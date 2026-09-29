@@ -1628,6 +1628,12 @@ function MobileShowcaseDeck({ items, openWorks }) {
 
   const RANGE = 150, COMMIT = 62, FLICK = 0.45;
   const CL = (v, a, b) => Math.max(a, Math.min(b, v));
+  // Auto-rotation cadence. Starts a fresh cooldown after every manual flip
+  // (drag / thumbnail tap) so the carousel never fires the instant a user
+  // finishes turning a card.
+  const CAROUSEL_INTERVAL = 3400;
+  const carouselTimerRef = useRef(0);
+  const scheduleCarouselRef = useRef(null);
 
   const rel = (i, active) => {
     const N = ctxRef.current.items.length;
@@ -1763,6 +1769,11 @@ function MobileShowcaseDeck({ items, openWorks }) {
     }
     if (e.cancelable) e.preventDefault();
     if (deckRef.current) deckRef.current.classList.add('grabbing');
+    // Pause auto-rotation while the user is interacting with the deck.
+    if (carouselTimerRef.current) {
+      window.clearTimeout(carouselTimerRef.current);
+      carouselTimerRef.current = 0;
+    }
     renderRef.current();
   };
   const onMove = (e) => {
@@ -1792,6 +1803,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
       } else {
         goToRef.current(s.downIdx);
       }
+      if (scheduleCarouselRef.current) scheduleCarouselRef.current();
       return;
     }
     if (Math.abs(s.curDX) > COMMIT || Math.abs(s.vel) > FLICK) {
@@ -1800,6 +1812,9 @@ function MobileShowcaseDeck({ items, openWorks }) {
     }
     s.p = 0;
     renderRef.current();
+    // The user just finished a flip (or a tap): restart the cooldown so the
+    // carousel waits a full interval before its next automatic turn.
+    if (scheduleCarouselRef.current) scheduleCarouselRef.current();
   };
 
   useLayoutEffect(() => {
@@ -1823,11 +1838,24 @@ function MobileShowcaseDeck({ items, openWorks }) {
       window.addEventListener('mouseup', onU);
     }
     renderRef.current();
-    const timer = setInterval(() => {
+
+    // Auto-rotation: a self-rescheduling timeout (not a fixed interval). Each
+    // manual flip taps scheduleCarousel() to restart the full cooldown, so the
+    // next automatic turn is always CAROUSEL_INTERVAL after the user lets go —
+    // never an instant flip right after they finished turning a card.
+    function scheduleCarousel() {
+      if (carouselTimerRef.current) window.clearTimeout(carouselTimerRef.current);
+      carouselTimerRef.current = window.setTimeout(tickCarousel, CAROUSEL_INTERVAL);
+    }
+    function tickCarousel() {
       if (!stateRef.current.isDrag) goToRef.current(stateRef.current.active + 1);
-    }, 2400);
+      scheduleCarousel();
+    }
+    scheduleCarouselRef.current = scheduleCarousel;
+    scheduleCarousel();
+
     return () => {
-      clearInterval(timer);
+      if (carouselTimerRef.current) window.clearTimeout(carouselTimerRef.current);
       if (window.PointerEvent) {
         deck.removeEventListener('pointerdown', onD);
         deck.removeEventListener('pointermove', onM);
@@ -1880,7 +1908,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
             className="mob-thumb"
             key={project.id}
             ref={(el) => { thumbRefs.current[i] = el; }}
-            onClick={() => goToRef.current(i)}
+            onClick={() => { goToRef.current(i); if (scheduleCarouselRef.current) scheduleCarouselRef.current(); }}
           >
             <LazyImage src={cover} alt="" />
           </div>
@@ -2831,6 +2859,7 @@ function HomePage({ openWorks, paging, active = true }) {
     let touchTracking = false;
     let touchConsumed = false;
     let touchEndTimer = 0;
+    let deckGesture = false;   // a touch that began on the mobile card deck: owned by the deck, never a page flip
 
     const onWheel = (event) => {
       if (event.ctrlKey || event.metaKey) return;    // pinch zoom, leave alone
@@ -2854,11 +2883,17 @@ function HomePage({ openWorks, paging, active = true }) {
       touchStartY = touch.clientY;
       touchTracking = true;
       touchConsumed = false;
+      // Touches that start on a showcase card are "play" gestures (drag/flip the
+      // card). The deck already claims them via touch-action:none + pointer
+      // capture, so the pager must not also treat their vertical drift as a
+      // whole-screen page flip. Page navigation still works from any touch that
+      // begins outside the deck (heading, dots, thumbnails, padding).
+      deckGesture = !!(event.target && event.target.closest && event.target.closest('.mob-deck'));
       window.clearTimeout(touchEndTimer);
     };
 
     const onTouchMove = (event) => {
-      if (!touchTracking || event.touches.length !== 1) return;
+      if (deckGesture || !touchTracking || event.touches.length !== 1) return;
       event.preventDefault();
       if (touchConsumed || isLocked()) return;
       const touch = event.touches[0];
@@ -2873,6 +2908,7 @@ function HomePage({ openWorks, paging, active = true }) {
       touchEndTimer = window.setTimeout(() => {
         touchTracking = false;
         touchConsumed = false;
+        deckGesture = false;
       }, HOME_TOUCH_END_DELAY_MS);
     };
 

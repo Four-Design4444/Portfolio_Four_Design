@@ -295,17 +295,24 @@ html[data-device="mobile"] .section.projects {
   padding-top: 88px;
 }
 
-html[data-device="mobile"] .advantage-head .section-kicker,
-html[data-device="mobile"] .projects-heading h2 {
+html[data-device="mobile"] .advantage-head .section-kicker {
   font-size: clamp(34px, 11.5vw, 54px);
   line-height: 0.94;
 }
+html[data-device="mobile"] .projects-heading h2 {
+  font-size: clamp(23px, 7.6vw, 35px);
+  line-height: 0.98;
+}
 
-html[data-device="mobile"] .advantage-head h2,
-html[data-device="mobile"] .projects-heading span {
+html[data-device="mobile"] .advantage-head h2 {
   min-height: 38px;
   padding: 0 18px;
   font-size: 16px;
+}
+html[data-device="mobile"] .projects-heading span {
+  min-height: 28px;
+  padding: 0 18px;
+  font-size: 13px;
 }
 
 html[data-device="mobile"] .advantage-grid {
