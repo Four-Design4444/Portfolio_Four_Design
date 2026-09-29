@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "dev": "set PATH=C:\\Users\\Four\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin;%PATH%&& vite --host 127.0.0.1",
+    "build": "set PATH=C:\\Users\\Four\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin;%PATH%&& vite build",
+    "build:cf": "node node_modules/vite/bin/vite.js build",
+    "preview": "set PATH=C:\\Users\\Four\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin;%PATH%&& vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "motion": "^12.42.0",
+    "ogl": "^1.0.11",
+    "react": "latest",
+    "react-dom": "latest",
+    "three": "^0.185.0",
+    "vite": "latest"
+  }
+}

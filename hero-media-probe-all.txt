@@ -1,0 +1,40 @@
+﻿==== 2K 01.mp4 ====
+SIZE_MB=22.91
+Duration: 00:00:15.00, start: 0.000000, bitrate: 12814 kb/s
+Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 2560x1440 [SAR 63:64 DAR 7:4], 12626 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 32000 Hz, stereo, fltp, 180 kb/s (default)
+==== 2K 02.mp4 ====
+SIZE_MB=22.21
+Duration: 00:00:15.00, start: 0.000000, bitrate: 12420 kb/s
+Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 2560x1440 [SAR 63:64 DAR 7:4], 12231 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 32000 Hz, stereo, fltp, 181 kb/s (default)
+==== 2k 03.mp4 ====
+SIZE_MB=23.77
+Duration: 00:00:15.00, start: 0.000000, bitrate: 13292 kb/s
+Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 2560x1440 [SAR 63:64 DAR 7:4], 13097 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 32000 Hz, stereo, fltp, 187 kb/s (default)
+==== 2k 04.mp4 ====
+SIZE_MB=23.49
+Duration: 00:00:15.00, start: 0.000000, bitrate: 13134 kb/s
+Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 2560x1440 [SAR 63:64 DAR 7:4], 12938 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 32000 Hz, stereo, fltp, 188 kb/s (default)
+==== PR接帧.mp4 ====
+SIZE_MB=23.64
+Duration: 00:00:14.71, start: 0.000000, bitrate: 13481 kb/s
+Stream #0:0[0x1](eng): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(progressive), 2560x1440 [SAR 63:64 DAR 7:4], 13154 kb/s, 24 fps, 24 tbr, 24k tbn (default)
+Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 317 kb/s (default)
+==== 04 1M压缩.mp4 ====
+SIZE_MB=0.97
+Duration: 00:00:14.72, start: 0.000000, bitrate: 554 kb/s
+Stream #0:0[0x1](eng): Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 2560x1440 [SAR 1:1 DAR 16:9], 449 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 22050 Hz, stereo, fltp, 97 kb/s (default)
+==== 04 2M压缩.mp4 ====
+SIZE_MB=1.93
+Duration: 00:00:14.72, start: 0.000000, bitrate: 1097 kb/s
+Stream #0:0[0x1](eng): Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 2560x1440 [SAR 1:1 DAR 16:9], 961 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 129 kb/s (default)
+==== 04 1.6M压缩.mp4 ====
+SIZE_MB=1.66
+Duration: 00:00:14.72, start: 0.000000, bitrate: 947 kb/s
+Stream #0:0[0x1](eng): Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 2560x1440 [SAR 1:1 DAR 16:9], 812 kb/s, 24 fps, 24 tbr, 12288 tbn (default)
+Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 128 kb/s (default)

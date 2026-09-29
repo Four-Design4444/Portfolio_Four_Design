@@ -1,0 +1,3 @@
+﻿== cur-base t=1 ==
+== cur-alpha over magenta t=1 ==
+== new t=1 ==

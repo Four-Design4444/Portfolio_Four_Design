@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <title>UI / Visual / AI Designer Portfolio</title>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var params = new URLSearchParams(window.location.search);
+        var forced = params.get('device');
+        var ua = navigator.userAgent || '';
+        var uaMobile = /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS|MicroMessenger/i.test(ua);
+        var iPadDesktopUA = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+        var touchOnly = (navigator.maxTouchPoints || 0) > 0 && !window.matchMedia('(hover: hover)').matches;
+        var narrow = window.matchMedia('(max-width: 900px)').matches;
+        var isMobile = forced === 'mobile' ? true : forced === 'desktop' ? false : (uaMobile || iPadDesktopUA || (touchOnly && narrow));
+        root.setAttribute('data-device', isMobile ? 'mobile' : 'desktop');
+        // The home route always uses one-screen paging. Keep secondary routes
+        // in their regular document flow from the first paint.
+        var hash = window.location.hash || '';
+        var homeRoute = hash === '' || hash === '#';
+        root.setAttribute('data-paging', homeRoute ? 'on' : 'off');
+        // --vh is the *visible* viewport, not the 100vh unit. On a phone those
+        // differ: 100vh resolves against the largest viewport (address bar
+        // hidden) while the bar is usually on screen. The paged home measures
+        // every screen against this value, so it has to follow the real height.
+        var syncHeight = function () {
+          root.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+        };
+        syncHeight();
+        window.addEventListener('resize', syncHeight);
+        window.addEventListener('orientationchange', function () {
+          window.setTimeout(syncHeight, 120);
+        });
+        // Mobile browsers resize the layout viewport when the address bar
+        // slides away, and they do not always fire a window resize for it.
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', syncHeight);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

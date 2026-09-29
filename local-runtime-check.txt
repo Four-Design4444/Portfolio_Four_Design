@@ -1,0 +1,77 @@
+[36mvite v8.3.0 [32mbuilding client environment for production...[36m[39m
+transforming...
+鉁?1968 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                     2.01 kB 鈹?gzip:   0.93 kB
+dist/assets/programmatic-ads-DtMx3n6P.svg           4.74 kB 鈹?gzip:   1.77 kB
+dist/assets/comfyui-CU7pTrin.png                   16.64 kB
+dist/assets/codex-DHpf28_2.png                     26.66 kB
+dist/assets/blender-DHndp3Ey.png                   36.48 kB
+dist/assets/photoshop-_2U0piDI.png                 46.06 kB
+dist/assets/about-words-BiDAgE0l.png              116.19 kB
+dist/assets/about-figure-DKvI43rk.jpg             209.25 kB
+dist/assets/ui-01-detail-shot-03-Dm6WqY4R.webp    244.38 kB
+dist/assets/figma-DwxPskE0.png                    268.23 kB
+dist/assets/ui-01-detail-shot-02-CLoS-DWs.webp    385.04 kB
+dist/assets/ui-01-detail-shot-01-ylN9GuKD.webp    447.07 kB
+dist/assets/ui-03-official-hero-CG75W639.jpg      510.92 kB
+dist/assets/ui-04-detail-hero-B4JbAyVZ.jpg      1,518.67 kB
+dist/assets/ui-02-ck-mini-program-D4-8UuBC.png  1,809.63 kB
+dist/assets/index-D5CtgYOA.css                     90.96 kB 鈹?gzip:  17.34 kB
+dist/assets/index-BB5Td53q.js                     362.66 kB 鈹?gzip: 116.53 kB
+
+node.exe : [33m[33m[MODULE_LEVEL_DIRECTIVE] [0mThe semantics of the module l
+evel directive "use client" in "node_modules/lucide-react/dist/esm/context.mjs"
+ may not be preserved when bundling.
+所在位置 行:445 字符: 178
++ ... de.exe'; $r=& $node (Join-Path $root 'node_modules\vite\bin\vite.js') ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33m[33m[MODU... when bundling. 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   [38;5;246m鈺?[0m[38;5;246m鈹€[0m[38;5;246m[[0m node_modules/lucide-react/
+dist/esm/context.mjs:2:1 [38;5;246m][0m
+   [38;5;246m鈹?[0m
+ [38;5;246m2 鈹?[0m "use client";
+ [38;5;240m  鈹?[0m 鈹€鈹€鈹€鈹€鈹€鈹€鈹攢鈹€鈹€鈹€鈹€鈹€  
+ [38;5;240m  鈹?[0m       鈺扳攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€ module level directive may not be p
+reserved
+ [38;5;240m  鈹?[0m 
+ [38;5;240m  鈹?[0m [38;5;115mHelp[0m: For more information, see https://roll
+down.rs/in-depth/directives#other-directives
+[38;5;246m鈹€鈹€鈹€鈺?[0m
+[39m
+[33m[33m[MODULE_LEVEL_DIRECTIVE] [0mThe semantics of the module level direct
+ive "use client" in "node_modules/lucide-react/dist/esm/Icon.mjs" may not be pr
+eserved when bundling.
+   [38;5;246m鈺?[0m[38;5;246m鈹€[0m[38;5;246m[[0m node_modules/lucide-react/
+dist/esm/Icon.mjs:2:1 [38;5;246m][0m
+   [38;5;246m鈹?[0m
+ [38;5;246m2 鈹?[0m "use client";
+ [38;5;240m  鈹?[0m 鈹€鈹€鈹€鈹€鈹€鈹€鈹攢鈹€鈹€鈹€鈹€鈹€  
+ [38;5;240m  鈹?[0m       鈺扳攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€ module level directive may not be p
+reserved
+ [38;5;240m  鈹?[0m 
+ [38;5;240m  鈹?[0m [38;5;115mHelp[0m: For more information, see https://roll
+down.rs/in-depth/directives#other-directives
+[38;5;246m鈹€鈹€鈹€鈺?[0m
+[39m
+[32m鉁?built in 4.55s[39m
+[33m[33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 4.1s of this 4.5s b
+uild (91%).
+The slowest callbacks, timed inside each callback (the wait before a callback s
+tarts is excluded, the time it awaits is included):
+  - plugin vite:prepare-out-dir renderStart (87%, 3.9s, 1 call)
+Additional callback time came from the callbacks below and from callbacks under
+ 1s.
+1 callback is listed without a time. Its calls overlapped, so the time inside o
+ne call includes work from other calls. To find its cost, profile the build wit
+h `node --cpu-prof`:
+  - plugin vite:asset load (22 calls)
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more d
+etails.
+[39m
+
+processExit=0

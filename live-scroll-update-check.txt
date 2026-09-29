@@ -1,0 +1,12 @@
+﻿[
+    {
+        "url":  "https://portfolio-design-56561.app.workbuddy.host/",
+        "status":  "ERROR",
+        "error":  "远程服务器返回错误: (504) 网关超时。"
+    },
+    {
+        "url":  "https://portfolio-design-56561.app.workbuddy.host/?device=mobile",
+        "status":  "ERROR",
+        "error":  "远程服务器返回错误: (504) 网关超时。"
+    }
+]

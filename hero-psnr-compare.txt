@@ -1,0 +1,6 @@
+﻿== PSNR base vs new ==
+psnr:default -> Stream #0:0 (wrapped_avframe)
+[Parsed_psnr_2 @ 000001ff04abfd00] PSNR y:43.350076 u:45.623600 v:46.778003 average:44.101597 min:41.330380 max:47.552346
+== SSIM ==
+ssim:default -> Stream #0:0 (wrapped_avframe)
+[Parsed_ssim_2 @ 0000011769496180] SSIM Y:0.987423 (19.004119) U:0.983691 (17.875602) V:0.984651 (18.139124) All:0.986339 (18.645068)
