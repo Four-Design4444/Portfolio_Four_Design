@@ -25,6 +25,13 @@
         var hash = window.location.hash || '';
         var homeRoute = hash === '' || hash === '#';
         root.setAttribute('data-paging', homeRoute ? 'on' : 'off');
+        // Take scroll restoration away from the browser before it can apply a
+        // saved position. The paged home decides the starting screen itself,
+        // so a restored offset (e.g. wherever the visitor last was) must never
+        // become the initial screen and then get "aligned" to by the pager.
+        if ('scrollRestoration' in history) {
+          try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
         // --vh is the *visible* viewport, not the 100vh unit. On a phone those
         // differ: 100vh resolves against the largest viewport (address bar
         // hidden) while the bar is usually on screen. The paged home measures

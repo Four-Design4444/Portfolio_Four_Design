@@ -1717,7 +1717,18 @@ function MobileShowcaseDeck({ items, openWorks }) {
       if (!th) return;
       const on = i === show;
       th.classList.toggle('on', on);
-      if (on) th.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      // Centre the active thumbnail inside the strip's OWN horizontal scroller.
+      // The strip is overflow-x:auto, so scrollLeft never moves the page. A
+      // bare scrollIntoView({block:'nearest'}) would instead scroll the window
+      // vertically and, because the deck lives on the projects screen, fling
+      // the whole home page down to it on first paint ("opens on works").
+      if (on) {
+        const strip = th.parentElement;
+        if (strip && strip.scrollWidth > strip.clientWidth) {
+          const target = th.offsetLeft - (strip.clientWidth - th.clientWidth) / 2;
+          strip.scrollTo({ left: target, behavior: 'smooth' });
+        }
+      }
     });
     dotRefs.current.forEach((d, i) => { if (d) d.classList.toggle('on', i === show); });
   };
@@ -2712,9 +2723,14 @@ function HomePage({ openWorks, paging, active = true }) {
   // wheel and the view disagreeing for the rest of the session.
   const startIndexRef = useRef(null);
   if (startIndexRef.current === null) {
-    const viewport = window.innerHeight || 1;
-    const restored = paging ? Math.round((window.scrollY || 0) / viewport) : 0;
-    startIndexRef.current = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, restored));
+    // Always open a fresh page load on the hero (screen 0). The pager owns the
+    // scroll position, so trusting window.scrollY here would let a browser-
+    // restored offset (or an address-bar layout shift) become the starting
+    // screen and get "aligned" to on mount — which read as the page opening
+    // already scrolled down to the works showcase on phones. The component is
+    // kept mounted (page-keep), so this branch only runs on the initial load;
+    // returning from works/detail preserves the last index via state instead.
+    startIndexRef.current = 0;
   }
 
   const [index, setIndex] = useState(startIndexRef.current);

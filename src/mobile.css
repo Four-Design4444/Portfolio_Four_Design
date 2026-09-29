@@ -393,9 +393,24 @@ html[data-device="mobile"] .showcase-deck-copy b {
 }
 
 /* --- Mobile works showcase: three-card poker stack (drag to flip) ---------- */
+
+/* The projects screen must stay within the viewport width. The base section
+   can resolve to display:flex, which turns .container into a flex item that
+   sizes to its content (the showcase strip) and overflows the phone width;
+   the right ~180px then gets clipped by overflow-x:hidden. Pin the section to
+   block flow and cap the showcase so nothing exceeds 100% on mobile. */
+html[data-device="mobile"] .section.projects {
+  display: block;
+}
 html[data-device="mobile"] .project-list {
   width: auto;
+  max-width: 100%;
   margin-top: 22px;
+  overflow: hidden;
+}
+html[data-device="mobile"] .mob-showcase {
+  width: 100%;
+  max-width: 100%;
 }
 
 html[data-device="mobile"] .mob-showcase {
