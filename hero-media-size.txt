@@ -1,6 +1,0 @@
-﻿C:\Users\Four\Documents\Portfolio Design\public\media\hero-base.mp4	15.54 MB	16289710 bytes
-C:\Users\Four\Documents\Portfolio Design\public\media\hero-cat-alpha.webm	12.31 MB	12906563 bytes
-C:\Users\Four\Documents\Portfolio Design\public\media\hero-mobile.mp4	20.93 MB	21945418 bytes
-C:\Users\Four\Documents\Portfolio Design\dist\media\hero-base.mp4	15.54 MB	16289710 bytes
-C:\Users\Four\Documents\Portfolio Design\dist\media\hero-cat-alpha.webm	12.31 MB	12906563 bytes
-C:\Users\Four\Documents\Portfolio Design\dist\media\hero-mobile.mp4	20.93 MB	21945418 bytes

@@ -1,6 +1,0 @@
-﻿== alpha decode with vp9 alpha ==
-== alpha stream info ==
-Duration: 00:00:14.71, start: 0.000000, bitrate: 7019 kb/s
-Stream #0:0: Video: vp9 (Profile 0), yuv420p(tv, progressive), 2560x1440, SAR 1:1 DAR 16:9, 24 fps, 24 tbr, 1k tbn
-ALPHA_MODE      : 1
-DURATION        : 00:00:14.709000000

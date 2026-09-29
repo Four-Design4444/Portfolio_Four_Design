@@ -1,0 +1,3419 @@
+﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { House, Mail, Phone } from 'lucide-react';
+import './styles.css';
+import './mobile.css';
+import fourLogo from './assets/four-logo.svg';
+import group10Markup from './assets/group-10.svg?raw';
+
+const HERO_HEVC_BASE_SRC = '/media/hero-hevc.mp4';
+const HERO_HEVC_MASK_SRC = '/media/hero-mask-hevc.mp4';
+const HERO_FALLBACK_BASE_SRC = '/media/hero-base.mp4';
+const HERO_FALLBACK_ALPHA_SRC = '/media/hero-cat-alpha.webm';
+const HERO_MOBILE_SRC = '/media/hero-mobile.mp4';
+const HERO_HEVC_CODEC_TYPES = [
+  'video/mp4; codecs="hvc1.1.6.L153.B0"',
+  'video/mp4; codecs="hvc1"'
+];
+const GROUP10_VIEWBOX = '0 0 1640 241';
+const GROUP10_PATH_CENTERS = [
+  { x: 0.049, y: 0.431 },
+  { x: 0.177, y: 0.432 },
+  { x: 0.316, y: 0.432 },
+  { x: 0.418, y: 0.431 },
+  { x: 0.521, y: 0.432 },
+  { x: 0.642, y: 0.432 },
+  { x: 0.771, y: 0.432 },
+  { x: 0.832, y: 0.432 },
+  { x: 0.927, y: 0.432 }
+];
+
+// The new SVG already contains seven independent white paths for "welcome".
+// Keep a fallback center for each one so the interaction remains stable even
+// while an SVG is being re-mounted or before getBBox() becomes available.
+const GROUP10_WELCOME_SUBPATH_CENTERS = [
+  { x: 0.981, y: 0.894 },
+  { x: 0.931, y: 0.894 },
+  { x: 0.883, y: 0.894 },
+  { x: 0.856, y: 0.894 },
+  { x: 0.829, y: 0.894 },
+  { x: 0.802, y: 0.894 },
+  { x: 0.776, y: 0.894 }
+];
+import aboutPortrait from './assets/profile/hero-composite/about-figure.jpg';
+import aboutWordsArt from './assets/profile/hero-composite/about-words.png';
+import figmaIcon from './assets/profile/figma.png';
+import comfyuiIcon from './assets/profile/comfyui.png';
+import blenderIcon from './assets/profile/blender.png';
+import codexIcon from './assets/profile/codex.png';
+import photoshopIcon from './assets/profile/photoshop.png';
+import BorderGlow from './components/BorderGlow';
+import SideRays from './components/SideRays';
+import previewZoomInIcon from './assets/preview-zoom-in.svg';
+import previewZoomOutIcon from './assets/preview-zoom-out.svg';
+import ui01DetailHeroFinal from './assets/projects/ui-01-detail-hero-final.jpg';
+import ui01DetailShot01 from './assets/projects/ui-01-detail-shot-01.webp';
+import ui01DetailShot02 from './assets/projects/ui-01-detail-shot-02.webp';
+import ui01DetailShot03 from './assets/projects/ui-01-detail-shot-03.webp';
+import ui02CkMiniProgram from './assets/projects/ui-02-ck-mini-program.png';
+import ui03OfficialHero from './assets/projects/ui-03-official-hero.jpg';
+import ui04DetailHero from './assets/projects/ui-04-detail-hero.jpg';
+import capabilityDeliveryIcon from './assets/capability-icons/payment.svg';
+import capabilityCodeIcon from './assets/capability-icons/programmatic-ads.svg';
+import capabilityAiIcon from './assets/capability-icons/ai-nodes.svg';
+import capabilityTrendIcon from './assets/capability-icons/trend.svg';
+
+const tools = [
+  { name: 'Figma', icon: figmaIcon },
+  { name: 'Comfyui', icon: comfyuiIcon },
+  { name: 'Blender', icon: blenderIcon },
+  { name: 'Codex', icon: codexIcon },
+  { name: 'Photoshop', icon: photoshopIcon }
+];
+
+const advantages = [
+  {
+    title: '高效协作交付',
+    icon: capabilityDeliveryIcon,
+    text: '可独立完成需求拆解、方案构思、修改优化与跨部门沟通。'
+  },
+  {
+    title: '程序化设计思维',
+    icon: capabilityCodeIcon,
+    text: '善于以开发者思维洞察交互逻辑，熟悉组件库功能，框架化 UI 设计。'
+  },
+  {
+    title: 'AI 辅助工作流',
+    icon: capabilityAiIcon,
+    text: '熟悉 AI 创作领域，使创意更快进入可判断状态。'
+  },
+  {
+    title: '趋势与风格迭代',
+    icon: capabilityTrendIcon,
+    text: '持续探索新的设计趋势，紧跟行业风向，让工具重塑工作流。'
+  }
+];
+const categories = [
+  { id: 'ui', title: 'UI Design', cn: 'UI 设计', label: 'Product Interface' },
+  { id: 'vi', title: 'VI Design', cn: 'VI 设计', label: 'Brand Visual' },
+  { id: '3d', title: '3D Design', cn: '3D 设计', label: 'Spatial / Motion' },
+  { id: 'aigc', title: 'AIGC', cn: 'AIGC', label: 'AI Creative' }
+];
+
+
+const worksByCategory = {
+  ui: [
+    {
+      id: 'coomo-home-mini',
+      title: 'COOMO HOME',
+      subtitle: '家居购物小程序',
+      image: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=1600&q=86',
+      detailHero: ui01DetailHeroFinal,
+      detailImages: [
+        { src: ui01DetailShot01, title: 'COOMO HOME 页面视觉 01' },
+        { src: ui01DetailShot02, title: 'COOMO HOME 页面视觉 02' },
+        { src: ui01DetailShot03, title: 'COOMO HOME 页面视觉 03' }
+      ]
+    },
+    {
+      id: 'smart-home-platform',
+      title: 'COOMO HOME',
+      subtitle: '鏅鸿兘瀹跺眳涓帶骞冲彴',
+      image: 'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1600&q=86',
+      detailHero: ui02CkMiniProgram
+    },
+    {
+      id: 'coomo-official',
+      title: 'COOMO瀹樼綉',
+      subtitle: '家居品牌官网',
+      image: 'https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1600&q=86',
+      detailHero: ui03OfficialHero
+    },
+    {
+      id: 'muguan-official',
+      title: '鎱曞啝瀹跺眳瀹樼綉',
+      subtitle: '家具品牌官网',
+      image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=86',
+      detailHero: ui04DetailHero
+    }
+  ],
+  vi: [
+    {
+      id: 'brand-summer',
+      title: 'Brand 瑙傚',
+      subtitle: '鍝佺墝瑙嗚绯荤粺',
+      image: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1800&q=86'
+    },
+    {
+      id: 'campaign-visual',
+      title: '鍟嗕笟娲诲姩瑙嗚',
+      subtitle: 'Campaign KV',
+      image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=1800&q=86'
+    },
+    {
+      id: 'packaging-system',
+      title: '鍖呰瑙嗚绯荤粺',
+      subtitle: 'Packaging / Layout',
+      image: 'https://images.unsplash.com/photo-1600172454284-934feca24b3f?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1626785774625-ddcddc3445e9?auto=format&fit=crop&w=1800&q=86'
+    }
+  ],
+  '3d': [
+    {
+      id: 'future-chair',
+      title: 'Future Chair',
+      subtitle: '浜у搧 3D 娓叉煋',
+      image: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1618172193622-ae2d025f4032?auto=format&fit=crop&w=1800&q=86'
+    },
+    {
+      id: 'motion-space',
+      title: 'Motion Space',
+      subtitle: '空间动态视觉',
+      image: 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1633419461186-7d40a38105ec?auto=format&fit=crop&w=1800&q=86'
+    }
+  ],
+  aigc: [
+    {
+      id: 'ai-poster-lab',
+      title: 'AI Poster Lab',
+      subtitle: '生成式海报实验',
+      image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1682687982501-1e58ab814714?auto=format&fit=crop&w=1800&q=86'
+    },
+    {
+      id: 'aigc-style',
+      title: 'AIGC Style System',
+      subtitle: 'AI 椋庢牸鎺㈢储',
+      image: 'https://images.unsplash.com/photo-1676299081847-824916de030a?auto=format&fit=crop&w=1600&q=86',
+      detailHero: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1800&q=86'
+    }
+  ]
+};
+
+// Seven cards laid out as a slightly staggered row (NOT an arc). `left` is the
+// resting x position, `restY`/`rot` give each card its small resting tilt and
+// vertical nudge, `z` stacks them left-to-right. Hovering a card lifts it to
+// the top layer and pushes everything to its right further right, which is
+// what makes the row open up. Every card also mirrors into the floor below it.
+const projectShowcases = [
+  {
+    id: 'ui-1',
+    category: 'ui',
+    work: 0,
+    index: '01',
+    title: 'COOMO HOME',
+    meta: '家居购物小程序',
+    deck: { left: 8.64, rot: -2.6, restY: 8, z: 1 }
+  },
+  {
+    id: 'ui-2',
+    category: 'ui',
+    work: 1,
+    index: '02',
+    title: '智家中控平台',
+    meta: '智能家居中控界面',
+    deck: { left: 19.74, rot: -1.6, restY: -2, z: 2 }
+  },
+  {
+    id: 'ui-3',
+    category: 'ui',
+    work: 2,
+    index: '03',
+    title: '品牌官方网站',
+    meta: '响应式官网设计',
+    deck: { left: 30.84, rot: -0.6, restY: 3, z: 3 }
+  },
+  {
+    id: 'vi-1',
+    category: 'vi',
+    work: 0,
+    index: '04',
+    title: 'Brand Visual',
+    meta: '品牌视觉系统',
+    deck: { left: 41.94, rot: 0.2, restY: -5, z: 4 }
+  },
+  {
+    id: 'vi-2',
+    category: 'vi',
+    work: 1,
+    index: '05',
+    title: 'Campaign KV',
+    meta: '商业活动视觉',
+    deck: { left: 53.04, rot: 1.0, restY: 1, z: 5 }
+  },
+  {
+    id: '3d-1',
+    category: '3d',
+    work: 0,
+    index: '06',
+    title: 'Product 3D',
+    meta: '产品三维渲染',
+    deck: { left: 64.14, rot: 1.9, restY: -3, z: 6 }
+  },
+  {
+    id: 'aigc-1',
+    category: 'aigc',
+    work: 0,
+    index: '07',
+    title: 'AI Workflow',
+    meta: 'ComfyUI 生成工作流',
+    deck: { left: 75.24, rot: 2.8, restY: 7, z: 7 }
+  }
+];
+
+const heroSignals = [
+  { id: 'interface', index: '01', title: 'Interface', cn: 'UI 系统', meta: 'Product / Interaction' },
+  { id: 'visual', index: '02', title: 'Visual', cn: '视觉语言', meta: 'Brand / Campaign' },
+  { id: 'ai', index: '03', title: 'AI Flow', cn: 'AI 工作流', meta: 'ComfyUI / Codex' },
+  { id: 'motion', index: '04', title: 'Motion', cn: '动态与三维', meta: '3D / Render' }
+];
+
+/* HIDDEN_HERO_FOUR_LOGO_ARCHIVE_START
+   Original FOUR Logo artwork and pointer-driven interaction.
+   This archive is intentionally not rendered by the live HERO. Keep this
+   marker stable so the effect can be restored later without rediscovering it.
+*/
+const fourLetterPaths = {
+  f: [
+    'M1.59209e-07 0H138V14H1.59209e-07V0Z',
+    'M33 95H113V109H33V95Z',
+    'M14 0L14 200H0L1.59209e-07 0H14Z'
+  ],
+  o: [
+    'M256.732 0C311.618 0.000100937 356.112 44.4939 356.112 99.3799C356.112 154.252 311.641 198.736 256.774 198.759V184.356C303.686 184.334 341.708 146.297 341.708 99.3799C341.708 52.4484 303.663 14.4034 256.732 14.4033C209.8 14.4033 171.754 52.4484 171.754 99.3799C171.754 100.241 171.769 101.099 171.794 101.954H157.384C157.363 101.099 157.352 100.241 157.352 99.3799C157.352 44.4939 201.846 0 256.732 0Z'
+  ],
+  u: [
+    'M399.403 0.360046V125.485C399.403 154.572 420.369 178.761 448.013 183.766V198.358C412.379 193.21 385 162.545 385 125.485V0.360046H399.403Z',
+    'M532.27 0.360046V125.485C532.27 162.42 505.075 193.002 469.617 198.304V183.699C497.083 178.549 517.866 154.445 517.866 125.485V0.360046H532.27Z'
+  ],
+  r: [
+    'M642.09 14.7629C666.65 14.7629 686.559 34.6723 686.559 59.2318C686.559 83.7914 666.65 103.701 642.09 103.701H586.744L667.596 197.86H686.559L619 118.104H642.09C674.604 118.104 700.962 91.7458 700.962 59.2318C700.962 26.7178 674.604 0.360046 642.09 0.360046H569.281V14.7629H642.09Z'
+  ]
+};
+
+function HeroMotionDemo() {
+  const [hovered, setHovered] = useState(false);
+  const letters = Object.entries(fourLetterPaths);
+  const markRef = useRef(null);
+  const letterRefs = useRef([]);
+  const subtitleRef = useRef(null);
+  const pointerRef = useRef({ x: 0.5, y: 0.5 });
+  const hoverTargetRef = useRef(0);
+
+  const handlePointerMove = (event) => {
+    const rect = markRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    pointerRef.current = { x: x / 100, y: y / 100 };
+    markRef.current.style.setProperty('--hero-pointer-x', `${x.toFixed(2)}%`);
+    markRef.current.style.setProperty('--hero-pointer-y', `${y.toFixed(2)}%`);
+  };
+
+  const handlePointerEnter = (event) => {
+    hoverTargetRef.current = 1;
+    setHovered(true);
+    handlePointerMove(event);
+  };
+
+  const handlePointerLeave = () => {
+    hoverTargetRef.current = 0;
+    setHovered(false);
+    pointerRef.current = { x: 0.5, y: 0.5 };
+  };
+
+  useEffect(() => {
+    let frame = 0;
+    let hoverMix = 0;
+    let lastTime = performance.now();
+    const start = performance.now();
+    const centers = [
+      { x: 0.08, y: 0.5 },
+      { x: 0.36, y: 0.5 },
+      { x: 0.63, y: 0.5 },
+      { x: 0.86, y: 0.5 }
+    ];
+
+    const smooth = (value) => {
+      const t = Math.min(Math.max(value, 0), 1);
+      return t * t * t * (t * (t * 6 - 15) + 10);
+    };
+
+    const render = (now) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      hoverMix += (hoverTargetRef.current - hoverMix) * (1 - Math.exp(-dt * 9));
+      const p = pointerRef.current;
+
+      letterRefs.current.forEach((node, index) => {
+        if (!node) return;
+        const introDelay = index * 520;
+        const introDuration = 2600;
+        const intro = smooth((now - start - introDelay) / introDuration);
+        const center = centers[index] ?? centers[0];
+        const dx = p.x - center.x;
+        const dy = p.y - center.y;
+        const distance = Math.sqrt(dx * dx * 1.2 + dy * dy * 2.8);
+        const proximity = Math.max(0, 1 - distance / 0.58);
+        const pull = proximity * proximity * hoverMix;
+        const wave = Math.sin(now * 0.0028 + index * 1.1) * pull;
+        const x = dx * 64 * pull;
+        const y = dy * 44 * pull + wave * 3;
+        const scaleX = 1 + pull * 0.09;
+        const scaleY = 1 + pull * 0.18;
+        const blur = 0;
+
+        node.style.opacity = String(intro);
+        node.style.filter = `blur(${blur.toFixed(3)}px)`;
+        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+      });
+
+      if (subtitleRef.current) {
+        const intro = smooth((now - start - 1750) / 1200);
+        const dx = p.x - 0.5;
+        const dy = p.y - 0.82;
+        const distance = Math.sqrt(dx * dx * 1.1 + dy * dy * 4.2);
+        const proximity = Math.max(0, 1 - distance / 0.74);
+        const pull = proximity * proximity * hoverMix;
+        const wave = Math.sin(now * 0.0031) * pull;
+        const x = -50 + dx * 36 * pull;
+        const y = dy * 24 * pull + wave * 2;
+        const scaleX = 1 + pull * 0.025;
+        const scaleY = 1 + pull * 0.075;
+        const blur = (1 - intro) * 8 + pull * (0.3 + proximity * 2.6);
+
+        subtitleRef.current.style.opacity = String(intro);
+        subtitleRef.current.style.filter = `blur(${blur.toFixed(3)}px)`;
+        subtitleRef.current.style.transform = `translate3d(${x.toFixed(2)}%, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+      }
+
+      frame = requestAnimationFrame(render);
+    };
+
+    frame = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <section className="hero-motion-demo">
+      <div className="hero-motion-bg" />
+      <div
+        ref={markRef}
+        className={`hero-motion-mark${hovered ? ' is-hovered' : ''}`}
+        onPointerEnter={handlePointerEnter}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
+      >
+        <svg className="hero-motion-svg" width="701" height="200" viewBox="0 0 701 200" aria-label="FOUR">
+          <g className="hero-motion-logo-core">
+            {letters.map(([key, paths], index) => (
+              <g
+                className="hero-motion-letter"
+                style={{ '--letter-delay': `${index * 520}ms` }}
+                ref={(node) => {
+                  letterRefs.current[index] = node;
+                }}
+                key={key}
+              >
+                {paths.map((path) => <path d={path} key={path} />)}
+              </g>
+            ))}
+          </g>
+        </svg>
+        <p className="hero-motion-subtitle" ref={subtitleRef}>Personal works exhibition</p>
+      </div>
+      <div className="hero-motion-note">
+        <span>BlurText style SVG entrance</span>
+        <span>Hover FOUR to preview logo blur diffusion</span>
+      </div>
+    </section>
+  );
+}
+
+function LogoMark({ large = false }) {
+  return <img className={large ? 'four-logo four-logo-large' : 'four-logo'} src={fourLogo} alt="FOUR" />;
+}
+
+function parseRoute() {
+  const hash = window.location.hash;
+  if (hash.startsWith('#/hero-motion-demo')) {
+    return { page: 'heroMotionDemo', category: 'ui', workId: '' };
+  }
+  if (hash.startsWith('#/detail')) {
+    const params = new URLSearchParams(hash.split('?')[1] ?? '');
+    return { page: 'detail', category: params.get('category') ?? 'ui', workId: params.get('work') ?? '' };
+  }
+  if (hash.startsWith('#/works')) {
+    const params = new URLSearchParams(hash.split('?')[1] ?? '');
+    return { page: 'works', category: params.get('category') ?? 'ui', workId: '' };
+  }
+  return { page: 'home', category: 'ui', workId: '' };
+}
+
+function App() {
+  const [route, setRoute] = useState(parseRoute);
+  const [homeActiveSection, setHomeActiveSection] = useState('hero');
+  const [homeScrollY, setHomeScrollY] = useState(() => Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? 0));
+  const [worksScrollY, setWorksScrollY] = useState(() => Number(window.sessionStorage.getItem('portfolioWorksScrollY') ?? 0));
+  const paging = usePagingEnabled(route.page === 'home');
+  const [navMotion, setNavMotion] = useState('');
+  const [sharedPill, setSharedPill] = useState(null);
+  const [sharedImage, setSharedImage] = useState(null);
+  const [worksActiveLocked, setWorksActiveLocked] = useState(false);
+  const previousPageRef = useRef(route.page);
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(parseRoute());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (route.page !== 'home') {
+      setHomeActiveSection('hero');
+      return undefined;
+    }
+
+    let frame = 0;
+    const syncActiveSection = () => {
+      frame = 0;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+      const marker = viewportHeight * 0.52;
+      let activeId = 'hero';
+      for (const id of HOME_PAGE_IDS) {
+        const section = document.getElementById(id);
+        if (!section) continue;
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= marker && rect.bottom > marker) {
+          activeId = id;
+          break;
+        }
+      }
+      setHomeActiveSection((current) => current === activeId ? current : activeId);
+    };
+    const requestSync = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(syncActiveSection);
+    };
+
+    syncActiveSection();
+    window.addEventListener('scroll', requestSync, { passive: true });
+    window.addEventListener('resize', requestSync);
+    window.addEventListener('scrollend', requestSync);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', requestSync);
+      window.removeEventListener('resize', requestSync);
+      window.removeEventListener('scrollend', requestSync);
+    };
+  }, [route.page]);
+
+  useEffect(() => {
+    if (!navMotion) return undefined;
+    const settleDelay = navMotion === 'to-works' ? 880 : 760;
+    const timer = window.setTimeout(() => {
+      setNavMotion('');
+      if (route.page === 'works' && navMotion === 'home-to-works') {
+        setSharedPill(null);
+      }
+    }, settleDelay);
+    return () => window.clearTimeout(timer);
+  }, [navMotion, route.page]);
+
+  const activeCategory = categories.find((item) => item.id === route.category) ?? categories[0];
+  const works = worksByCategory[activeCategory.id] ?? [];
+  const activeIndex = Math.max(0, works.findIndex((item) => item.id === route.workId));
+  const activeWork = works[activeIndex] ?? works[0];
+
+  useLayoutEffect(() => {
+    const previousPage = previousPageRef.current;
+    previousPageRef.current = route.page;
+
+    if (route.page === 'home') {
+      setSharedPill(null);
+      return undefined;
+    }
+
+    if (route.page === 'works' && previousPage === 'works') {
+      // In-place category changes are animated by the nav's own indicator.
+      // Creating a shared overlay here would hide that indicator and make the
+      // category change look like an instant swap.
+      setSharedPill(null);
+      return undefined;
+    }
+
+    let frame = 0;
+    let trackingUntil = 0;
+    let disposed = false;
+    const selector = route.page === 'detail' ? '[data-detail-category-pill="true"]' : `[data-category-pill="${activeCategory.id}"]`;
+
+    // The nav itself morphs with CSS. The shared active pill is a separate
+    // fixed layer, so sampling only once leaves it behind when a quick swipe
+    // starts another morph before the previous one has settled. Track the
+    // anchor for the duration of the morph and keep the existing pill CSS
+    // transition intact.
+    const updatePill = () => {
+      if (disposed) return;
+      const rect = readNavRect(selector);
+      if (rect) {
+        setSharedPill((current) => {
+          const next = {
+            rect,
+            title: activeCategory.title,
+            mode: route.page === 'detail' ? 'detail' : 'works'
+          };
+          if (
+            current && current.title === next.title && current.mode === next.mode &&
+            Math.abs(current.rect.x - rect.x) < 0.25 &&
+            Math.abs(current.rect.y - rect.y) < 0.25 &&
+            Math.abs(current.rect.width - rect.width) < 0.25 &&
+            Math.abs(current.rect.height - rect.height) < 0.25
+          ) return current;
+          return next;
+        });
+      }
+      if (performance.now() < trackingUntil) {
+        frame = window.requestAnimationFrame(updatePill);
+      }
+    };
+
+    const startTracking = (duration = 1100) => {
+      trackingUntil = Math.max(trackingUntil, performance.now() + duration);
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updatePill);
+    };
+
+    if (route.page === 'works' && previousPage !== 'detail') {
+      setSharedPill(null);
+      startTracking();
+    } else {
+      startTracking();
+    }
+    const handleResize = () => startTracking(900);
+    const handleScroll = () => startTracking(900);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [route.page, activeCategory.id, activeCategory.title]);
+
+  useLayoutEffect(() => {
+    if (route.page !== 'detail' || !sharedImage || sharedImage.toRect) return undefined;
+
+    let frame = 0;
+    let attempts = 0;
+    const updateImageTarget = () => {
+      const rect = readNavRect('[data-detail-hero-image="true"]');
+      attempts += 1;
+
+      if (rect && rect.width > 0 && rect.height > 0) {
+        setSharedImage((current) => current ? { ...current, toRect: rect } : current);
+        return;
+      }
+
+      if (attempts < 12) {
+        frame = window.requestAnimationFrame(updateImageTarget);
+      }
+    };
+
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(updateImageTarget);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [route.page, sharedImage]);
+
+  const restoreScroll = (key, fallback) => {
+    const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.body.style.scrollBehavior = 'auto';
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo(0, saved)));
+  };
+
+  const goHome = () => {
+    setNavMotion('');
+    setSharedPill(null);
+    setWorksActiveLocked(false);
+    window.location.hash = '';
+    setRoute({ page: 'home', category: route.category, workId: '' });
+    // The home layer stayed mounted, so its screen index is still the one the
+    // reader left on. Restore the recorded entry offset, which on a paged home
+    // is exactly that screen boundary, so the wheel controller and the view
+    // stay in step instead of being reset to screen 01.
+    restoreScroll('portfolioHomeScrollY', homeScrollY);
+  };
+
+  const goWorks = (category = route.category, restore = false) => {
+    if (route.page === 'home') {
+      setNavMotion('home-to-works');
+    } else if (route.page !== 'detail') {
+      setNavMotion('');
+      setWorksActiveLocked(false);
+    }
+    if (route.page === 'works' && category !== route.category) {
+      setSharedPill(null);
+    }
+    if (route.page === 'home') {
+      const entryY = window.scrollY;
+      setHomeScrollY(entryY);
+      window.sessionStorage.setItem('portfolioHomeScrollY', String(entryY));
+      // Record which screen of the home layer was the way in, so a return can
+      // land on it even if the entry scroll offset is gone after a reload.
+      window.sessionStorage.setItem(
+        'portfolioHomeEntryIndex',
+        String(Math.max(0, Math.round(entryY / (window.innerHeight || 1))))
+      );
+    }
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.body.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    window.location.hash = `/works?category=${category}`;
+    setRoute({ page: 'works', category, workId: '' });
+    if (restore) {
+      restoreScroll('portfolioWorksScrollY', worksScrollY);
+    } else {
+      window.requestAnimationFrame(() => window.scrollTo(0, 0));
+    }
+  };
+
+  const goDetail = (category, workId, transitionImage) => {
+    const fromRect = readNavRect(`[data-category-pill="${category}"]`);
+    if (fromRect) {
+      setSharedPill({ rect: fromRect, title: categories.find((item) => item.id === category)?.title ?? activeCategory.title, mode: 'works' });
+    }
+    if (transitionImage?.rect && transitionImage?.src) {
+      setSharedImage({
+        src: transitionImage.src,
+        fromRect: transitionImage.rect,
+        toRect: null,
+        workId
+      });
+    } else {
+      setSharedImage(null);
+    }
+    setWorksActiveLocked(false);
+    setNavMotion('to-detail');
+    setWorksScrollY(window.scrollY);
+    window.sessionStorage.setItem('portfolioWorksScrollY', String(window.scrollY));
+    window.sessionStorage.setItem('portfolioDetailEntryCategory', category);
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.body.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    window.location.hash = `/detail?category=${category}&work=${workId}`;
+    setRoute({ page: 'detail', category, workId });
+    window.requestAnimationFrame(() => window.scrollTo(0, 0));
+  };
+
+  const goDetailByIndex = (nextIndex) => {
+    const target = works[nextIndex];
+    if (!target) return;
+    window.location.hash = `/detail?category=${activeCategory.id}&work=${target.id}`;
+    setRoute({ page: 'detail', category: activeCategory.id, workId: target.id });
+    window.scrollTo(0, 0);
+  };
+
+  const goDetailCategory = (category) => {
+    const target = worksByCategory[category]?.[0];
+    if (!target) return;
+
+    // Keep the current detail pill mounted at its old rect while the new
+    // category target is rendered. The tracking effect then updates the rect
+    // and the pill's existing CSS transition carries it to the new position.
+    // Without this hand-off React can mount the new target and the overlay in
+    // the same frame, which reads as a direct jump on fast taps.
+    const currentRect = readNavRect('[data-detail-category-pill="true"]');
+    if (currentRect) {
+      setSharedPill({ rect: currentRect, title: activeCategory.title, mode: 'detail' });
+    }
+
+    window.location.hash = `/detail?category=${category}&work=${target.id}`;
+    setRoute({ page: 'detail', category, workId: target.id });
+    window.scrollTo(0, 0);
+  };
+
+  const goDetailBack = () => {
+    const entryCategory = window.sessionStorage.getItem('portfolioDetailEntryCategory');
+    const shouldRestore = entryCategory === route.category;
+    setWorksActiveLocked(true);
+    window.setTimeout(() => setWorksActiveLocked(false), 860);
+    setNavMotion('to-works');
+    goWorks(route.category, shouldRestore);
+  };
+
+  return (
+    <>
+      <main>
+        {route.page !== 'heroMotionDemo' && (
+          <MorphNav
+            page={route.page}
+            navMotion={navMotion}
+            homeActiveSection={homeActiveSection}
+            hasSharedWorksPill={Boolean((sharedPill || worksActiveLocked) && route.page === 'works')}
+            activeCategory={activeCategory}
+            activeIndex={activeIndex}
+            total={works.length}
+            goHome={goHome}
+            goWorks={goWorks}
+            goWorksBack={goDetailBack}
+            goDetailByIndex={goDetailByIndex}
+            goDetailCategory={goDetailCategory}
+          />
+        )}
+        {sharedPill && <SharedCategoryPill pill={sharedPill} />}
+        {sharedImage && (
+          <SharedImageTransition
+            transition={sharedImage}
+            onDone={() => setSharedImage(null)}
+          />
+        )}
+        {route.page === 'heroMotionDemo' ? (
+          <HeroMotionDemo />
+        ) : (
+          <>
+            {/* The home layer is never unmounted, only hidden. Its images,
+                video and scroll position survive a trip into works or detail,
+                so coming back needs no reload and lands on the same screen. */}
+            <div
+              className={`page-keep${route.page === 'home' ? '' : ' is-hidden'}`}
+              aria-hidden={route.page !== 'home'}
+            >
+              <HomePage
+                openWorks={goWorks}
+                paging={paging && route.page === 'home'}
+                active={route.page === 'home'}
+              />
+            </div>
+            {route.page === 'works' ? (
+              <WorksPage activeCategory={activeCategory} goDetail={goDetail} />
+            ) : route.page === 'detail' ? (
+              <WorkDetailPage activeCategory={activeCategory} work={activeWork} imageTransitionActive={Boolean(sharedImage && sharedImage.workId === activeWork?.id)} />
+            ) : null}
+          </>
+        )}
+      </main>
+    </>
+  );
+}
+
+function SharedCategoryPill({ pill }) {
+  const style = {
+    '--pill-x': `${pill.rect.x}px`,
+    '--pill-y': `${pill.rect.y}px`,
+    '--pill-w': `${pill.rect.width}px`,
+    '--pill-h': `${pill.rect.height}px`
+  };
+
+  return (
+    <span className={`shared-active-pill shared-active-pill-${pill.mode}`} style={style} aria-hidden="true">
+      <span>{pill.title}</span>
+      <span className="shared-active-chevron" />
+    </span>
+  );
+}
+
+function readNavRect(selector) {
+  const element = document.querySelector(selector);
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  return {
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
+function SharedImageTransition({ transition, onDone }) {
+  const [isMoving, setIsMoving] = useState(false);
+  const targetRect = transition.toRect ?? transition.fromRect;
+  const rect = isMoving ? targetRect : transition.fromRect;
+  const style = {
+    '--image-x': `${rect.x}px`,
+    '--image-y': `${rect.y}px`,
+    '--image-w': `${rect.width}px`,
+    '--image-h': `${rect.height}px`
+  };
+
+  useEffect(() => {
+    if (!transition.toRect) return undefined;
+    const frame = window.requestAnimationFrame(() => setIsMoving(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [transition.toRect]);
+
+  return (
+    <div
+      className="shared-image-transition"
+      style={style}
+      onTransitionEnd={(event) => {
+        if (event.propertyName === 'width') onDone();
+      }}
+      aria-hidden="true"
+    >
+      <img src={transition.src} alt="" />
+    </div>
+  );
+}
+
+function navigateToHomeSection(event, id) {
+  event.preventDefault();
+  const pager = homePagerRef.current;
+  if (pager && pager.jumpTo(id)) return;
+  const target = document.getElementById(id);
+  if (!target) return;
+  window.history.replaceState(null, '', `#${id}`);
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* HIDDEN_HERO_FOUR_LOGO_INTERACTION_START
+   Original live HERO Logo component. It is retained for later reuse and is not
+   mounted by HeroSection while the current three-layer HERO is active.
+*/
+function SharedHeroLogo({ page, homeHeroProgress, goHome }) {
+  const wrapRef = useRef(null);
+  const letterRefs = useRef([]);
+  const subtitleRefs = useRef([]);
+  const pointerRef = useRef({ x: 0.5, y: 0.5 });
+  const hoverTargetRef = useRef(0);
+  const transformRef = useRef({
+    x: 0,
+    y: 0,
+    width: 701,
+    height: 200,
+    opacity: 1,
+    subtitle: 1,
+    navMode: 0
+  });
+  const letters = Object.entries(fourLetterPaths);
+  const subtitleText = 'Personal works exhibition';
+  const subtitleChars = subtitleText.split('');
+
+  useLayoutEffect(() => {
+    let frame = 0;
+    let lockedViewport = null;
+    const updatePosition = () => {
+      const wrap = wrapRef.current;
+      if (!wrap) return;
+      const host = wrap.parentElement;
+      const hostRect = host?.getBoundingClientRect();
+      const hostWidth = Math.max(1, Math.round(hostRect?.width ?? window.innerWidth));
+      const hostHeight = Math.max(1, Math.round(hostRect?.height ?? window.innerHeight));
+
+      if (!lockedViewport) {
+        lockedViewport = {
+          width: hostWidth,
+          height: hostHeight
+        };
+      }
+
+      const viewportWidth = lockedViewport.width;
+      const viewportHeight = lockedViewport.height;
+      const heroWidth = Math.min(viewportWidth * 0.44, 701);
+      const heroHeight = heroWidth * (200 / 701);
+      const heroRect = {
+        x: (viewportWidth - heroWidth) / 2,
+        y: (viewportHeight - heroHeight) / 2 - viewportHeight * 0.03,
+        width: heroWidth,
+        height: heroHeight
+      };
+      const rect = heroRect;
+
+      transformRef.current = {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        opacity: 1,
+        subtitle: 1,
+        navMode: 0
+      };
+
+      wrap.style.transform = `translate3d(${rect.x.toFixed(2)}px, ${rect.y.toFixed(2)}px, 0)`;
+      wrap.style.width = `${rect.width.toFixed(2)}px`;
+      wrap.style.height = `${rect.height.toFixed(2)}px`;
+      wrap.style.opacity = String(transformRef.current.opacity);
+      wrap.classList.toggle('is-hero-active', page === 'home');
+      wrap.classList.remove('is-nav-active');
+      wrap.style.setProperty('--shared-subtitle-opacity', String(transformRef.current.subtitle));
+      wrap.classList.add('is-positioned');
+    };
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      lockedViewport = {
+        width: Math.max(1, Math.round(wrapRef.current?.parentElement?.getBoundingClientRect().width ?? window.innerWidth)),
+        height: Math.max(1, Math.round(wrapRef.current?.parentElement?.getBoundingClientRect().height ?? window.innerHeight))
+      };
+      frame = window.requestAnimationFrame(updatePosition);
+    };
+
+    updatePosition();
+    window.addEventListener('resize', requestUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', requestUpdate);
+    };
+  }, [page]);
+
+  const handlePointerMove = (event) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    pointerRef.current = {
+      x: (event.clientX - rect.left) / rect.width,
+      y: (event.clientY - rect.top) / rect.height
+    };
+  };
+
+  useEffect(() => {
+    const handleWindowPointerMove = (event) => {
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const canInteract = page === 'home' && transformRef.current.navMode < 0.08 && transformRef.current.opacity > 0.5;
+      if (!rect || !canInteract) {
+        hoverTargetRef.current = 0;
+        return;
+      }
+
+      const isInside =
+        event.clientX >= rect.left - rect.width * 0.08 &&
+        event.clientX <= rect.right + rect.width * 0.08 &&
+        event.clientY >= rect.top - rect.height * 0.18 &&
+        event.clientY <= rect.bottom + rect.height * 0.92;
+
+      if (isInside) {
+        hoverTargetRef.current = 1;
+        handlePointerMove(event);
+      } else {
+        hoverTargetRef.current = 0;
+        pointerRef.current = { x: 0.5, y: 0.5 };
+      }
+    };
+
+    const handleWindowPointerLeave = () => {
+      hoverTargetRef.current = 0;
+      pointerRef.current = { x: 0.5, y: 0.5 };
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove, { passive: true });
+    window.addEventListener('pointerleave', handleWindowPointerLeave);
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerleave', handleWindowPointerLeave);
+    };
+  }, [page]);
+
+  useEffect(() => {
+    let frame = 0;
+    let hoverMix = 0;
+    let lastTime = performance.now();
+    const start = performance.now();
+    const centers = [
+      { x: 0.08, y: 0.5 },
+      { x: 0.36, y: 0.5 },
+      { x: 0.63, y: 0.5 },
+      { x: 0.86, y: 0.5 }
+    ];
+    const zones = [
+      { x1: -0.02, x2: 0.22, y1: -0.08, y2: 1.08 },
+      { x1: 0.2, x2: 0.52, y1: -0.08, y2: 1.08 },
+      { x1: 0.52, x2: 0.78, y1: -0.08, y2: 1.08 },
+      { x1: 0.78, x2: 1.04, y1: -0.08, y2: 1.08 }
+    ];
+    const rectProximity = (point, zone, falloff = 0.24) => {
+      const nearestX = Math.min(Math.max(point.x, zone.x1), zone.x2);
+      const nearestY = Math.min(Math.max(point.y, zone.y1), zone.y2);
+      const dx = point.x - nearestX;
+      const dy = point.y - nearestY;
+      const distance = Math.sqrt(dx * dx * 1.2 + dy * dy * 2.4);
+      return Math.max(0, 1 - distance / falloff);
+    };
+    const smooth = (value) => {
+      const t = Math.min(Math.max(value, 0), 1);
+      return t * t * t * (t * (t * 6 - 15) + 10);
+    };
+
+    const render = (now) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      const navMode = transformRef.current.navMode;
+      const motionEnabled = navMode < 0.08 && transformRef.current.opacity > 0.5;
+      hoverMix += ((motionEnabled ? hoverTargetRef.current : 0) - hoverMix) * (1 - Math.exp(-dt * 9));
+      const p = pointerRef.current;
+
+      letterRefs.current.forEach((node, index) => {
+        if (!node) return;
+        const introDelay = index * 260;
+        const introDuration = 1800;
+        const intro = page === 'home' && navMode < 0.08 ? smooth((now - start - introDelay) / introDuration) : 1;
+        const center = centers[index] ?? centers[0];
+        const dx = p.x - center.x;
+        const dy = p.y - center.y;
+        const proximity = Math.max(
+          rectProximity(p, zones[index] ?? zones[0], 0.28),
+          Math.max(0, 1 - Math.sqrt(dx * dx * 0.8 + dy * dy * 1.8) / 0.72) * 0.55
+        );
+        const pull = proximity * proximity * hoverMix;
+        const wave = Math.sin(now * 0.0028 + index * 1.1) * pull;
+        const x = dx * 64 * pull;
+        const y = dy * 44 * pull + wave * 3;
+        const scaleX = 1 + pull * 0.09;
+        const scaleY = 1 + pull * 0.18;
+        const blur = (1 - intro) * 72;
+
+        node.style.opacity = String(intro);
+        node.style.filter = `blur(${blur.toFixed(3)}px)`;
+        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+      });
+
+      subtitleRefs.current.forEach((node, index) => {
+        if (!node) return;
+        const subtitleIntro = page === 'home' && navMode < 0.08 ? smooth((now - start - 1900) / 900) : 1;
+        const count = Math.max(subtitleChars.length - 1, 1);
+        const centerX = 0.08 + (index / count) * 0.84;
+        const centerY = 1.22;
+        const dx = p.x - centerX;
+        const dy = p.y - centerY;
+        const charHalfWidth = subtitleChars[index] === ' ' ? 0.018 : 0.026;
+        const proximity = Math.max(
+          rectProximity(p, { x1: centerX - charHalfWidth, x2: centerX + charHalfWidth, y1: 1.06, y2: 1.38 }, 0.12),
+          Math.max(0, 1 - Math.sqrt(dx * dx * 1.8 + dy * dy * 4.2) / 0.24) * 0.6
+        );
+        const pull = proximity * proximity * hoverMix;
+        const x = dx * 150 * pull;
+        const y = dy * 78 * pull + Math.sin(now * 0.0031 + index * 0.32) * pull * 5;
+        const scaleX = 1 + pull * 0.05;
+        const scaleY = 1 + pull * 0.16;
+        const blur = (1 - subtitleIntro) * 10;
+        const opacity = subtitleIntro * transformRef.current.subtitle;
+
+        node.style.opacity = String(opacity);
+        node.style.filter = `blur(${blur.toFixed(3)}px)`;
+        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+      });
+
+      frame = window.requestAnimationFrame(render);
+    };
+
+    frame = window.requestAnimationFrame(render);
+    return () => window.cancelAnimationFrame(frame);
+  }, [page]);
+
+  return (
+    <button
+      type="button"
+      className="shared-hero-logo"
+      ref={wrapRef}
+      onClick={goHome}
+      aria-label="FOUR Home"
+    >
+      <svg className="shared-hero-logo-svg" width="701" height="200" viewBox="0 0 701 200" aria-hidden="true">
+        <g className="shared-hero-logo-core">
+          {letters.map(([key, paths], index) => (
+            <g
+              className="shared-hero-letter"
+              ref={(node) => {
+                letterRefs.current[index] = node;
+              }}
+              key={key}
+            >
+              {paths.map((path) => <path d={path} key={path} />)}
+            </g>
+          ))}
+        </g>
+      </svg>
+      <span className="shared-hero-subtitle" aria-label={subtitleText}>
+        {subtitleChars.map((char, index) => (
+          <span
+            className="shared-hero-subtitle-char"
+            aria-hidden="true"
+            ref={(node) => {
+              subtitleRefs.current[index] = node;
+            }}
+            key={`${char}-${index}`}
+          >
+            {char === ' ' ? '\u00A0' : char}
+          </span>
+        ))}
+      </span>
+    </button>
+  );
+}
+
+function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } = {}) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  const lastScrollYRef = useRef(typeof window === 'undefined' ? 0 : window.scrollY);
+  const visibleRef = useRef(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return undefined;
+
+    let frame = 0;
+    const syncVisibility = () => {
+      const rect = element.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const currentScrollY = window.scrollY;
+      const isScrollingDown = currentScrollY >= lastScrollYRef.current;
+      const isInView = rect.top < viewportHeight * 0.92 && rect.bottom > viewportHeight * 0.08;
+      const isWaitingBelow = rect.top >= viewportHeight * 0.92;
+
+      lastScrollYRef.current = currentScrollY;
+
+      if (isInView) {
+        if (isScrollingDown || !visibleRef.current) {
+          visibleRef.current = true;
+          setVisible(true);
+        }
+        return;
+      }
+
+      if (isWaitingBelow) {
+        visibleRef.current = false;
+        setVisible(false);
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const currentScrollY = window.scrollY;
+        const isScrollingDown = currentScrollY >= lastScrollYRef.current;
+        lastScrollYRef.current = currentScrollY;
+
+        if (entry.isIntersecting) {
+          if (isScrollingDown || !visibleRef.current) {
+            visibleRef.current = true;
+            setVisible(true);
+          }
+          return;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        if (rect.top >= viewportHeight * 0.92) {
+          visibleRef.current = false;
+          setVisible(false);
+        }
+      },
+      { threshold, rootMargin }
+    );
+
+    observer.observe(element);
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(syncVisibility);
+    });
+    const visibilityTimer = window.setInterval(syncVisibility, 240);
+    window.addEventListener('scroll', syncVisibility, { passive: true });
+    window.addEventListener('resize', syncVisibility);
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(visibilityTimer);
+      window.removeEventListener('scroll', syncVisibility);
+      window.removeEventListener('resize', syncVisibility);
+    };
+  }, [threshold, rootMargin]);
+
+  return [ref, visible];
+}
+
+function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, activeCategory, activeIndex, total, goHome, goWorks, goWorksBack, goDetailByIndex, goDetailCategory }) {
+  const isHome = page === 'home';
+  const isDetail = page === 'detail';
+  const activeCategoryIndex = Math.max(0, categories.findIndex((category) => category.id === activeCategory.id));
+  const isFirst = activeIndex <= 0;
+  const isLast = activeIndex >= total - 1;
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const hideSharedWorksLabel = !isHome && !isDetail && hasSharedWorksPill;
+
+  // One sliding underline for the home primary nav. The indicator is a single
+  // independent element whose position is driven by the active item's box, so
+  // swapping its inner content for an SVG later does not touch the motion.
+  const homeNavRef = useRef(null);
+  const indicatorRef = useRef(null);
+  const navBoxesRef = useRef([]);
+  const currentRef = useRef({ x: 0, w: 0 });
+  const targetIndexRef = useRef(0);
+  const lockIndexRef = useRef(-1);
+  const lockTimerRef = useRef(0);
+  const animRef = useRef(null);
+  const rafRef = useRef(0);
+
+  // Speed is the only constant: every transition of the four buttons moves at
+  // the same px/ms in both directions, so Home -> Contact, Contact -> Home and
+  // Contact -> About all feel identical. Only the duration scales with distance.
+  const NAV_SPEED_PX_PER_MS = 0.5;
+  const NAV_MIN_MS = 110;
+  const NAV_MAX_MS = 520;
+  // The first painted frame lands one frame after the click and the last one a
+  // frame after the duration, so a raw distance/speed would run ~2 frames long
+  // and short hops would look slower than long ones. The budget spends those
+  // frames up front, which keeps every move at the same measured px/ms.
+  const NAV_FRAME_BUDGET_MS = 32;
+
+  // Five home screens map onto four nav items: profile and advantage both sit
+  // under About.
+  const itemIndexFromScroll = () => {
+    const pageH = window.innerHeight || 1;
+    const section = Math.min(4, Math.max(0, Math.round(window.scrollY / pageH)));
+    if (section <= 0) return 0;
+    if (section <= 2) return 1;
+    if (section === 3) return 2;
+    return 3;
+  };
+
+  // Written straight to the node instead of through state: no React re-render
+  // per frame, so the slide keeps its timing and never drops a frame mid-move.
+  const paint = (x, w) => {
+    currentRef.current = { x, w };
+    const el = indicatorRef.current;
+    if (!el) return;
+    el.style.transform = `translateX(${x}px)`;
+    el.style.width = `${w}px`;
+    el.style.opacity = w > 0 ? '1' : '0';
+  };
+
+  const step = (now) => {
+    rafRef.current = 0;
+    const anim = animRef.current;
+    if (!anim) return;
+    // Linear in time at a fixed px/ms: no easing, so speed never varies mid-slide.
+    const q = Math.min(1, (now - anim.start) / anim.duration);
+    paint(anim.fromX + (anim.toX - anim.fromX) * q, anim.fromW + (anim.toW - anim.fromW) * q);
+    if (q < 1) rafRef.current = window.requestAnimationFrame(step);
+    else animRef.current = null;
+  };
+
+  const moveTo = (index, immediate) => {
+    const boxes = navBoxesRef.current;
+    if (boxes.length < 4) return;
+    const clamped = Math.min(Math.max(index, 0), boxes.length - 1);
+    const dest = boxes[clamped];
+    if (immediate) {
+      if (rafRef.current) { window.cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+      animRef.current = null;
+      targetIndexRef.current = clamped;
+      paint(dest.x, dest.w);
+      return;
+    }
+    // Already travelling to (or resting on) this item: let the current slide
+    // finish. Restarting each frame would re-scale the remaining distance and
+    // drag a slow tail behind every move.
+    if (animRef.current && animRef.current.index === clamped) return;
+    if (!animRef.current && targetIndexRef.current === clamped) return;
+    targetIndexRef.current = clamped;
+    const from = currentRef.current;
+    if (Math.abs(dest.x - from.x) < 0.5 && Math.abs(dest.w - from.w) < 0.5) {
+      animRef.current = null;
+      paint(dest.x, dest.w);
+      return;
+    }
+    animRef.current = {
+      fromX: from.x,
+      fromW: from.w,
+      toX: dest.x,
+      toW: dest.w,
+      index: clamped,
+      start: performance.now(),
+      duration: Math.min(
+        Math.max(Math.abs(dest.x - from.x) / NAV_SPEED_PX_PER_MS - NAV_FRAME_BUDGET_MS, NAV_MIN_MS),
+        NAV_MAX_MS,
+      ),
+    };
+    if (!rafRef.current) rafRef.current = window.requestAnimationFrame(step);
+  };
+
+  // A click owns the next transition: the bar glides straight to the clicked item
+  // at the shared speed, ignoring intermediate sections until it arrives. That
+  // is what removes the stop-over at About on the way to Contact.
+  const lockTo = (index) => {
+    lockIndexRef.current = index;
+    if (lockTimerRef.current) window.clearTimeout(lockTimerRef.current);
+    lockTimerRef.current = window.setTimeout(() => {
+      lockIndexRef.current = -1;
+    }, 1600);
+    moveTo(index, false);
+  };
+
+  useLayoutEffect(() => {
+    if (!isHome || !homeNavRef.current) return undefined;
+    const links = Array.from(homeNavRef.current.querySelectorAll('a[data-home-nav-item]'));
+    const measureBoxes = () => {
+      navBoxesRef.current = links.map((el) => ({ x: el.offsetLeft, w: el.offsetWidth }));
+    };
+    measureBoxes();
+    // Land on the correct item immediately on mount; do not animate into place.
+    moveTo(itemIndexFromScroll(), true);
+    const remeasure = window.requestAnimationFrame(() => {
+      measureBoxes();
+      moveTo(targetIndexRef.current, true);
+    });
+    let scrollFrame = 0;
+    const onScroll = () => {
+      if (scrollFrame) return;
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = 0;
+        const idx = itemIndexFromScroll();
+        if (lockIndexRef.current >= 0 && idx !== lockIndexRef.current) return;
+        lockIndexRef.current = -1;
+        moveTo(idx, false);
+      });
+    };
+    const onResize = () => { measureBoxes(); moveTo(targetIndexRef.current, true); };
+    const onScrollEnd = () => { lockIndexRef.current = -1; moveTo(itemIndexFromScroll(), false); };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scrollend', onScrollEnd);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scrollend', onScrollEnd);
+      window.cancelAnimationFrame(remeasure);
+      if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      if (lockTimerRef.current) window.clearTimeout(lockTimerRef.current);
+    };
+  }, [isHome]);
+
+  // Going back to the hero has to animate the same way going forward does, so
+  // hand the jump to the pager (smooth). goHome()'s instant scrollTo(0, 0) is
+  // only correct when arriving at home from another page.
+  const goHomeWithScroll = (event) => {
+    if (event && event.preventDefault) event.preventDefault();
+    // Only the home page owns the pager and the hero section. Anywhere else
+    // this is a real route change and must fall through to goHome().
+    if (isHome) {
+      lockTo(0);
+      const pager = homePagerRef.current;
+      if (pager && pager.jumpTo('hero')) return;
+      const hero = document.getElementById('hero');
+      if (hero) {
+        hero.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+    }
+    goHome();
+  };
+
+  const scrollToHomeSection = (event, id) => {
+    event.preventDefault();
+    // On a paged home the pager owns the scroll, and a raw scrollIntoView would
+    // fight it and leave the wheel out of step. The pager is registered on a
+    // module-level ref because the nav renders above HomePage.
+    const pager = homePagerRef.current;
+    if (pager && pager.jumpTo(id)) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    window.history.replaceState(null, '', `#${id}`);
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  return (
+    <header
+      className={`morph-nav nav-${page} motion-${navMotion}${isHome ? ' nav-home-shared' : ''}${hasSharedWorksPill ? ' has-shared-works-pill' : ''}${categoryOpen ? ' category-menu-open' : ''}`}
+      style={{ '--active-index': activeCategoryIndex }}
+    >
+      {!isDetail && <button type="button" className="morph-logo" data-shared-logo-anchor="true" onClick={goHomeWithScroll} aria-label="FOUR Home"><LogoMark /></button>}
+      {isHome && (
+        <nav className="home-primary-items" aria-label="Primary navigation" ref={homeNavRef}>
+          <a data-home-nav-item="0" className={homeActiveSection === 'hero' ? 'is-active' : ''} aria-current={homeActiveSection === 'hero' ? 'location' : undefined} href="#hero" onClick={goHomeWithScroll}>Home</a>
+          <a data-home-nav-item="1" className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} aria-current={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'location' : undefined} href="#profile" onClick={(event) => {
+            lockTo(1);
+            scrollToHomeSection(event, 'profile');
+          }}>About</a>
+          <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onClick={(event) => {
+            event.preventDefault();
+            goWorks();
+          }}>Portfolio</a>
+          <a data-home-nav-item="3" className={homeActiveSection === 'contact' ? 'is-active' : ''} aria-current={homeActiveSection === 'contact' ? 'location' : undefined} href="#contact" onClick={(event) => {
+            lockTo(3);
+            scrollToHomeSection(event, 'contact');
+          }}>Contact</a>
+          <span className="home-nav-indicator" aria-hidden="true" ref={indicatorRef} />
+        </nav>
+      )}
+      {isDetail && (
+        <button type="button" className="detail-nav-back" onClick={goWorksBack}>
+          <svg className="detail-nav-back-icon" viewBox="0 0 10 18" aria-hidden="true">
+            <path d="M8.5 1.5L1.5 9l7 7.5" />
+          </svg>
+          Back
+        </button>
+      )}
+      <nav className="works-nav-items" aria-hidden={isHome || isDetail}>
+        <span className="works-nav-indicator" aria-hidden="true" />
+        {categories.map((category) => (
+          <button
+            type="button"
+            key={category.id}
+            data-category-pill={category.id}
+            className={category.id === activeCategory.id ? 'active' : ''}
+            aria-label={category.title}
+            onClick={() => goWorks(category.id)}
+          >
+            {hideSharedWorksLabel && category.id === activeCategory.id ? null : category.title}
+          </button>
+        ))}
+      </nav>
+      {isDetail && (
+        <div className="detail-pager">
+          <button type="button" disabled={isFirst} onClick={() => goDetailByIndex(activeIndex - 1)}>
+            <span className="pager-triangle pager-triangle-left" aria-hidden="true" />
+            Last
+          </button>
+          <span>{String(activeIndex + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span>
+          <button type="button" disabled={isLast} onClick={() => goDetailByIndex(activeIndex + 1)}>
+            Next
+            <span className="pager-triangle pager-triangle-right" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {isHome ? null : isDetail ? (
+        <div className={`detail-category-select${categoryOpen ? ' is-open' : ''}`} onMouseLeave={() => setCategoryOpen(false)}>
+          <button
+            type="button"
+            className="detail-category-trigger"
+            data-detail-category-pill="true"
+            aria-label={activeCategory.title}
+            onClick={() => setCategoryOpen((open) => !open)}
+          >
+            <span className="detail-category-chevron" />
+          </button>
+          <div className="detail-category-menu">
+            {categories.map((category) => (
+              <button
+                type="button"
+                key={category.id}
+                className={category.id === activeCategory.id ? 'active' : ''}
+                onClick={() => {
+                  setCategoryOpen(false);
+                  goDetailCategory(category.id);
+                }}
+              >
+                {category.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="morph-home-pill" onClick={goHome}><House size={15} strokeWidth={2} />Home</button>
+      )}
+    </header>
+  );
+}
+
+function ShowcaseDeck({ items, openWorks }) {
+  const [stageRef, visible] = useRevealOnView({ threshold: 0.16, rootMargin: '0px 0px -6% 0px' });
+  const [hovered, setHovered] = useState(-1);
+
+  // Hovering a card lifts it to the front and pushes the others sideways: the
+  // cards to its left travel further left, the ones to its right travel further
+  // right. That is what makes the row "fan open", and it is why moving from
+  // card 1 to card 2 makes card 1 drop back and slide left again.
+  const PUSH = 24;      // px a neighbour shifts away from the hovered card
+  const PUSH_CAP = 3;   // neighbours further than this many steps move no more
+
+  return (
+    <div
+      ref={stageRef}
+      className={`showcase-deck${visible ? ' is-visible' : ''}`}
+      onPointerLeave={() => setHovered(-1)}
+    >
+      {items.map(({ project, cover }, index) => {
+        const active = index === hovered;
+        const distance = index - hovered;
+        const push = hovered < 0 || active
+          ? 0
+          : Math.sign(distance) * Math.min(Math.abs(distance), PUSH_CAP) * PUSH;
+
+        const deckVars = {
+          '--x': `${project.deck.left}%`,
+          '--rot': active ? 0 : project.deck.rot,
+          '--y': active ? -46 : project.deck.restY,
+          '--push': push,
+          '--scale': active ? 1.06 : 1,
+          '--z': active ? 60 : project.deck.z,
+          '--i': index
+        };
+
+        return (
+          <React.Fragment key={project.id}>
+            {/* The reflection belongs to the floor, not to the card. It follows
+                the card horizontally, but stays on the fixed ground plane while
+                the card itself can float higher on hover. */}
+            <span
+              className={`showcase-deck-reflection${active ? ' is-active' : ''}`}
+              aria-hidden="true"
+              style={{ ...deckVars, '--mirror-push': `${push}px` }}
+            >
+              <LazyImage src={cover} alt="" aria-hidden="true" />
+            </span>
+            <div
+              className={`showcase-deck-card${active ? ' is-active' : ''}`}
+              style={deckVars}
+              onPointerEnter={() => setHovered(index)}
+              onFocus={() => setHovered(index)}
+              onBlur={(event) => {
+                // Only drop the card when focus truly leaves it, not on the
+                // card -> button hand-off inside the same card.
+                if (!event.currentTarget.contains(event.relatedTarget)) setHovered(-1);
+              }}
+            >
+              <button
+                type="button"
+                className="showcase-deck-button"
+                onClick={() => openWorks(project.category)}
+              >
+                <LazyImage src={cover} alt="" aria-hidden="true" />
+                <span className="showcase-deck-scrim" aria-hidden="true" />
+                <span className="showcase-deck-copy">
+                  <em>{project.index}</em>
+                  <strong>{project.title}</strong>
+                  <b>{project.meta}</b>
+                </span>
+              </button>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Mobile-only works showcase: a three-card poker stack.
+   - Only the left / centre / right cards are ever visible (|eff| > 1.3 hidden).
+   - Flipping left: the right card stacks up to cover the centre, the former
+     centre card stacks down to the left, and the old left card is tucked back
+     into the deck (slides right + sinks + fades) while the next card is drawn
+     out from the deck to the right.
+   - The centre card follows the finger 1:1 in any direction with a 3D tilt;
+     the other two cards parallax along.
+   - Tapping a side card switches to it; tapping the front card opens works.
+   - Auto-plays every 2.4s; pauses while dragging.
+   The PC ShowcaseDeck (hover fan) is untouched. */
+function MobileShowcaseDeck({ items, openWorks }) {
+  const deckRef = useRef(null);
+  const cardRefs = useRef([]);
+  const dimRefs = useRef([]);
+  const thumbRefs = useRef([]);
+  const dotRefs = useRef([]);
+  const counterRef = useRef(null);
+  const ctxRef = useRef({ items, openWorks });
+  ctxRef.current = { items, openWorks };
+
+  const RANGE = 150, COMMIT = 62, FLICK = 0.45;
+  const CL = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  const rel = (i, active) => {
+    const N = ctxRef.current.items.length;
+    let r = i - active;
+    while (r > N / 2) r -= N;
+    while (r < -N / 2) r += N;
+    return r;
+  };
+
+  /* Poker-deck pose: segment-wise asymmetric, like the reference screenshot. */
+  const poseAt = (eff) => {
+    if (eff >= 0) {
+      if (eff <= 1) {                                  // right slot -> centre (covers up)
+        const f = eff;
+        return { x: 96 * f, s: 1 - 0.14 * f, r: 8 * f, dim: 0.62 * f, o: 1 };
+      }
+      const f = CL(eff - 1, 0, 1);                     // 0 (right slot) -> 1 (inside deck)
+      return {
+        x: 96 * (1 - f), s: 0.86 + 0.09 * f, r: 8 * (1 - f),
+        dim: 0.62 + 0.18 * f,
+        o: 1 - CL((f - 0.5) / 0.5, 0, 1),
+      };
+    }
+    if (eff >= -1) {                                   // centre -> left slot
+      const f = -eff;
+      return { x: -96 * f, s: 1 - 0.14 * f, r: -8 * f, dim: 0.62 * f, o: 1 };
+    }
+    const f = CL(-eff - 1, 0, 1);                      // left slot -> back into deck (slides right)
+    return {
+      x: -96 * (1 - f), s: 0.86 + 0.09 * f, r: -8 * (1 - f),
+      dim: 0.62 + 0.18 * f,
+      o: 1 - CL((f - 0.5) / 0.5, 0, 1),
+    };
+  };
+  const zFor = (eff) => {
+    if (eff > 0.5) return eff < 1.5 ? 2 : 1;
+    if (eff < -0.5) return eff > -1.5 ? 2 : 0;
+    return 3;
+  };
+
+  const stateRef = useRef({
+    active: 0, p: 0, isDrag: false, moved: false,
+    startX: 0, startY: 0, curDX: 0, curDY: 0, lastDX: 0, vel: 0, downIdx: 0,
+  });
+
+  const render = () => {
+    const N = ctxRef.current.items.length;
+    const s = stateRef.current;
+    cardRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const r = rel(i, s.active);
+      const isMain = s.isDrag && Math.abs(r) < 0.5;
+      let transform, z, dim, op, front = false;
+      if (isMain) {
+        transform =
+          `translate(-50%, -50%) translateX(${s.curDX}px) translateY(${s.curDY}px)` +
+          ` rotateX(${CL(-s.curDY * 0.05, -9, 9)}deg) rotateY(${CL(s.curDX * 0.05, -9, 9)}deg)` +
+          ` rotate(${CL(s.curDX * 0.04, -8, 8)}deg) scale(.985)`;
+        z = 3; dim = 0; op = 1;
+      } else {
+        const eff = CL(r + s.p, -2.05, 2.05);
+        const pose = poseAt(eff);
+        const par = s.isDrag ? 0.16 : 0;
+        transform =
+          `translate(-50%, -50%) translateX(${pose.x + s.curDX * par}px) translateY(${s.curDY * par}px)` +
+          ` rotate(${pose.r}deg) scale(${pose.s})`;
+        z = zFor(eff); dim = pose.dim; op = pose.o;
+        front = !s.isDrag && z === 3;
+      }
+      el.style.transition = s.isDrag ? 'none' :
+        'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease';
+      el.style.transform = transform;
+      el.style.opacity = op;
+      el.style.zIndex = z;
+      const dimEl = dimRefs.current[i];
+      if (dimEl) dimEl.style.opacity = dim;
+      el.classList.toggle('front', front);
+      el.classList.toggle('lift', isMain);
+    });
+
+    const show = ((s.active % N) + N) % N;
+    if (counterRef.current) {
+      counterRef.current.textContent =
+        `FEATURED ${String(show + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
+    }
+    thumbRefs.current.forEach((th, i) => {
+      if (!th) return;
+      const on = i === show;
+      th.classList.toggle('on', on);
+      if (on) th.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+    dotRefs.current.forEach((d, i) => { if (d) d.classList.toggle('on', i === show); });
+  };
+
+  const goTo = (idx) => {
+    const N = ctxRef.current.items.length;
+    const s = stateRef.current;
+    s.active = ((idx % N) + N) % N;
+    s.p = 0; s.curDX = 0; s.curDY = 0; s.isDrag = false;
+    if (deckRef.current) deckRef.current.classList.remove('grabbing');
+    render();
+  };
+
+  // Keep latest closures reachable from the long-lived listeners.
+  const renderRef = useRef(render);
+  const goToRef = useRef(goTo);
+  renderRef.current = render;
+  goToRef.current = goTo;
+
+  const ptOf = (e) => (e.touches && e.touches[0] ? e.touches[0] : e);
+
+  const onDown = (e) => {
+    const s = stateRef.current;
+    const q = ptOf(e);
+    const cardEl = e.target.closest('.mob-card');
+    s.downIdx = cardEl ? Number(cardEl.dataset.idx) : s.active;
+    s.isDrag = true; s.moved = false;
+    s.startX = q.clientX; s.startY = q.clientY;
+    s.curDX = 0; s.curDY = 0; s.lastDX = 0; s.vel = 0;
+    if (e.pointerId !== undefined && deckRef.current && deckRef.current.setPointerCapture) {
+      try { deckRef.current.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    if (e.cancelable) e.preventDefault();
+    if (deckRef.current) deckRef.current.classList.add('grabbing');
+    renderRef.current();
+  };
+  const onMove = (e) => {
+    const s = stateRef.current;
+    if (!s.isDrag) return;
+    const q = ptOf(e);
+    s.curDX = q.clientX - s.startX;
+    s.curDY = q.clientY - s.startY;
+    s.vel = s.curDX - s.lastDX; s.lastDX = s.curDX;
+    if (Math.abs(s.curDX) > 8 || Math.abs(s.curDY) > 8) s.moved = true;
+    s.p = Math.max(-1.25, Math.min(1.25, s.curDX / RANGE));
+    if (e.cancelable) e.preventDefault();
+    renderRef.current();
+  };
+  const onUp = (e) => {
+    const s = stateRef.current;
+    if (!s.isDrag) return;
+    s.isDrag = false;
+    if (e.pointerId !== undefined && deckRef.current && deckRef.current.releasePointerCapture) {
+      try { deckRef.current.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    if (deckRef.current) deckRef.current.classList.remove('grabbing');
+    if (!s.moved) {
+      if (s.downIdx === s.active) {
+        const item = ctxRef.current.items[s.active];
+        if (item) ctxRef.current.openWorks(item.project.category);
+      } else {
+        goToRef.current(s.downIdx);
+      }
+      return;
+    }
+    if (Math.abs(s.curDX) > COMMIT || Math.abs(s.vel) > FLICK) {
+      const N = ctxRef.current.items.length;
+      s.active = (s.active + (s.curDX < 0 ? 1 : -1) + N * 2) % N;
+    }
+    s.p = 0;
+    renderRef.current();
+  };
+
+  useLayoutEffect(() => {
+    const deck = deckRef.current;
+    if (!deck) return undefined;
+    const onD = (e) => onDown(e);
+    const onM = (e) => onMove(e);
+    const onU = (e) => onUp(e);
+    if (window.PointerEvent) {
+      deck.addEventListener('pointerdown', onD);
+      deck.addEventListener('pointermove', onM);
+      deck.addEventListener('pointerup', onU);
+      deck.addEventListener('pointercancel', onU);
+    } else {
+      deck.addEventListener('touchstart', onD, { passive: false });
+      deck.addEventListener('touchmove', onM, { passive: false });
+      deck.addEventListener('touchend', onU);
+      deck.addEventListener('touchcancel', onU);
+      deck.addEventListener('mousedown', onD);
+      window.addEventListener('mousemove', onM);
+      window.addEventListener('mouseup', onU);
+    }
+    renderRef.current();
+    const timer = setInterval(() => {
+      if (!stateRef.current.isDrag) goToRef.current(stateRef.current.active + 1);
+    }, 2400);
+    return () => {
+      clearInterval(timer);
+      if (window.PointerEvent) {
+        deck.removeEventListener('pointerdown', onD);
+        deck.removeEventListener('pointermove', onM);
+        deck.removeEventListener('pointerup', onU);
+        deck.removeEventListener('pointercancel', onU);
+      } else {
+        deck.removeEventListener('touchstart', onD);
+        deck.removeEventListener('touchmove', onM);
+        deck.removeEventListener('touchend', onU);
+        deck.removeEventListener('touchcancel', onU);
+        deck.removeEventListener('mousedown', onD);
+        window.removeEventListener('mousemove', onM);
+        window.removeEventListener('mouseup', onU);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="mob-showcase">
+      <div className="mob-counter" ref={counterRef}>FEATURED 01 / 07</div>
+      <div className="mob-stage">
+        <div className="mob-deck" ref={deckRef}>
+          {items.map(({ project, cover }, i) => (
+            <div
+              className="mob-card"
+              key={project.id}
+              data-idx={i}
+              ref={(el) => { cardRefs.current[i] = el; }}
+            >
+              <LazyImage className="mob-card-img" src={cover} alt="" />
+              <div className="mob-veil" />
+              <div className="mob-dim" ref={(el) => { dimRefs.current[i] = el; }} />
+              <span className="mob-tag">{project.category.toUpperCase()}</span>
+              <div className="mob-copy">
+                <strong className="mob-title">{project.title}</strong>
+                <b className="mob-meta">{project.meta}</b>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mob-dots">
+        {items.map((it, i) => (
+          <i key={i} ref={(el) => { dotRefs.current[i] = el; }} />
+        ))}
+      </div>
+      <div className="mob-thumbs">
+        {items.map(({ project, cover }, i) => (
+          <div
+            className="mob-thumb"
+            key={project.id}
+            ref={(el) => { thumbRefs.current[i] = el; }}
+            onClick={() => goToRef.current(i)}
+          >
+            <LazyImage src={cover} alt="" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Reveal({ as: Tag = 'div', className = '', children, threshold = 0.18, rootMargin = '0px 0px -10% 0px' }) {
+  const [ref, visible] = useRevealOnView({ threshold, rootMargin });
+  return (
+    <Tag ref={ref} className={`${className}${visible ? ' is-visible' : ''}`}>
+      {children}
+    </Tag>
+  );
+}
+
+/* Lazy-loads an image: the real src is only assigned once the element is within
+   one viewport of the screen, so flipping to the next paged screen already has
+   its images ready. No placeholder is used; the surrounding layout reserves the
+   space via CSS aspect-ratio or fixed dimensions. */
+function LazyImage({ src, alt = '', className, ...rest }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !src) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      el.src = src;
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.src = src;
+          io.disconnect();
+        }
+      },
+      { root: null, rootMargin: '100% 0px 100% 0px', threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [src]);
+  return <img ref={ref} className={className} alt={alt} {...rest} />;
+}
+
+/* ---------------------------------------------------------------------------
+   HERO - page 01 of a paged home.
+
+   PC uses an HEVC color source plus a grayscale matte where supported. Their
+   decoded frames are paired by frame index, then the matte is converted to
+   alpha by WebGL. H.264/VP9 remains the complete compatibility fallback. The
+   interactive SVG stays between the background and foreground planes.
+
+   There is no cinematic hand-off to the personal-info page.
+--------------------------------------------------------------------------- */
+const HERO_FRAME_WIDTH = 2560;
+const HERO_FRAME_HEIGHT = 1440;
+const HERO_FRAME_FPS = 24;
+const HERO_FRAME_COUNT = 353;
+
+/* Desktop HERO uses a three-plane composition: background canvas, SVG
+   typography, and transparent foreground canvas. Mobile uses one portrait MP4. */
+/* Hidden FOUR Logo archive for future reuse. Keep this marker stable so the
+   original logo artwork and interaction remain easy to find. */
+const HIDDEN_HERO_FOUR_LOGO_ARCHIVE = {
+  marker: 'HIDDEN_HERO_FOUR_LOGO_INTERACTION_START',
+  component: 'SharedHeroLogo',
+  motion: 'pointer proximity + requestAnimationFrame letter deformation',
+  source: 'fourLetterPaths',
+  selector: '.shared-hero-logo'
+};
+
+/* The personal-info body used by page 02. It remains a normal page section;
+   the former screen-map copy and HERO-to-profile transition were removed. */
+function ProfileContent() {
+  return (
+    <div className="profile-shot-inner">
+      <div className="profile-hero-stage">
+        <LazyImage className="profile-words-art" src={aboutWordsArt} alt="FOUR 邱锋江" />
+        <LazyImage className="profile-portrait-art" src={aboutPortrait} alt="邱锋江 portrait" />
+      </div>
+      <div className="profile-contact-line"><span>Guangdong / Remote</span><span>Four4444.Design@gmail.com</span><span>18219315597</span></div>
+      <div className="profile-stats-row"><div><strong>6+</strong><span>Years Design</span></div><div><strong>10</strong><span>Design Tool</span></div><div><strong>50</strong><span>Work Case</span></div></div>
+      <div className="profile-tools">
+        <p>专业技能</p>
+        <div className="profile-tool-list">
+          {tools.map((tool) => <span key={tool.name}><LazyImage src={tool.icon} alt="" />{tool.name}</span>)}
+        </div>
+      </div>
+      <div className="profile-bottom-line"><span /><b>UI / VI / AI</b></div>
+    </div>
+  );
+}
+
+function HeroSection({ active = true }) {
+  const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
+  const [assetMode, setAssetMode] = useState(() => {
+    if (isMobile) return 'mobile';
+    const video = document.createElement('video');
+    return HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type))) ? 'hevc' : 'fallback';
+  });
+  const useWebglRenderer = !isMobile && assetMode === 'hevc';
+  const heroTitleMarkup = useMemo(() => {
+    let welcomePart = 0;
+    const splitWelcome = group10Markup.replace(
+      /<path\b(?=[^>]*\bfill="white")([^>]*?)\s*\/>/g,
+      (_match, attributes) => `<path${attributes} data-welcome-part="${welcomePart++}"/>`
+    );
+    return splitWelcome
+      .replace('<svg ', '<svg class="hero-title-svg" ')
+      .replace(/\s+width="[^"]*"\s+height="[^"]*"/, '')
+      .replace(/viewBox="[^"]*"/, `viewBox="${GROUP10_VIEWBOX}"`);
+  }, []);
+  const baseRef = useRef(null);
+  const alphaRef = useRef(null);
+  const baseCanvasRef = useRef(null);
+  const alphaCanvasRef = useRef(null);
+  const fallbackAlphaCanvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const pointerRef = useRef({ x: 0.5, y: 0.5 });
+  const hoverTargetRef = useRef(0);
+
+  useEffect(() => {
+    if (isMobile) return undefined;
+    const base = baseRef.current;
+    const alpha = alphaRef.current;
+    const baseCanvas = baseCanvasRef.current;
+    const alphaCanvas = useWebglRenderer ? alphaCanvasRef.current : fallbackAlphaCanvasRef.current;
+    if (!base || !alpha || !baseCanvas || !alphaCanvas) return undefined;
+
+    const baseContext = baseCanvas.getContext('2d', { alpha: false });
+    const alphaGl = useWebglRenderer && typeof WebGLRenderingContext !== 'undefined'
+      ? alphaCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true })
+      : null;
+    const alphaContext = alphaGl ? null : (!useWebglRenderer ? alphaCanvas.getContext('2d', { alpha: true }) : null);
+    if (!baseContext || (useWebglRenderer && !alphaGl)) {
+      if (assetMode === 'hevc') setAssetMode('fallback');
+      return undefined;
+    }
+    if (!useWebglRenderer && !alphaContext) return undefined;
+    let matteProgram = null;
+    let matteTextures = null;
+    if (alphaGl) {
+      const compileShader = (type, source) => {
+        const shader = alphaGl.createShader(type);
+        alphaGl.shaderSource(shader, source);
+        alphaGl.compileShader(shader);
+        if (!alphaGl.getShaderParameter(shader, alphaGl.COMPILE_STATUS)) throw new Error(alphaGl.getShaderInfoLog(shader));
+        return shader;
+      };
+      try {
+        const vertex = compileShader(alphaGl.VERTEX_SHADER, 'attribute vec2 p; attribute vec2 uv; varying vec2 vUv; void main(){gl_Position=vec4(p,0.0,1.0);vUv=uv;}');
+        const fragment = compileShader(alphaGl.FRAGMENT_SHADER, 'precision mediump float; varying vec2 vUv; uniform sampler2D colorTex; uniform sampler2D matteTex; void main(){vec4 c=texture2D(colorTex,vUv);vec3 m=texture2D(matteTex,vUv).rgb;float a=dot(m,vec3(0.2126,0.7152,0.0722));gl_FragColor=vec4(c.rgb,a);}');
+        matteProgram = alphaGl.createProgram();
+        alphaGl.attachShader(matteProgram, vertex);
+        alphaGl.attachShader(matteProgram, fragment);
+        alphaGl.linkProgram(matteProgram);
+        if (!alphaGl.getProgramParameter(matteProgram, alphaGl.LINK_STATUS)) throw new Error(alphaGl.getProgramInfoLog(matteProgram));
+        alphaGl.useProgram(matteProgram);
+        const vertices = new Float32Array([-1, -1, 0, 1, 1, -1, 1, 1, -1, 1, 0, 0, 1, 1, 1, 0]);
+        const buffer = alphaGl.createBuffer();
+        alphaGl.bindBuffer(alphaGl.ARRAY_BUFFER, buffer);
+        alphaGl.bufferData(alphaGl.ARRAY_BUFFER, vertices, alphaGl.STATIC_DRAW);
+        const position = alphaGl.getAttribLocation(matteProgram, 'p');
+        const uv = alphaGl.getAttribLocation(matteProgram, 'uv');
+        alphaGl.enableVertexAttribArray(position);
+        alphaGl.vertexAttribPointer(position, 2, alphaGl.FLOAT, false, 16, 0);
+        alphaGl.enableVertexAttribArray(uv);
+        alphaGl.vertexAttribPointer(uv, 2, alphaGl.FLOAT, false, 16, 8);
+        matteTextures = [0, 1].map((unit, index) => {
+          const texture = alphaGl.createTexture();
+          alphaGl.activeTexture(alphaGl.TEXTURE0 + unit);
+          alphaGl.bindTexture(alphaGl.TEXTURE_2D, texture);
+          alphaGl.texParameteri(alphaGl.TEXTURE_2D, alphaGl.TEXTURE_MIN_FILTER, alphaGl.LINEAR);
+          alphaGl.texParameteri(alphaGl.TEXTURE_2D, alphaGl.TEXTURE_MAG_FILTER, alphaGl.LINEAR);
+          alphaGl.texParameteri(alphaGl.TEXTURE_2D, alphaGl.TEXTURE_WRAP_S, alphaGl.CLAMP_TO_EDGE);
+          alphaGl.texParameteri(alphaGl.TEXTURE_2D, alphaGl.TEXTURE_WRAP_T, alphaGl.CLAMP_TO_EDGE);
+          alphaGl.uniform1i(alphaGl.getUniformLocation(matteProgram, index ? 'matteTex' : 'colorTex'), unit);
+          return texture;
+        });
+        // The quad's uv layout already puts v=1 at clip-space bottom, which is
+        // exactly what an unflipped texImage2D upload needs (v=0 -> image top
+        // row). Adding UNPACK_FLIP_Y_WEBGL on top of that flipped the whole
+        // foreground: the cat-shaped mask landed at the top of the screen and
+        // cropped the sky pixels into a mirror-image cat above the real one.
+      } catch {
+        setAssetMode('fallback');
+        return undefined;
+      }
+    }
+    const renderMatte = (colorSnapshot, matteSnapshot) => {
+      alphaGl.viewport(0, 0, alphaCanvas.width, alphaCanvas.height);
+      [colorSnapshot, matteSnapshot].forEach((snapshot, index) => {
+        alphaGl.activeTexture(alphaGl.TEXTURE0 + index);
+        alphaGl.bindTexture(alphaGl.TEXTURE_2D, matteTextures[index]);
+        alphaGl.texImage2D(alphaGl.TEXTURE_2D, 0, alphaGl.RGBA, alphaGl.RGBA, alphaGl.UNSIGNED_BYTE, snapshot);
+      });
+      alphaGl.drawArrays(alphaGl.TRIANGLE_STRIP, 0, 4);
+      if (alphaGl.getError() !== alphaGl.NO_ERROR) throw new Error('WebGL matte render failed');
+    };
+
+    const pending = { base: new Map(), alpha: new Map() };
+    const frameState = {
+      base: { last: -1, cycle: 0 },
+      alpha: { last: -1, cycle: 0 }
+    };
+    const callbackIds = { base: 0, alpha: 0 };
+    const latestKey = { base: -1, alpha: -1 };
+    const FRAME_WRAP_THRESHOLD = Math.floor(HERO_FRAME_COUNT / 2);
+    const MAX_PENDING_PER_VIDEO = 3;
+    const STALL_CHECK_MS = 900;
+    const STALL_GRACE_MS = 1800;
+    const RECOVERY_COOLDOWN_MS = 1400;
+    const playbackStartAt = performance.now();
+    let disposed = false;
+    let fallbackRaf = 0;
+    let stallTimer = 0;
+    let lastProgressTime = { base: -1, alpha: -1 };
+    let lastProgressFrame = { base: -1, alpha: -1 };
+    let lastDecoderProgressAt = { base: playbackStartAt, alpha: playbackStartAt };
+    let lastPresentedAt = 0;
+    let hasPresentedFrame = false;
+    let mediaWarningAt = 0;
+    let lastRecoveryAt = -Infinity;
+    let recoveryIgnoreUntil = 0;
+    let recoveryCount = 0;
+    let resizeObserver;
+    let visiblePair = null;
+    let lastPresentedKey = -1;
+    let showImmediatePair = false;
+
+    const releaseSnapshot = (snapshot) => {
+      if (!snapshot) return;
+      snapshot.width = 1;
+      snapshot.height = 1;
+    };
+    const clearPending = (role, queues = pending, states = frameState) => {
+      queues[role].forEach(releaseSnapshot);
+      queues[role].clear();
+      states[role].last = -1;
+      states[role].cycle = 0;
+      if (queues === pending) latestKey[role] = -1;
+    };
+    const resizeCanvases = () => {
+      [baseCanvas, alphaCanvas].forEach((canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const scale = Math.min(dpr, HERO_FRAME_WIDTH / rect.width, HERO_FRAME_HEIGHT / rect.height);
+        const width = Math.max(1, Math.round(rect.width * scale));
+        const height = Math.max(1, Math.round(rect.height * scale));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+      });
+    };
+    const makeSnapshot = (video, canvas, keepAlpha) => {
+      const width = canvas.width || HERO_FRAME_WIDTH;
+      const height = canvas.height || HERO_FRAME_HEIGHT;
+      const snapshot = typeof OffscreenCanvas === 'function'
+        ? new OffscreenCanvas(width, height)
+        : document.createElement('canvas');
+      snapshot.width = width;
+      snapshot.height = height;
+      const context = snapshot.getContext('2d', { alpha: keepAlpha });
+      if (!context) return null;
+      const sourceWidth = video.videoWidth || HERO_FRAME_WIDTH;
+      const sourceHeight = video.videoHeight || HERO_FRAME_HEIGHT;
+      const cover = Math.max(width / sourceWidth, height / sourceHeight);
+      const cropWidth = width / cover;
+      const cropHeight = height / cover;
+      const sx = (sourceWidth - cropWidth) / 2;
+      const sy = (sourceHeight - cropHeight) / 2;
+      context.drawImage(video, sx, sy, cropWidth, cropHeight, 0, 0, width, height);
+      return snapshot;
+    };
+    const drawSnapshot = (canvas, context, snapshot) => {
+      if (!snapshot || !canvas.width || !canvas.height || !context) return;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(snapshot, 0, 0, canvas.width, canvas.height);
+    };
+    const drawPair = (baseSnapshot, alphaSnapshot) => {
+      drawSnapshot(baseCanvas, baseContext, baseSnapshot);
+      if (alphaGl) renderMatte(baseSnapshot, alphaSnapshot);
+      else drawSnapshot(alphaCanvas, alphaContext, alphaSnapshot);
+    };
+    const redrawVisiblePair = () => {
+      resizeCanvases();
+      if (!visiblePair) return;
+      try {
+        drawPair(visiblePair.base, visiblePair.alpha);
+      } catch {
+        if (assetMode === 'hevc') setAssetMode('fallback');
+      }
+    };
+    resizeCanvases();
+    const trimPending = (role) => {
+      const queue = pending[role];
+      while (queue.size > MAX_PENDING_PER_VIDEO) {
+        const oldestKey = Math.min(...queue.keys());
+        releaseSnapshot(queue.get(oldestKey));
+        queue.delete(oldestKey);
+      }
+      const otherRole = role === 'base' ? 'alpha' : 'base';
+      const otherLatest = latestKey[otherRole];
+      if (otherLatest < 0) return;
+      const oldestUsefulKey = otherLatest - MAX_PENDING_PER_VIDEO;
+      queue.forEach((snapshot, key) => {
+        if (key < oldestUsefulKey) {
+          releaseSnapshot(snapshot);
+          queue.delete(key);
+        }
+      });
+    };
+    const presentMatchingPair = () => {
+      const commonKeys = [...pending.base.keys()].filter((key) => pending.alpha.has(key));
+      if (!commonKeys.length) return;
+      const key = Math.max(...commonKeys);
+      if (!showImmediatePair && key <= lastPresentedKey) return;
+      const baseSnapshot = pending.base.get(key);
+      const alphaSnapshot = pending.alpha.get(key);
+      if (!baseSnapshot || !alphaSnapshot) return;
+
+      try {
+        drawPair(baseSnapshot, alphaSnapshot);
+      } catch {
+        if (assetMode === 'hevc') setAssetMode('fallback');
+        return;
+      }
+      showImmediatePair = false;
+      baseCanvas.dataset.framePairKey = String(key);
+      alphaCanvas.dataset.framePairKey = String(key);
+      const pairCount = Number(baseCanvas.dataset.framePairCount || 0) + 1;
+      baseCanvas.dataset.framePairCount = String(pairCount);
+      alphaCanvas.dataset.framePairCount = String(pairCount);
+      const previousPair = visiblePair;
+      visiblePair = { key, base: baseSnapshot, alpha: alphaSnapshot };
+      lastPresentedKey = key;
+      lastPresentedAt = performance.now();
+      hasPresentedFrame = true;
+      pending.base.delete(key);
+      pending.alpha.delete(key);
+      if (previousPair) {
+        releaseSnapshot(previousPair.base);
+        releaseSnapshot(previousPair.alpha);
+      }
+      pending.base.forEach((snapshot, pendingKey) => {
+        if (pendingKey <= key) {
+          releaseSnapshot(snapshot);
+          pending.base.delete(pendingKey);
+        }
+      });
+      pending.alpha.forEach((snapshot, pendingKey) => {
+        if (pendingKey <= key) {
+          releaseSnapshot(snapshot);
+          pending.alpha.delete(pendingKey);
+        }
+      });
+    };
+    const getFrameKey = (role, video, metadata) => {
+      const mediaTime = Number.isFinite(metadata?.mediaTime) ? metadata.mediaTime : video.currentTime;
+      if (!Number.isFinite(mediaTime)) return -1;
+      const frame = Math.max(0, Math.min(HERO_FRAME_COUNT - 1, Math.round(mediaTime * HERO_FRAME_FPS)));
+      const state = frameState[role];
+      if (state.last >= 0 && state.last - frame > FRAME_WRAP_THRESHOLD) state.cycle += 1;
+      state.last = frame;
+      return state.cycle * HERO_FRAME_COUNT + frame;
+    };
+    const capture = (role, video, metadata) => {
+      if (disposed || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      const key = getFrameKey(role, video, metadata);
+      if (key < 0 || key === latestKey[role] || key <= lastPresentedKey) return;
+      latestKey[role] = key;
+      const canvas = role === 'base' ? baseCanvas : alphaCanvas;
+      const snapshot = makeSnapshot(video, canvas, role === 'alpha');
+      if (!snapshot) return;
+      const previous = pending[role].get(key);
+      if (previous) releaseSnapshot(previous);
+      pending[role].set(key, snapshot);
+      trimPending(role);
+      presentMatchingPair();
+    };
+    const noteDecoderProgress = (role, mediaTime) => {
+      const previousTime = lastProgressTime[role];
+      const previousFrame = lastProgressFrame[role];
+      const frame = Number.isFinite(mediaTime)
+        ? Math.round(mediaTime * HERO_FRAME_FPS) % HERO_FRAME_COUNT
+        : -1;
+      if (frame !== previousFrame || (Number.isFinite(mediaTime) && Math.abs(mediaTime - previousTime) > 0.001)) {
+        lastProgressTime[role] = mediaTime;
+        lastProgressFrame[role] = frame;
+        lastDecoderProgressAt[role] = performance.now();
+      }
+    };
+    const onVideoFrame = (role, video, now, metadata) => {
+      callbackIds[role] = 0;
+      const mediaTime = Number.isFinite(metadata?.mediaTime) ? metadata.mediaTime : video.currentTime;
+      noteDecoderProgress(role, mediaTime);
+      if (!base.seeking && !alpha.seeking) capture(role, video, metadata);
+      if (!disposed && !video.paused && !video.ended && !base.seeking && !alpha.seeking) {
+        callbackIds[role] = video.requestVideoFrameCallback((nextNow, nextMetadata) => onVideoFrame(role, video, nextNow, nextMetadata));
+      }
+    };
+    const cancelVideoFrameCallbacks = () => {
+      [['base', base], ['alpha', alpha]].forEach(([role, video]) => {
+        if (callbackIds[role] && typeof video.cancelVideoFrameCallback === 'function') {
+          video.cancelVideoFrameCallback(callbackIds[role]);
+        }
+        callbackIds[role] = 0;
+      });
+    };
+    const startVideoFrameCallback = (role, video) => {
+      if (typeof video.requestVideoFrameCallback !== 'function' || callbackIds[role] || video.paused || base.seeking || alpha.seeking) return;
+      callbackIds[role] = video.requestVideoFrameCallback((now, metadata) => onVideoFrame(role, video, now, metadata));
+    };
+    const startBothVideoFrameCallbacks = () => {
+      if (base.seeking || alpha.seeking) return;
+      startVideoFrameCallback('base', base);
+      startVideoFrameCallback('alpha', alpha);
+    };
+    const fallbackTick = () => {
+      if (disposed) return;
+      noteDecoderProgress('base', base.currentTime);
+      noteDecoderProgress('alpha', alpha.currentTime);
+      capture('base', base, { mediaTime: base.currentTime });
+      capture('alpha', alpha, { mediaTime: alpha.currentTime });
+      fallbackRaf = window.requestAnimationFrame(fallbackTick);
+    };
+    const safePlay = (video) => {
+      if (!video || video.ended) {
+        try { video.currentTime = 0; } catch {}
+      }
+      const promise = video.play();
+      if (promise?.catch) promise.catch(() => {});
+    };
+    const recoverPlayback = (reason) => {
+      if (disposed || base.seeking || alpha.seeking) return;
+      const now = performance.now();
+      if (!hasPresentedFrame && now - playbackStartAt < STALL_GRACE_MS) return;
+      if (now < recoveryIgnoreUntil || now - lastRecoveryAt < RECOVERY_COOLDOWN_MS) return;
+      lastRecoveryAt = now;
+      recoveryIgnoreUntil = now + 900;
+      recoveryCount += 1;
+      const baseTime = Number.isFinite(base.currentTime) ? base.currentTime : 0;
+      const alphaTime = Number.isFinite(alpha.currentTime) ? alpha.currentTime : baseTime;
+      const targetTime = Math.max(0, Math.min(base.duration || Number.POSITIVE_INFINITY, baseTime));
+      const targetAlphaTime = Math.max(0, Math.min(alpha.duration || Number.POSITIVE_INFINITY, targetTime));
+      try { base.pause(); } catch {}
+      try { alpha.pause(); } catch {}
+      cancelVideoFrameCallbacks();
+      clearPending('base');
+      clearPending('alpha');
+      frameState.base.last = -1;
+      frameState.alpha.last = -1;
+      frameState.base.cycle = 0;
+      frameState.alpha.cycle = 0;
+      lastPresentedKey = -1;
+      showImmediatePair = true;
+      try { base.currentTime = targetTime; } catch {}
+      try { alpha.currentTime = targetAlphaTime; } catch {}
+      lastProgressTime.base = -1;
+      lastProgressTime.alpha = -1;
+      lastProgressFrame.base = -1;
+      lastProgressFrame.alpha = -1;
+      lastDecoderProgressAt.base = now;
+      lastDecoderProgressAt.alpha = now;
+      hasPresentedFrame = false;
+      lastPresentedAt = now;
+      window.setTimeout(() => {
+        if (disposed) return;
+        safePlay(base);
+        safePlay(alpha);
+        startBothVideoFrameCallbacks();
+      }, 80);
+      base.dataset.recoveryCount = String(recoveryCount);
+      base.dataset.recoveryReason = reason;
+    };
+    const checkForStall = () => {
+      if (disposed) return;
+      const now = performance.now();
+      if (now < recoveryIgnoreUntil) {
+        stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
+        return;
+      }
+      const waitingForInitialFrame = !hasPresentedFrame && now - playbackStartAt > STALL_GRACE_MS;
+      const baseStopped = hasPresentedFrame && !base.paused && !base.ended && now - lastDecoderProgressAt.base > STALL_CHECK_MS;
+      const alphaStopped = hasPresentedFrame && !alpha.paused && !alpha.ended && now - lastDecoderProgressAt.alpha > STALL_CHECK_MS;
+      const pairStopped = hasPresentedFrame && now - lastPresentedAt > STALL_CHECK_MS;
+      const unexpectedlyPaused = hasPresentedFrame && (base.paused || alpha.paused);
+      if (assetMode === 'hevc' && (waitingForInitialFrame || baseStopped || alphaStopped || pairStopped)) {
+        baseCanvas.dataset.fallbackReason = waitingForInitialFrame ? 'hevc-no-first-frame' : 'hevc-frame-stalled';
+        setAssetMode('fallback');
+        return;
+      }
+      if (waitingForInitialFrame || baseStopped || alphaStopped || pairStopped || unexpectedlyPaused) {
+        recoverPlayback(waitingForInitialFrame ? 'initial-frame' : unexpectedlyPaused ? 'paused' : pairStopped ? 'frame-pair-stalled' : baseStopped ? 'base-stalled' : 'alpha-stalled');
+      }
+      stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
+    };
+    const onMediaError = () => {
+      if (assetMode === 'hevc') {
+        baseCanvas.dataset.fallbackReason = 'hevc-media-error';
+        setAssetMode('fallback');
+        return;
+      }
+      const now = performance.now();
+      if (now - mediaWarningAt > STALL_CHECK_MS) {
+        mediaWarningAt = now;
+        recoverPlayback('media-error');
+      }
+    };
+    const onWaiting = () => {
+      window.setTimeout(() => {
+        if (!disposed && (!base.paused || !alpha.paused)) checkForStall();
+      }, STALL_CHECK_MS);
+    };
+    const onSeeking = () => {
+      showImmediatePair = true;
+      hasPresentedFrame = false;
+      lastPresentedAt = performance.now();
+      cancelVideoFrameCallbacks();
+      clearPending('base');
+      clearPending('alpha');
+      frameState.base.last = -1;
+      frameState.alpha.last = -1;
+      frameState.base.cycle = 0;
+      frameState.alpha.cycle = 0;
+      lastPresentedKey = -1;
+    };
+    const onSeeked = () => {
+      frameState.base.last = -1;
+      frameState.alpha.last = -1;
+      if (!base.paused && !base.seeking && !alpha.seeking) {
+        startBothVideoFrameCallbacks();
+        safePlay(base);
+        safePlay(alpha);
+      }
+    };
+
+    base.addEventListener('play', startBothVideoFrameCallbacks);
+    alpha.addEventListener('play', startBothVideoFrameCallbacks);
+    base.addEventListener('seeking', onSeeking);
+    alpha.addEventListener('seeking', onSeeking);
+    base.addEventListener('seeked', onSeeked);
+    alpha.addEventListener('seeked', onSeeked);
+    base.addEventListener('waiting', onWaiting);
+    alpha.addEventListener('waiting', onWaiting);
+    base.addEventListener('stalled', onMediaError);
+    alpha.addEventListener('stalled', onMediaError);
+    base.addEventListener('error', onMediaError);
+    alpha.addEventListener('error', onMediaError);
+
+    if (typeof ResizeObserver === 'function') {
+      resizeObserver = new ResizeObserver(redrawVisiblePair);
+      resizeObserver.observe(baseCanvas);
+      resizeObserver.observe(alphaCanvas);
+    } else {
+      window.addEventListener('resize', redrawVisiblePair);
+    }
+
+    if (!active) {
+      // The home layer is kept mounted but hidden while another page is open.
+      // Pause the clocks and drop the frame pairing so the decoder and the
+      // stall watchdog stop; the watchdog would otherwise read the pause as a
+      // stall and restart playback nobody can see.
+      try { base.pause(); } catch {}
+      try { alpha.pause(); } catch {}
+      cancelVideoFrameCallbacks();
+    } else if (typeof base.requestVideoFrameCallback === 'function' && typeof alpha.requestVideoFrameCallback === 'function') {
+      startBothVideoFrameCallbacks();
+    } else {
+      fallbackRaf = window.requestAnimationFrame(fallbackTick);
+    }
+    if (active) {
+      safePlay(base);
+      safePlay(alpha);
+      stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
+    }
+
+    return () => {
+      disposed = true;
+      if (stallTimer) window.clearTimeout(stallTimer);
+      base.removeEventListener('play', startBothVideoFrameCallbacks);
+      alpha.removeEventListener('play', startBothVideoFrameCallbacks);
+      base.removeEventListener('seeking', onSeeking);
+      alpha.removeEventListener('seeking', onSeeking);
+      base.removeEventListener('seeked', onSeeked);
+      alpha.removeEventListener('seeked', onSeeked);
+      base.removeEventListener('waiting', onWaiting);
+      alpha.removeEventListener('waiting', onWaiting);
+      base.removeEventListener('stalled', onMediaError);
+      alpha.removeEventListener('stalled', onMediaError);
+      base.removeEventListener('error', onMediaError);
+      alpha.removeEventListener('error', onMediaError);
+      if (callbackIds.base && typeof base.cancelVideoFrameCallback === 'function') base.cancelVideoFrameCallback(callbackIds.base);
+      if (callbackIds.alpha && typeof alpha.cancelVideoFrameCallback === 'function') alpha.cancelVideoFrameCallback(callbackIds.alpha);
+      if (fallbackRaf) window.cancelAnimationFrame(fallbackRaf);
+      if (resizeObserver) resizeObserver.disconnect();
+      else window.removeEventListener('resize', redrawVisiblePair);
+      try { base.pause(); } catch {}
+      try { alpha.pause(); } catch {}
+      clearPending('base');
+      clearPending('alpha');
+      if (visiblePair) {
+        releaseSnapshot(visiblePair.base);
+        releaseSnapshot(visiblePair.alpha);
+        visiblePair = null;
+      }
+    };
+  }, [assetMode, isMobile, useWebglRenderer, active]);
+
+  const updatePointerFromEvent = (event) => {
+    const svg = wrapRef.current?.querySelector('svg');
+    const rect = svg?.getBoundingClientRect() || wrapRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width || !rect.height) return false;
+    const clamp = (value) => Math.min(Math.max(value, 0), 1);
+    pointerRef.current = {
+      x: clamp((event.clientX - rect.left) / rect.width),
+      y: clamp((event.clientY - rect.top) / rect.height)
+    };
+    return true;
+  };
+
+  const handlePointerMove = (event) => {
+    hoverTargetRef.current = 1;
+    updatePointerFromEvent(event);
+  };
+
+  const handlePointerLeave = () => {
+    hoverTargetRef.current = 0;
+    pointerRef.current = { x: 0.5, y: 0.5 };
+  };
+
+  useEffect(() => {
+    const handleWindowPointerMove = (event) => {
+      const svg = wrapRef.current?.querySelector('svg');
+      const rect = svg?.getBoundingClientRect();
+      if (!rect || !rect.width || !rect.height) return;
+      const isInside = event.clientX >= rect.left && event.clientX <= rect.right &&
+        event.clientY >= rect.top && event.clientY <= rect.bottom;
+      if (isInside) {
+        hoverTargetRef.current = 1;
+        updatePointerFromEvent(event);
+      } else {
+        hoverTargetRef.current = 0;
+        pointerRef.current = { x: 0.5, y: 0.5 };
+      }
+    };
+    const handleWindowPointerLeave = () => {
+      hoverTargetRef.current = 0;
+      pointerRef.current = { x: 0.5, y: 0.5 };
+    };
+    window.addEventListener('pointermove', handleWindowPointerMove, { passive: true });
+    window.addEventListener('pointerleave', handleWindowPointerLeave);
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerleave', handleWindowPointerLeave);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    let frame = 0;
+    let svgNode = null;
+    let paths = [];
+    let centers = [];
+    let hoverMix = 0;
+    let lastTime = performance.now();
+    const start = performance.now();
+    const smooth = (value) => {
+      const t = Math.min(Math.max(value, 0), 1);
+      return t * t * t * (t * (t * 6 - 15) + 10);
+    };
+    const refreshPaths = () => {
+      const svg = wrapRef.current?.querySelector('svg');
+      const nextPaths = svg
+        ? [...svg.children].filter((node) => node.tagName?.toLowerCase() === 'path')
+        : [];
+      if (svg === svgNode && nextPaths.length === paths.length && nextPaths[0] === paths[0]) return;
+      svgNode = svg;
+      paths = nextPaths;
+      const viewBox = svg?.viewBox?.baseVal;
+      const viewWidth = viewBox?.width || 1640;
+      const viewHeight = viewBox?.height || 241;
+      centers = paths.map((node, index) => {
+        try {
+          const box = node.getBBox();
+          return {
+            x: (box.x + box.width / 2) / viewWidth,
+            y: (box.y + box.height / 2) / viewHeight
+          };
+        } catch {
+          return GROUP10_PATH_CENTERS[index] || GROUP10_WELCOME_SUBPATH_CENTERS[index - GROUP10_PATH_CENTERS.length] || { x: 0.5, y: 0.5 };
+        }
+      });
+    };
+    const render = (now) => {
+      refreshPaths();
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      hoverMix += (hoverTargetRef.current - hoverMix) * (1 - Math.exp(-dt * 12));
+      const p = pointerRef.current;
+      paths.forEach((node, index) => {
+        const center = centers[index] || { x: 0.5, y: 0.5 };
+        const isWelcome = node.dataset.welcomePart !== undefined;
+        const welcomeIndex = Number(node.dataset.welcomePart || 0);
+        const introDelay = isWelcome ? 1080 + welcomeIndex * 55 : index * 120;
+        const intro = smooth((now - start - introDelay) / 1800);
+        const dx = p.x - center.x;
+        const dy = p.y - center.y;
+        const proximity = Math.max(0, 1 - Math.sqrt(dx * dx * 1.15 + dy * dy * 1.3) / (isWelcome ? 0.48 : 0.46));
+        const pull = Math.pow(proximity, 1.15) * hoverMix;
+        const wave = Math.sin(now * 0.0032 + index * 0.72) * pull;
+        const x = dx * (isWelcome ? 112 : 104) * pull + wave * 5;
+        const y = dy * (isWelcome ? 68 : 58) * pull + wave * 4;
+        const scaleX = 1 + pull * (isWelcome ? 0.16 : 0.13);
+        const scaleY = 1 + pull * (isWelcome ? 0.3 : 0.24);
+        const rotate = dx * 12 * pull + wave * 2.2;
+        const skew = dy * 9 * pull;
+        node.style.opacity = String(intro);
+        node.style.filter = `blur(${((1 - intro) * 52).toFixed(3)}px)`;
+        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
+      });
+      frame = window.requestAnimationFrame(render);
+    };
+    frame = window.requestAnimationFrame(render);
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <section className="hero hero-video-stage" id="hero" aria-label="Hero video">
+      <div className="hero-video-fixed">
+        {isMobile ? (
+          <video
+            className="hero-mobile-video"
+            src={HERO_MOBILE_SRC}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            aria-label="Mobile hero video"
+          />
+        ) : (
+          <>
+            <canvas ref={baseCanvasRef} className="hero-video-bg hero-video-base-canvas" aria-hidden="true" />
+            <div
+              className="hero-title-layer"
+              ref={wrapRef}
+              aria-label="Group 10 portfolio mark"
+              onPointerMove={handlePointerMove}
+              onPointerEnter={handlePointerMove}
+              onPointerLeave={handlePointerLeave}
+              dangerouslySetInnerHTML={{ __html: heroTitleMarkup }}
+            />
+            <canvas ref={alphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas" style={{ display: useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
+            <canvas ref={fallbackAlphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas hero-video-alpha-2d" style={{ display: !isMobile && !useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
+            <video key={`base-${assetMode}`} ref={baseRef} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" disablePictureInPicture />
+            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" disablePictureInPicture />
+          </>
+        )}
+        <div className="hero-scroll-hint" aria-hidden="true" />
+      </div>
+    </section>
+  );
+}
+/* ---------------------------------------------------------------------------
+   HOME PAGING
+
+   The home page is five screens and the wheel moves between them one screen at
+   a time. The HERO itself stays in place and loops continuously. A wheel notch
+   from page 01 moves directly to page 02 with the regular page scroll; no
+   cinematic playback, screen map, whiteout, or hand-off state is involved.
+--------------------------------------------------------------------------- */
+const HOME_PAGE_IDS = ['hero', 'profile', 'advantage', 'projects', 'contact'];
+const HOME_PAGE_COUNT = HOME_PAGE_IDS.length;
+
+// Long enough for a one-screen smooth scroll plus its settle, so a second
+// notch arriving mid-animation is swallowed instead of stacking.
+const HOME_STEP_LOCK_MS = 400;
+
+// Wheel and touch gestures closer together than this belong to the same step.
+// A swipe can emit several touchmove events, so only the first resolved one may
+// advance the page until the gesture has fully settled.
+const HOME_GESTURE_GAP_MS = 90;
+const HOME_TOUCH_THRESHOLD = 34;
+const HOME_TOUCH_END_DELAY_MS = 120;
+
+const HOME_PAGING_QUERY = '(min-width: 1px)';
+
+// The nav renders above the home page, so it cannot receive the pager as a
+// prop without threading state through App. It reads this instead.
+const homePagerRef = { current: null };
+
+function usePagingEnabled(active = true) {
+  const [enabled, setEnabled] = useState(() => (
+    active && document.documentElement.getAttribute('data-paging') === 'on'
+  ));
+
+  useLayoutEffect(() => {
+    const query = window.matchMedia(HOME_PAGING_QUERY);
+    const apply = () => {
+      const on = active && query.matches;
+      document.documentElement.setAttribute('data-paging', on ? 'on' : 'off');
+    // The browser's own scroll restore would land the visitor halfway down a
+    // page it is not allowed to scroll freely. The paged home keeps its saved
+    // screen index aligned with the browser position.
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = on ? 'manual' : 'auto';
+      }
+      setEnabled((current) => (current === on ? current : on));
+    };
+    apply();
+    query.addEventListener('change', apply);
+    return () => query.removeEventListener('change', apply);
+  }, [active]);
+
+  return enabled;
+}
+function HomePage({ openWorks, paging, active = true }) {
+  const [profileRef, profileSeen] = useRevealOnView();
+  const [advantageRef, advantageSeen] = useRevealOnView();
+  const [projectsRef, projectsSeen] = useRevealOnView();
+  const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
+
+  // Mobile shows the three-card poker stack; desktop keeps the hover-fan deck.
+  const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
+
+  const worksItems = projectShowcases.map((project) => {
+    const work = worksByCategory[project.category]?.[project.work];
+    return { project, cover: work?.detailHero ?? work?.image };
+  });
+
+  // Where the controller thinks it is. On a paged home the scroll position is
+  // the only thing that can say: the browser may have restored one from an
+  // earlier visit, and starting at 0 while the page sits on 3 would leave the
+  // wheel and the view disagreeing for the rest of the session.
+  const startIndexRef = useRef(null);
+  if (startIndexRef.current === null) {
+    const viewport = window.innerHeight || 1;
+    const restored = paging ? Math.round((window.scrollY || 0) / viewport) : 0;
+    startIndexRef.current = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, restored));
+  }
+
+  const [index, setIndex] = useState(startIndexRef.current);
+
+  // The first screen is already visible on the first paint. Later screens
+  // reveal when their one-screen gesture arrives.
+  const [hasEnteredPage, setHasEnteredPage] = useState(() => startIndexRef.current > 0);
+
+  const indexRef = useRef(index);
+  const lockedUntilRef = useRef(0);
+  const scrollingRef = useRef(false);
+  const reducedRef = useRef(false);
+
+  indexRef.current = index;
+
+  useEffect(() => {
+    reducedRef.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }, []);
+
+  // Align the controller index and scroll position before the first gesture.
+  useLayoutEffect(() => {
+    if (!paging) return;
+    // Align to the screen the controller is actually on. This runs again when
+    // the home layer comes back from another page (paging flips false -> true),
+    // which lands the reader on the screen they left from, not screen 01.
+    const aligned = indexRef.current * (window.innerHeight || 1);
+    if (Math.abs(window.scrollY - aligned) > 1) window.scrollTo(0, aligned);
+  }, [paging]);
+
+  // A paged screen is exactly one viewport tall, so this is both the scroll
+  // target for page `n` and the distance one notch travels.
+  const pageHeight = () => window.innerHeight || document.documentElement.clientHeight || 1;
+
+  // The screens are one --vh tall, and on a phone --vh changes as the address
+  // bar slides in and out. When it does, the offset the controller is sitting
+  // on no longer lands on a screen boundary, so the position is re-aligned to
+  // the current page once the viewport has settled. The delay keeps the
+  // realign out of the address-bar animation, where innerHeight reports a new
+  // value on every frame and a scroll per frame would jitter.
+  useEffect(() => {
+    if (!paging) return undefined;
+    let timer = 0;
+    const realign = () => {
+      timer = 0;
+      const aligned = indexRef.current * pageHeight();
+      if (Math.abs(window.scrollY - aligned) > 1) {
+        window.scrollTo({ top: aligned, behavior: 'auto' });
+      }
+    };
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(realign, 160);
+    };
+    window.addEventListener('resize', schedule);
+    const viewport = window.visualViewport;
+    if (viewport) viewport.addEventListener('resize', schedule);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', schedule);
+      if (viewport) viewport.removeEventListener('resize', schedule);
+    };
+  }, [paging]);
+  const isLocked = () => performance.now() < lockedUntilRef.current;
+  const lockFor = (ms) => { lockedUntilRef.current = performance.now() + ms; };
+
+  const goToPage = (next, { instant = false } = {}) => {
+    const clamped = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, next));
+    setHasEnteredPage(true);
+    setIndex(clamped);
+    const smooth = !instant && !reducedRef.current;
+    if (smooth) {
+      scrollingRef.current = true;
+      window.setTimeout(() => { scrollingRef.current = false; }, 725);
+    }
+    window.scrollTo({ top: clamped * pageHeight(), behavior: smooth ? 'smooth' : 'auto' });
+  };
+
+  const step = (direction) => {
+    if (isLocked()) return;
+    const current = indexRef.current;
+    const next = current + direction;
+    if (next < 0) return;
+    if (next > HOME_PAGE_COUNT - 1) { lockFor(HOME_STEP_LOCK_MS); return; }
+    goToPage(next);
+    lockFor(HOME_STEP_LOCK_MS);
+  };
+
+  // One wheel notch, one page. The native scroll is taken over completely
+  // here: left alone it would drift between screens and the paging would fall
+  // apart, so every gesture is claimed and resolved by hand.
+  useEffect(() => {
+    if (!paging) return undefined;
+
+    let gestureAt = 0;
+    let settleTimer = 0;
+    let touchStartY = 0;
+    let touchStartX = 0;
+    let touchTracking = false;
+    let touchConsumed = false;
+    let touchEndTimer = 0;
+
+    const onWheel = (event) => {
+      if (event.ctrlKey || event.metaKey) return;    // pinch zoom, leave alone
+      event.preventDefault();
+      const now = performance.now();
+      const gap = now - gestureAt;
+      gestureAt = now;
+      if (isLocked()) return;
+      if (gap < HOME_GESTURE_GAP_MS) return;         // same gesture, still streaming
+      if (Math.abs(event.deltaY) < 2) return;
+      step(event.deltaY > 0 ? 1 : -1);
+    };
+
+    const onTouchStart = (event) => {
+      if (event.touches.length !== 1) {
+        touchTracking = false;
+        return;
+      }
+      const touch = event.touches[0];
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchTracking = true;
+      touchConsumed = false;
+      window.clearTimeout(touchEndTimer);
+    };
+
+    const onTouchMove = (event) => {
+      if (!touchTracking || event.touches.length !== 1) return;
+      event.preventDefault();
+      if (touchConsumed || isLocked()) return;
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - touchStartX;
+      const deltaY = touch.clientY - touchStartY;
+      if (Math.abs(deltaY) < HOME_TOUCH_THRESHOLD || Math.abs(deltaY) < Math.abs(deltaX)) return;
+      touchConsumed = true;
+      step(deltaY < 0 ? 1 : -1);
+    };
+
+    const onTouchEnd = () => {
+      touchEndTimer = window.setTimeout(() => {
+        touchTracking = false;
+        touchConsumed = false;
+      }, HOME_TOUCH_END_DELAY_MS);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target;
+      const tag = target && target.tagName ? target.tagName : '';
+      if (target && (target.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')) return;
+
+      if (event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        if (isLocked()) return;
+        goToPage(event.key === 'Home' ? 0 : HOME_PAGE_COUNT - 1);
+        lockFor(HOME_STEP_LOCK_MS);
+        return;
+      }
+
+      let direction = 0;
+      if (event.key === 'ArrowDown' || event.key === 'PageDown' || event.key === ' ' || event.key === 'Spacebar') direction = 1;
+      else if (event.key === 'ArrowUp' || event.key === 'PageUp') direction = -1;
+      if (!direction) return;
+      event.preventDefault();
+      step(direction);
+    };
+
+    // Any native scroll that slips through is corrected to the nearest whole
+    // screen after the gesture settles. During touch, the move handler already
+    // owns the gesture and the correction prevents partial-screen drift.
+    const onScroll = () => {
+      if (isLocked() || scrollingRef.current) return;
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        if (isLocked() || scrollingRef.current) return;
+        const height = pageHeight();
+        const nearest = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, Math.round(window.scrollY / height)));
+        if (Math.abs(window.scrollY - nearest * height) > 6) {
+          goToPage(nearest, { instant: true });
+          return;
+        }
+        if (nearest !== indexRef.current) {
+          setIndex(nearest);
+        }
+      }, 75);
+    };
+
+    const onScrollEnd = () => { scrollingRef.current = false; };
+
+    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('scrollend', onScrollEnd);
+    return () => {
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(touchEndTimer);
+      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scrollend', onScrollEnd);
+    };
+  }, [paging]);
+
+  // The nav links render outside this component, so they reach the pager
+  // through the module-level ref instead of a chain of props.
+  useEffect(() => {
+    if (!paging) {
+      homePagerRef.current = null;
+      return undefined;
+    }
+    homePagerRef.current = {
+      jumpTo(id) {
+        const target = HOME_PAGE_IDS.indexOf(id);
+        if (target < 0) return false;
+        if (isLocked()) return true;
+        if (target === indexRef.current) return true;
+        goToPage(target);
+        lockFor(HOME_STEP_LOCK_MS);
+        return true;
+      },
+    };
+    return () => { homePagerRef.current = null; };
+  }, [paging]);
+
+  // With paging on, arrival at a page is what reveals it - the observer is only
+  // there for the unpaged (touch and narrow) layout.
+  const profileVisible = paging ? hasEnteredPage && index === 1 : profileSeen;
+  const advantageVisible = paging ? hasEnteredPage && index === 2 : advantageSeen;
+  const projectsVisible = paging ? hasEnteredPage && index === 3 : projectsSeen;
+  const contactVisible = paging ? hasEnteredPage && index === 4 : contactSeen;
+
+  return (
+    <>
+      <HeroSection active={active} />
+
+      <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
+        <ProfileContent />
+      </section>
+
+      <section ref={advantageRef} className={`section advantage motion-reveal-section${advantageVisible ? ' is-visible' : ''}`} id="advantage">
+        <div className="container">
+          <div className="advantage-head">
+            <p className="section-kicker display-reveal-title rany-display-heading">CAPABILITIES</p>
+            <h2 className="display-reveal-subtitle">个人优势</h2>
+            <p>将 UI、视觉、AI 与项目交付整合成稳定的设计生产力。</p>
+          </div>
+          <div className="advantage-grid">
+            {advantages.map((item) => (
+              <Reveal
+                key={item.title}
+                as="div"
+                className="advantage-reveal"
+                threshold={0.25}
+                rootMargin="0px 0px -6% 0px"
+              >
+                <BorderGlow
+                  className="advantage-glow-card"
+                  edgeSensitivity={30}
+                  glowColor="40 80 80"
+                  backgroundColor="#131313"
+                  borderRadius={8}
+                  glowRadius={44}
+                  glowIntensity={1}
+                  coneSpread={25}
+                  fillOpacity={0.36}
+                  colors={['#c084fc', '#f472b6', '#38bdf8']}
+                >
+                  <article className="advantage-card">
+                    <LazyImage className="advantage-icon-image" src={item.icon} alt="" />
+                    <h3>{item.title}</h3>
+                    <p>{item.text}</p>
+                  </article>
+                </BorderGlow>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}`} id="projects">
+        <div className="container">
+          <div className="projects-heading">
+            <h2 className="display-reveal-title rany-display-heading">SELECTED WORK</h2>
+            <span className="display-reveal-subtitle">作品展示</span>
+          </div>
+        </div>
+        <div className="project-list">
+          {isMobile ? (
+            <MobileShowcaseDeck items={worksItems} openWorks={openWorks} />
+          ) : (
+            <ShowcaseDeck items={worksItems} openWorks={openWorks} />
+          )}
+        </div>
+      </section>
+
+      <section ref={contactRef} className={`contact-page motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
+        <SideRays
+          className="contact-side-rays"
+          speed={2.5}
+          rayColor1="#EAB308"
+          rayColor2="#96c8ff"
+          intensity={2}
+          spread={2}
+          origin="top-right"
+          tilt={0}
+          saturation={1.5}
+          blend={0.75}
+          falloff={1.6}
+          opacity={1}
+        />
+        <div className="container">
+          <Reveal as="div" className="contact-head" threshold={0.14} rootMargin="0px 0px -8% 0px">
+            <p className="section-kicker display-reveal-title rany-display-heading">CONTACT</p>
+            <h2 className="display-reveal-subtitle">联系合作</h2>
+          </Reveal>
+          <Reveal as="p" className="contact-sentence" threshold={0.14} rootMargin="0px 0px -8% 0px">从像素到多边形，从代码到创意<br />设计是一种看得见的思考</Reveal>
+          <Reveal as="div" className="contact-actions" threshold={0.14} rootMargin="0px 0px -8% 0px">
+            <a className="contact-mail" href="mailto:Four4444.Design@gmail.com"><Mail size={17} strokeWidth={1.8} />发送邮件</a>
+            <a className="contact-phone" href="tel:18219315597"><Phone size={15} strokeWidth={1.8} />18219315597</a>
+          </Reveal>
+          <Reveal as="div" className="contact-bottom" threshold={0.14} rootMargin="0px 0px -8% 0px"><span>FOUR / Personal website</span><span>Thank you for watching</span></Reveal>
+        </div>
+      </section>
+
+    </>
+  );
+}
+
+function WorksPage({ activeCategory, goDetail }) {
+  const works = worksByCategory[activeCategory.id] ?? [];
+  const openDetail = (work) => {
+    const image = document.querySelector(`[data-work-image="${work.id}"]`);
+    const rect = image ? readNavRect(`[data-work-image="${work.id}"]`) : null;
+    goDetail(activeCategory.id, work.id, {
+      rect,
+      src: work.detailHero ?? work.image
+    });
+  };
+
+  return (
+    <section className="works-index-page">
+      <SideRays
+        className="works-side-rays"
+        speed={2.5}
+        rayColor1="#EAB308"
+        rayColor2="#96c8ff"
+        intensity={2}
+        spread={2}
+        origin="top-right"
+        tilt={0}
+        saturation={1.5}
+        blend={0.75}
+        falloff={1.6}
+        opacity={1}
+      />
+      <div className="works-container">
+        <div className="works-title-row">
+          <div className="works-title-block">
+            <h1>{activeCategory.title}</h1>
+          </div>
+          <p className="works-intro">在数字产品层出不穷的今天，{activeCategory.title} 是连接用户与技术的最后一道桥梁，在纷繁复杂的数字世界中，为用户带来清晰、愉悦且富有温度的浏览体验。</p>
+        </div>
+        <div className="works-divider" />
+        <div className="works-showcase-list">
+          {works.map((work) => (
+            <article className="showcase-item" key={work.id}>
+              <button className="showcase-main-img" type="button" onClick={() => openDetail(work)}>
+                <LazyImage data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
+              </button>
+              <div className="showcase-copy">
+                <h2>{work.title}</h2>
+                <p>{work.subtitle}</p>
+                <button type="button" onClick={() => openDetail(work)}>查看设计详情</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkDetailPage({ activeCategory, work, imageTransitionActive = false }) {
+  const [preview, setPreview] = useState(null);
+
+  if (!work) return null;
+
+  const detailImages = work.detailImages ?? [
+    { id: `${work.id}-fallback-01`, src: work.detailHero, title: `${work.title} detail visual 01` },
+    { id: `${work.id}-fallback-02`, src: work.detailHero, title: `${work.title} detail visual 02` },
+    { id: `${work.id}-fallback-03`, src: work.detailHero, title: `${work.title} detail visual 03` },
+    { id: `${work.id}-fallback-04`, src: work.detailHero, title: `${work.title} detail visual 04` }
+  ];
+  const openPreview = (index, event) => {
+    if (preview) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPreview({
+      index,
+      phase: 'opening',
+      fromRect: {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height
+      },
+      toRect: null,
+      zoom: 1,
+      progress: 0
+    });
+  };
+
+  return (
+    <section className="work-detail-page">
+      <div className="detail-hero">
+        <LazyImage className={imageTransitionActive ? 'is-transitioning' : ''} data-detail-hero-image="true" src={work.detailHero} alt={work.title} />
+        {work.detailOverlay && (
+          <div className="detail-hero-copy" aria-label={`${work.detailOverlay.title} project information`}>
+            <div className="detail-hero-main">
+              <h1>{work.detailOverlay.title}</h1>
+              <p>{work.detailOverlay.project}</p>
+              <span>{work.detailOverlay.slogan}</span>
+            </div>
+            <div className="detail-hero-meta">
+              <div>
+                <b>{work.detailOverlay.styleTitle}</b>
+                <span>{work.detailOverlay.styleText}</span>
+              </div>
+              <div>
+                <b>{work.detailOverlay.toolTitle}</b>
+                <span>{work.detailOverlay.toolText}</span>
+              </div>
+            </div>
+            <div className="detail-hero-footer">
+              <span>{work.detailOverlay.footerLeft}</span>
+              <span>{work.detailOverlay.footerRight}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="detail-content">
+        <div className="detail-title">
+          <span>{activeCategory.label}</span>
+          <h1>{work.title}</h1>
+          <p>{work.subtitle}</p>
+        </div>
+        {detailImages.length > 0 ? (
+          <div className="detail-image-stack">
+            {detailImages.map((item, index) => (
+              <button
+                className="detail-design-shot"
+                data-detail-shot={index}
+                type="button"
+                key={item.id ?? `${work.id}-detail-${index}`}
+                onClick={(event) => openPreview(index, event)}
+              >
+                <LazyImage src={item.src} alt={item.title} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="detail-large-placeholder" />
+            <div className="detail-card-row"><span /><span /><span /><span /></div>
+          </>
+        )}
+      </div>
+      {preview && (
+        <ImagePreviewLayer
+          images={detailImages}
+          preview={preview}
+          setPreview={setPreview}
+        />
+      )}
+    </section>
+  );
+}
+
+function ImagePreviewLayer({ images, preview, setPreview }) {
+  const viewportRef = useRef(null);
+  const scrollRef = useRef(null);
+  const previewImageRef = useRef(null);
+  const dragRef = useRef({ active: false, x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+  const closeTimerRef = useRef(0);
+  const hiddenSourceRef = useRef(null);
+  const activeImage = images[preview.index];
+  const isAnimating = preview.phase === 'opening' || preview.phase === 'closing';
+  const showTransitionFrame = preview.phase === 'opening' || preview.phase === 'closing';
+  const style = preview.fromRect && preview.toRect ? {
+    '--preview-from-x': `${preview.fromRect.x}px`,
+    '--preview-from-y': `${preview.fromRect.y}px`,
+    '--preview-from-w': `${preview.fromRect.width}px`,
+    '--preview-from-h': `${preview.fromRect.height}px`,
+    '--preview-to-x': `${preview.toRect.x}px`,
+    '--preview-to-y': `${preview.toRect.y}px`,
+    '--preview-to-w': `${preview.toRect.width}px`,
+    '--preview-to-h': `${preview.toRect.height}px`
+  } : {};
+
+  useEffect(() => {
+    const preventBackgroundScroll = (event) => {
+      if (event.target.closest?.('.image-preview-scroll')) return;
+      event.preventDefault();
+    };
+
+    document.documentElement.classList.add('preview-scroll-locked');
+    window.addEventListener('wheel', preventBackgroundScroll, { passive: false });
+    window.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
+
+    return () => {
+      document.documentElement.classList.remove('preview-scroll-locked');
+      window.removeEventListener('wheel', preventBackgroundScroll);
+      window.removeEventListener('touchmove', preventBackgroundScroll);
+      window.clearTimeout(closeTimerRef.current);
+      hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
+      scrollRef.current?.classList.remove('is-dragging');
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (preview.phase !== 'opening' || preview.toRect) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPreview((current) => current ? {
+        ...current,
+        toRect: {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height
+        }
+      } : current);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [preview.phase, preview.toRect, setPreview]);
+
+  useEffect(() => {
+    if (preview.phase !== 'opening' || !preview.toRect) return undefined;
+    let cancelled = false;
+    const image = new Image();
+    image.src = activeImage.src;
+    const ready = image.decode ? image.decode().catch(() => undefined) : Promise.resolve();
+
+    const timer = window.setTimeout(() => {
+      ready.then(() => {
+        if (!cancelled) {
+          setPreview((current) => current ? { ...current, phase: 'open' } : current);
+        }
+      });
+    }, 580);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [preview.phase, preview.toRect, activeImage.src, setPreview]);
+
+  const updateProgress = () => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const max = element.scrollHeight - element.clientHeight;
+    const progress = max > 0 ? element.scrollTop / max : 0;
+    setPreview((current) => current ? { ...current, progress } : current);
+  };
+
+  const startDrag = (event) => {
+    const element = scrollRef.current;
+    if (!element || event.button > 0) return;
+    dragRef.current = {
+      active: true,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: element.scrollLeft,
+      scrollTop: element.scrollTop
+    };
+    element.classList.add('is-dragging');
+    element.setPointerCapture?.(event.pointerId);
+  };
+
+  const dragPreview = (event) => {
+    const element = scrollRef.current;
+    const drag = dragRef.current;
+    if (!element || !drag.active) return;
+    event.preventDefault();
+    element.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
+    element.scrollTop = drag.scrollTop - (event.clientY - drag.y);
+    updateProgress();
+  };
+
+  const endDrag = (event) => {
+    const element = scrollRef.current;
+    if (!element) return;
+    dragRef.current.active = false;
+    element.classList.remove('is-dragging');
+    element.releasePointerCapture?.(event.pointerId);
+  };
+
+  const closePreview = () => {
+    if (preview.phase === 'closing') return;
+    const thumb = document.querySelector(`[data-detail-shot="${preview.index}"]`);
+    const rect = thumb?.getBoundingClientRect();
+    hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
+    hiddenSourceRef.current = thumb ?? null;
+    thumb?.classList.add('is-preview-source-hidden');
+    setPreview((current) => current ? {
+      ...current,
+      phase: 'closing',
+      fromRect: rect ? {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height
+      } : current.fromRect
+    } : current);
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => {
+      thumb?.classList.remove('is-preview-source-hidden');
+      hiddenSourceRef.current = null;
+      setPreview(null);
+    }, 620);
+  };
+
+  const finishClose = () => {
+    if (preview.phase !== 'closing') return;
+    window.clearTimeout(closeTimerRef.current);
+    hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
+    hiddenSourceRef.current = null;
+    setPreview(null);
+  };
+
+  const changeImage = (nextIndex) => {
+    if (!images[nextIndex]) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    setPreview((current) => current ? {
+      ...current,
+      index: nextIndex,
+      phase: 'open',
+      zoom: 1,
+      progress: 0
+    } : current);
+  };
+
+  const toggleZoom = () => {
+    setPreview((current) => current ? {
+      ...current,
+      zoom: current.zoom === 1 ? 1.45 : 1
+    } : current);
+  };
+
+  if (!activeImage) return null;
+
+  return (
+    <div className={`image-preview-layer image-preview-${preview.phase}`} style={style}>
+      {preview.phase !== 'closing' && (
+        <>
+          <div className="image-preview-scrim" onClick={closePreview} />
+          <div className="image-preview-shell">
+            <div className="image-preview-viewport" ref={viewportRef}>
+              <div
+                className="image-preview-scroll"
+                ref={scrollRef}
+                onScroll={updateProgress}
+                onPointerDown={startDrag}
+                onPointerMove={dragPreview}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+                onPointerLeave={endDrag}
+              >
+                <img
+                  ref={previewImageRef}
+                  className={isAnimating ? 'is-preview-hidden' : ''}
+                  style={{ '--preview-zoom': preview.zoom }}
+                  src={activeImage.src}
+                  alt={activeImage.title}
+                />
+              </div>
+            </div>
+            <div className="image-preview-side">
+              <button className="image-preview-close" type="button" onClick={closePreview} aria-label="Close preview" />
+              <div className="image-preview-progress" aria-hidden="true">
+                <span style={{ transform: `scaleY(${Math.max(0.08, preview.progress)})` }} />
+              </div>
+            </div>
+            <div className="image-preview-controls">
+              <div className="image-preview-pager">
+                <button className="image-preview-page-button image-preview-page-last" type="button" disabled={preview.index === 0} onClick={() => changeImage(preview.index - 1)} />
+                <span className="image-preview-count">{String(preview.index + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}</span>
+                <button className="image-preview-page-button image-preview-page-next" type="button" disabled={preview.index === images.length - 1} onClick={() => changeImage(preview.index + 1)} />
+              </div>
+              <div className="image-preview-zoom-shell">
+                <button className="image-preview-zoom-button" type="button" onClick={toggleZoom} aria-label={preview.zoom === 1 ? 'Zoom in' : 'Zoom out'}>
+                  <img src={preview.zoom === 1 ? previewZoomInIcon : previewZoomOutIcon} alt="" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      {showTransitionFrame && preview.toRect && (
+        <div className="image-preview-transition-frame" aria-hidden="true" onAnimationEnd={finishClose}>
+          <img src={activeImage.src} alt="" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
+
+
+
+
