@@ -63,6 +63,24 @@ import capabilityCodeIcon from './assets/capability-icons/programmatic-ads.svg';
 import capabilityAiIcon from './assets/capability-icons/ai-nodes.svg';
 import capabilityTrendIcon from './assets/capability-icons/trend.svg';
 
+// Warm the works/detail imagery once the visitor signals intent (nav hover/focus),
+// so the secondary route paints from cache instead of triggering a fresh fetch.
+const WORKS_PREFETCH_ASSETS = [
+  ui01DetailHeroFinal, ui01DetailShot01, ui01DetailShot02, ui01DetailShot03,
+  ui02CkMiniProgram, ui03OfficialHero, ui04DetailHero
+];
+let worksPrefetched = false;
+function prefetchWorksAssets() {
+  if (worksPrefetched) return;
+  worksPrefetched = true;
+  WORKS_PREFETCH_ASSETS.forEach((src) => {
+    if (!src) return;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = src;
+  });
+}
+
 const tools = [
   { name: 'Figma', icon: figmaIcon },
   { name: 'Comfyui', icon: comfyuiIcon },
@@ -1428,7 +1446,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             lockTo(1);
             scrollToHomeSection(event, 'profile');
           }}>About</a>
-          <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onClick={(event) => {
+          <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onMouseEnter={prefetchWorksAssets} onFocus={prefetchWorksAssets} onClick={(event) => {
             event.preventDefault();
             goWorks();
           }}>Portfolio</a>
@@ -2594,6 +2612,7 @@ function HeroSection({ active = true }) {
             loop
             playsInline
             preload="auto"
+            fetchPriority="high"
             disablePictureInPicture
             aria-label="Mobile hero video"
           />
@@ -2611,8 +2630,8 @@ function HeroSection({ active = true }) {
             />
             <canvas ref={alphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas" style={{ display: useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
             <canvas ref={fallbackAlphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas hero-video-alpha-2d" style={{ display: !isMobile && !useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
-            <video key={`base-${assetMode}`} ref={baseRef} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" disablePictureInPicture />
-            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" disablePictureInPicture />
+            <video key={`base-${assetMode}`} ref={baseRef} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
+            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
           </>
         )}
         <div className="hero-scroll-hint" aria-hidden="true" />
