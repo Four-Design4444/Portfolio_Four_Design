@@ -857,45 +857,6 @@ html[data-device="mobile"] .detail-image-stack {
   gap: 20px;
 }
 
-/* --- 7. Image preview --------------------------------------------------- */
-
-html[data-device="mobile"] .image-preview-layer {
-  padding: 62px 14px 104px;
-}
-
-html[data-device="mobile"] .image-preview-shell {
-  width: calc(100vw - 28px);
-  height: calc(var(--vh, 1vh) * 100 - 190px);
-  grid-template-columns: minmax(0, 1fr) 24px;
-  gap: 10px;
-}
-
-html[data-device="mobile"] .image-preview-close {
-  width: 40px;
-  height: 40px;
-}
-
-html[data-device="mobile"] .image-preview-pager {
-  grid-template-columns: 32px 84px 32px;
-  gap: 14px;
-  padding: 6px 14px;
-}
-
-html[data-device="mobile"] .image-preview-page-button {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-}
-
-html[data-device="mobile"] .image-preview-zoom-shell {
-  width: 44px;
-  height: 40px;
-}
-
-html[data-device="mobile"] .image-preview-controls {
-  bottom: -64px;
-}
-
 /* --- 8. Narrow phones --------------------------------------------------- */
 
 @media (max-width: 360px) {

@@ -3191,6 +3191,40 @@ h2 {
   gap: clamp(40px, 5vw, 76px);
 }
 
+/* Long-scroll gallery: one seamless column of tiled bands. Each band reserves
+   its exact aspect ratio and paints an inline LQIP, so scrolling never reflows
+   and never shows a hole while the real WebP is in flight. */
+.detail-scrolls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(40px, 5vw, 76px);
+}
+
+.detail-scroll {
+  display: block;
+}
+
+.scroll-tile {
+  position: relative;
+  width: 100%;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  background-position: center top;
+  overflow: hidden;
+}
+
+.scroll-tile img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity .34s ease;
+}
+
+.scroll-tile.is-loaded img {
+  opacity: 1;
+}
+
 .detail-design-shot {
   display: block;
   width: 100%;
@@ -3199,7 +3233,6 @@ h2 {
   border-radius: 0;
   overflow: hidden;
   background: #111111;
-  cursor: zoom-in;
   box-shadow: none;
 }
 
@@ -3212,368 +3245,6 @@ h2 {
   filter: none;
   transform: none;
   transition: none;
-}
-
-.detail-design-shot.is-preview-source-hidden {
-  background: transparent;
-}
-
-.detail-design-shot.is-preview-source-hidden img {
-  opacity: 0;
-}
-
-.image-preview-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: grid;
-  place-items: center;
-  padding: 58px 76px 86px;
-  color: #ffffff;
-}
-
-.image-preview-closing {
-  pointer-events: none;
-}
-
-.image-preview-scrim {
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  -webkit-backdrop-filter: blur(26px) saturate(1.12);
-  backdrop-filter: blur(26px) saturate(1.12);
-}
-
-.image-preview-closing .image-preview-scrim {
-  opacity: 0;
-}
-
-.image-preview-shell {
-  position: relative;
-  z-index: 2;
-  width: min(1320px, calc(100vw - 152px));
-  height: min(780px, calc(100vh - 174px));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  gap: 18px;
-}
-
-.image-preview-closing .image-preview-shell {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.image-preview-viewport {
-  position: relative;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-  border-radius: 16px;
-  background: transparent;
-  box-shadow: 0 32px 120px rgba(0, 0, 0, 0.42);
-}
-
-.image-preview-scroll {
-  height: 100%;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.image-preview-scroll.is-dragging {
-  cursor: grabbing;
-}
-
-.image-preview-scroll::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-.image-preview-scroll img {
-  display: block;
-  width: calc(100% * var(--preview-zoom, 1));
-  max-width: none;
-  height: auto;
-  margin: 0 auto;
-  object-fit: cover;
-  object-position: top center;
-  filter: none;
-  transform-origin: top center;
-  pointer-events: none;
-  -webkit-user-drag: none;
-  user-select: none;
-  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.image-preview-scroll img.is-preview-hidden {
-  opacity: 0;
-}
-
-.image-preview-side {
-  position: relative;
-  display: grid;
-  grid-template-rows: 38px 1fr;
-  justify-items: center;
-  gap: 18px;
-  animation: previewUiFadeIn 360ms ease 220ms both;
-}
-
-.image-preview-close {
-  position: relative;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.12);
-  backdrop-filter: blur(18px) saturate(1.12);
-  cursor: pointer;
-  transition: background 220ms ease, transform 220ms ease;
-}
-
-.image-preview-close::before,
-.image-preview-close::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 13px;
-  height: 1.5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.image-preview-close::before {
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.image-preview-close::after {
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
-
-.image-preview-close:hover {
-  background: rgba(0, 93, 245, 0.42);
-  transform: scale(1.04);
-}
-
-.image-preview-progress {
-  width: 2px;
-  height: 100%;
-  min-height: 180px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-
-.image-preview-progress span {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: #ffffff;
-  transform-origin: top center;
-  transition: transform 120ms linear;
-}
-
-.image-preview-controls {
-  position: absolute;
-  left: 50%;
-  bottom: -76px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  transform: translateX(-50%);
-  animation: previewUiFadeIn 360ms ease 220ms both;
-}
-
-.image-preview-pager,
-.image-preview-zoom-shell {
-  display: grid;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.48);
-  -webkit-backdrop-filter: blur(24px) saturate(1.16);
-  backdrop-filter: blur(24px) saturate(1.16);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.38);
-}
-
-.image-preview-pager {
-  grid-template-columns: 30px 104px 30px;
-  gap: 26px;
-  padding: 6px 14px;
-}
-
-.image-preview-zoom-shell {
-  width: 44px;
-  height: 40px;
-}
-
-.image-preview-controls button {
-  padding: 0;
-  border: 0;
-  color: #ffffff;
-  background: transparent;
-  cursor: pointer;
-  transition: color 180ms ease, transform 180ms ease;
-}
-
-.image-preview-controls button:hover:not(:disabled) {
-  color: #0060f4;
-  background: transparent;
-  transform: translateY(-1px);
-}
-
-.image-preview-controls button:disabled {
-  color: #999999;
-  cursor: default;
-  background: transparent;
-}
-
-.image-preview-page-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.26) !important;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07) !important;
-  font-size: 0;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.image-preview-page-button::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-  transform: translate(-50%, -50%);
-}
-
-.image-preview-page-last::before {
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
-  border-right: 7px solid currentColor;
-  margin-left: -1px;
-}
-
-.image-preview-page-next::before {
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
-  border-left: 7px solid currentColor;
-  margin-left: 1px;
-}
-
-.image-preview-page-button:hover:not(:disabled) {
-  border-color: rgba(0, 96, 244, 0.72) !important;
-  background: rgba(0, 96, 244, 0.18) !important;
-}
-
-.image-preview-zoom-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  padding: 0;
-}
-
-.image-preview-zoom-button img {
-  display: block;
-  width: 14px;
-  height: 14px;
-  pointer-events: none;
-}
-
-.image-preview-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  font-size: 18px !important;
-  font-weight: 400;
-  line-height: 1;
-  color: #ffffff !important;
-}
-
-.image-preview-transition-frame {
-  position: fixed;
-  left: var(--preview-from-x);
-  top: var(--preview-from-y);
-  width: var(--preview-from-w);
-  height: var(--preview-from-h);
-  z-index: 3;
-  overflow: hidden;
-  border-radius: 16px;
-  box-shadow: none;
-  pointer-events: none;
-  animation: previewImageOpen 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.image-preview-transition-frame img {
-  display: block;
-  width: 100%;
-  min-height: 100%;
-  height: auto;
-  object-fit: cover;
-  object-position: top center;
-  filter: none;
-}
-
-.image-preview-closing .image-preview-transition-frame {
-  animation: previewImageClose 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes previewUiFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes previewImageOpen {
-  from {
-    left: var(--preview-from-x);
-    top: var(--preview-from-y);
-    width: var(--preview-from-w);
-    height: var(--preview-from-h);
-    border-radius: 12px;
-  }
-  to {
-    left: var(--preview-to-x);
-    top: var(--preview-to-y);
-    width: var(--preview-to-w);
-    height: var(--preview-to-h);
-    border-radius: 16px;
-  }
-}
-
-@keyframes previewImageClose {
-  from {
-    left: var(--preview-to-x);
-    top: var(--preview-to-y);
-    width: var(--preview-to-w);
-    height: var(--preview-to-h);
-    border-radius: 16px;
-  }
-  to {
-    left: var(--preview-from-x);
-    top: var(--preview-from-y);
-    width: var(--preview-from-w);
-    height: var(--preview-from-h);
-    border-radius: 12px;
-  }
 }
 
 @media (max-width: 1500px) {
@@ -4001,86 +3672,6 @@ body:has(.work-detail-page) .detail-hero img {
 
   .detail-design-shot {
     border-radius: 0;
-  }
-
-  .image-preview-layer {
-    padding: 52px 18px 84px;
-  }
-
-  .image-preview-shell {
-    width: calc(100vw - 36px);
-    height: calc(100vh - 142px);
-    grid-template-columns: minmax(0, 1fr) 20px;
-    gap: 10px;
-  }
-
-  .image-preview-viewport {
-    border-radius: 12px;
-  }
-
-  .image-preview-side {
-    grid-template-rows: 30px 1fr;
-    gap: 12px;
-  }
-
-  .image-preview-close {
-    width: 28px;
-    height: 28px;
-  }
-
-  .image-preview-controls {
-    bottom: -58px;
-    display: flex;
-    gap: 8px;
-    padding: 0;
-    max-width: calc(100vw - 36px);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .image-preview-pager {
-    grid-template-columns: 26px 66px 26px;
-    gap: 12px;
-    padding: 5px 10px;
-  }
-
-  .image-preview-zoom-shell {
-    width: 34px;
-    height: 34px;
-  }
-
-  .image-preview-controls::-webkit-scrollbar {
-    display: none;
-  }
-
-  .image-preview-controls button {
-    min-width: 0;
-    padding: 0;
-    font-size: 12px;
-  }
-
-  .image-preview-zoom-button {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    padding: 0;
-  }
-
-  .image-preview-page-button {
-    width: 26px;
-    min-width: 26px;
-    height: 26px;
-    padding: 0;
-  }
-
-  .image-preview-count {
-    font-size: 14px !important;
-    padding: 0 !important;
-  }
-
-  .image-preview-zoom-button img {
-    width: 12px;
-    height: 12px;
   }
 
   .detail-hero-copy {

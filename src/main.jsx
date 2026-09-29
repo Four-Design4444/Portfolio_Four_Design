@@ -50,26 +50,18 @@ import codexIcon from './assets/profile/codex.png';
 import photoshopIcon from './assets/profile/photoshop.png';
 import BorderGlow from './components/BorderGlow';
 import SideRays from './components/SideRays';
-import previewZoomInIcon from './assets/preview-zoom-in.svg';
-import previewZoomOutIcon from './assets/preview-zoom-out.svg';
-import ui01DetailHeroFinal from './assets/projects/ui-01-detail-hero-final.jpg';
-import ui01DetailShot01 from './assets/projects/ui-01-detail-shot-01.webp';
-import ui01DetailShot02 from './assets/projects/ui-01-detail-shot-02.webp';
-import ui01DetailShot03 from './assets/projects/ui-01-detail-shot-03.webp';
-import ui02CkMiniProgram from './assets/projects/ui-02-ck-mini-program.png';
-import ui03OfficialHero from './assets/projects/ui-03-official-hero.jpg';
-import ui04DetailHero from './assets/projects/ui-04-detail-hero.jpg';
 import capabilityDeliveryIcon from './assets/capability-icons/payment.svg';
 import capabilityCodeIcon from './assets/capability-icons/programmatic-ads.svg';
 import capabilityAiIcon from './assets/capability-icons/ai-nodes.svg';
 import capabilityTrendIcon from './assets/capability-icons/trend.svg';
+import { DETAIL_SCROLLS } from './data/detailScrolls';
 
-// Warm the works/detail imagery once the visitor signals intent (nav hover/focus),
-// so the secondary route paints from cache instead of triggering a fresh fetch.
-const WORKS_PREFETCH_ASSETS = [
-  ui01DetailHeroFinal, ui01DetailShot01, ui01DetailShot02, ui01DetailShot03,
-  ui02CkMiniProgram, ui03OfficialHero, ui04DetailHero
-];
+// Warm the works covers once the visitor signals intent (nav hover/focus), so the
+// secondary route paints from cache instead of triggering a fresh fetch. The long
+// scrolls themselves are tiled and lazy-loaded, so only the covers are warmable.
+const WORKS_PREFETCH_ASSETS = Object.keys(DETAIL_SCROLLS.works).map(
+  (id) => `/detail/${id}/v1/cover.webp`
+);
 let worksPrefetched = false;
 function prefetchWorksAssets() {
   if (worksPrefetched) return;
@@ -120,74 +112,74 @@ const categories = [
 ];
 
 
+// Covers are cropped from the exported long scrolls (see
+// .workbuddy/tools/build-detail-covers.py). The gallery itself is served by the
+// tiled scrolls in DETAIL_SCROLLS, so no work needs a hand-picked image set.
 const worksByCategory = {
   ui: [
     {
       id: 'coomo-home-mini',
       title: 'COOMO HOME',
       subtitle: '家居购物小程序',
-      image: 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?auto=format&fit=crop&w=1600&q=86',
-      detailHero: ui01DetailHeroFinal,
-      detailImages: [
-        { src: ui01DetailShot01, title: 'COOMO HOME 页面视觉 01' },
-        { src: ui01DetailShot02, title: 'COOMO HOME 页面视觉 02' },
-        { src: ui01DetailShot03, title: 'COOMO HOME 页面视觉 03' }
-      ]
+      image: '/detail/coomo-home-mini/v1/cover-portrait.webp',
+      detailHero: '/detail/coomo-home-mini/v1/cover.webp'
     },
     {
       id: 'smart-home-platform',
       title: 'COOMO HOME',
-      subtitle: '鏅鸿兘瀹跺眳涓帶骞冲彴',
-      image: 'https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1600&q=86',
-      detailHero: ui02CkMiniProgram
+      subtitle: '智能家居中控平台',
+      image: '/detail/smart-home-platform/v1/cover-portrait.webp',
+      detailHero: '/detail/smart-home-platform/v1/cover.webp'
     },
     {
       id: 'coomo-official',
-      title: 'COOMO瀹樼綉',
+      title: 'COOMO 官网',
       subtitle: '家居品牌官网',
-      image: 'https://images.unsplash.com/photo-1600210492493-0946911123ea?auto=format&fit=crop&w=1600&q=86',
-      detailHero: ui03OfficialHero
+      image: '/detail/coomo-official/v1/cover-portrait.webp',
+      detailHero: '/detail/coomo-official/v1/cover.webp'
     },
     {
       id: 'muguan-official',
-      title: '鎱曞啝瀹跺眳瀹樼綉',
+      title: '慕冠家居官网',
       subtitle: '家具品牌官网',
-      image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=86',
-      detailHero: ui04DetailHero
+      image: '/detail/muguan-official/v1/cover-portrait.webp',
+      detailHero: '/detail/muguan-official/v1/cover.webp'
     }
   ],
   vi: [
     {
       id: 'brand-summer',
-      title: 'Brand 瑙傚',
-      subtitle: '鍝佺墝瑙嗚绯荤粺',
-      image: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?auto=format&fit=crop&w=1800&q=86'
+      title: 'Brand 觅野',
+      subtitle: '品牌视觉系统',
+      image: '/detail/brand-summer/v1/cover-portrait.webp',
+      detailHero: '/detail/brand-summer/v1/cover.webp'
     },
     {
       id: 'campaign-visual',
-      title: '鍟嗕笟娲诲姩瑙嗚',
-      subtitle: 'Campaign KV',
-      image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=1800&q=86'
+      title: '商业活动视觉',
+      subtitle: '画册 / KV',
+      image: '/detail/campaign-visual/v1/cover-portrait.webp',
+      detailHero: '/detail/campaign-visual/v1/cover.webp'
     },
     {
       id: 'packaging-system',
-      title: '鍖呰瑙嗚绯荤粺',
-      subtitle: 'Packaging / Layout',
-      image: 'https://images.unsplash.com/photo-1600172454284-934feca24b3f?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1626785774625-ddcddc3445e9?auto=format&fit=crop&w=1800&q=86'
+      title: '运营设计',
+      subtitle: '海报视觉系统',
+      image: '/detail/packaging-system/v1/cover-portrait.webp',
+      detailHero: '/detail/packaging-system/v1/cover.webp'
     }
   ],
   '3d': [
     {
       id: 'future-chair',
       title: 'Future Chair',
-      subtitle: '浜у搧 3D 娓叉煋',
-      image: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1618172193622-ae2d025f4032?auto=format&fit=crop&w=1800&q=86'
+      subtitle: '产品 3D 渲染',
+      image: '/detail/future-chair/v1/cover-portrait.webp',
+      detailHero: '/detail/future-chair/v1/cover.webp'
     },
     {
+      // No scroll was exported for this one yet: it keeps its placeholder art
+      // until an export lands, and then picks up tiles automatically.
       id: 'motion-space',
       title: 'Motion Space',
       subtitle: '空间动态视觉',
@@ -200,15 +192,15 @@ const worksByCategory = {
       id: 'ai-poster-lab',
       title: 'AI Poster Lab',
       subtitle: '生成式海报实验',
-      image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1682687982501-1e58ab814714?auto=format&fit=crop&w=1800&q=86'
+      image: '/detail/ai-poster-lab/v1/cover-portrait.webp',
+      detailHero: '/detail/ai-poster-lab/v1/cover.webp'
     },
     {
       id: 'aigc-style',
       title: 'AIGC Style System',
-      subtitle: 'AI 椋庢牸鎺㈢储',
-      image: 'https://images.unsplash.com/photo-1676299081847-824916de030a?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1800&q=86'
+      subtitle: 'AI 风格探索',
+      image: '/detail/aigc-style/v1/cover-portrait.webp',
+      detailHero: '/detail/aigc-style/v1/cover.webp'
     }
   ]
 };
@@ -3212,9 +3204,81 @@ function WorksPage({ activeCategory, goDetail }) {
   );
 }
 
-function WorkDetailPage({ activeCategory, work, imageTransitionActive = false }) {
-  const [preview, setPreview] = useState(null);
+/* ---------------------------------------------------------------------------
+   Long-scroll detail gallery.
 
+   Each exported artwork is one extremely tall JPEG (up to 32768px, ratio up to
+   22:1). Loading it as a single file is impossible: the decoded bitmap alone
+   would be ~240MB. Every scroll is therefore cut into ~1600px bands in source
+   space, encoded at two widths (1470 desktop / 714 mobile) and streamed in as
+   the visitor scrolls. Band 1 loads eager + high priority, band 2 eager, all
+   later bands are native lazy. Each band carries a ~250 byte inline LQIP so
+   the column never collapses or jumps while a band is in flight.
+--------------------------------------------------------------------------- */
+const SCROLL_ROOT = '/detail';
+
+function ScrollTile({ workId, slug, tile, eager, highPriority }) {
+  const [loaded, setLoaded] = useState(false);
+  const base = `${SCROLL_ROOT}/${workId}/${slug}/tile-${String(tile.i).padStart(3, '0')}`;
+  const desktop = `${base}.webp`;
+  const mobile = `${base}@714.webp`;
+  return (
+    <div
+      className={`scroll-tile${loaded ? ' is-loaded' : ''}`}
+      style={{ aspectRatio: `${tile.w} / ${tile.h}`, backgroundImage: `url("${tile.lqip}")` }}
+    >
+      <img
+        src={desktop}
+        srcSet={`${mobile} ${DETAIL_SCROLLS.mobileWidth}w, ${desktop} ${DETAIL_SCROLLS.desktopWidth}w`}
+        sizes="(max-width: 1100px) calc(100vw - 36px), min(1470px, calc(100vw - 220px))"
+        width={tile.w}
+        height={tile.h}
+        alt=""
+        loading={eager ? 'eager' : 'lazy'}
+        fetchPriority={highPriority ? 'high' : 'auto'}
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
+
+function DetailScroll({ workId, fallbackImages }) {
+  const work = DETAIL_SCROLLS.works[workId];
+  const scrolls = work ? work.scrolls : null;
+  if (!scrolls || !scrolls.length) {
+    if (!fallbackImages || !fallbackImages.length) return null;
+    return (
+      <div className="detail-image-stack">
+        {fallbackImages.map((item, index) => (
+          <div className="detail-design-shot" key={item.id ?? `${workId}-fallback-${index}`}>
+            <LazyImage src={item.src} alt={item.title} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="detail-scrolls">
+      {scrolls.map((scroll) => (
+        <div className="detail-scroll" key={scroll.slug}>
+          {scroll.tiles.map((tile, index) => (
+            <ScrollTile
+              key={tile.i}
+              workId={workId}
+              slug={scroll.slug}
+              tile={tile}
+              eager={index < 2}
+              highPriority={index === 0}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkDetailPage({ activeCategory, work, imageTransitionActive = false }) {
   if (!work) return null;
 
   const detailImages = work.detailImages ?? [
@@ -3223,23 +3287,6 @@ function WorkDetailPage({ activeCategory, work, imageTransitionActive = false })
     { id: `${work.id}-fallback-03`, src: work.detailHero, title: `${work.title} detail visual 03` },
     { id: `${work.id}-fallback-04`, src: work.detailHero, title: `${work.title} detail visual 04` }
   ];
-  const openPreview = (index, event) => {
-    if (preview) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setPreview({
-      index,
-      phase: 'opening',
-      fromRect: {
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height
-      },
-      toRect: null,
-      zoom: 1,
-      progress: 0
-    });
-  };
 
   return (
     <section className="work-detail-page">
@@ -3275,266 +3322,9 @@ function WorkDetailPage({ activeCategory, work, imageTransitionActive = false })
           <h1>{work.title}</h1>
           <p>{work.subtitle}</p>
         </div>
-        {detailImages.length > 0 ? (
-          <div className="detail-image-stack">
-            {detailImages.map((item, index) => (
-              <button
-                className="detail-design-shot"
-                data-detail-shot={index}
-                type="button"
-                key={item.id ?? `${work.id}-detail-${index}`}
-                onClick={(event) => openPreview(index, event)}
-              >
-                <LazyImage src={item.src} alt={item.title} />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <>
-            <div className="detail-large-placeholder" />
-            <div className="detail-card-row"><span /><span /><span /><span /></div>
-          </>
-        )}
+        <DetailScroll workId={work.id} fallbackImages={detailImages} />
       </div>
-      {preview && (
-        <ImagePreviewLayer
-          images={detailImages}
-          preview={preview}
-          setPreview={setPreview}
-        />
-      )}
     </section>
-  );
-}
-
-function ImagePreviewLayer({ images, preview, setPreview }) {
-  const viewportRef = useRef(null);
-  const scrollRef = useRef(null);
-  const previewImageRef = useRef(null);
-  const dragRef = useRef({ active: false, x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
-  const closeTimerRef = useRef(0);
-  const hiddenSourceRef = useRef(null);
-  const activeImage = images[preview.index];
-  const isAnimating = preview.phase === 'opening' || preview.phase === 'closing';
-  const showTransitionFrame = preview.phase === 'opening' || preview.phase === 'closing';
-  const style = preview.fromRect && preview.toRect ? {
-    '--preview-from-x': `${preview.fromRect.x}px`,
-    '--preview-from-y': `${preview.fromRect.y}px`,
-    '--preview-from-w': `${preview.fromRect.width}px`,
-    '--preview-from-h': `${preview.fromRect.height}px`,
-    '--preview-to-x': `${preview.toRect.x}px`,
-    '--preview-to-y': `${preview.toRect.y}px`,
-    '--preview-to-w': `${preview.toRect.width}px`,
-    '--preview-to-h': `${preview.toRect.height}px`
-  } : {};
-
-  useEffect(() => {
-    const preventBackgroundScroll = (event) => {
-      if (event.target.closest?.('.image-preview-scroll')) return;
-      event.preventDefault();
-    };
-
-    document.documentElement.classList.add('preview-scroll-locked');
-    window.addEventListener('wheel', preventBackgroundScroll, { passive: false });
-    window.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
-
-    return () => {
-      document.documentElement.classList.remove('preview-scroll-locked');
-      window.removeEventListener('wheel', preventBackgroundScroll);
-      window.removeEventListener('touchmove', preventBackgroundScroll);
-      window.clearTimeout(closeTimerRef.current);
-      hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
-      scrollRef.current?.classList.remove('is-dragging');
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (preview.phase !== 'opening' || preview.toRect) return undefined;
-
-    const frame = window.requestAnimationFrame(() => {
-      const rect = viewportRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setPreview((current) => current ? {
-        ...current,
-        toRect: {
-          x: rect.left,
-          y: rect.top,
-          width: rect.width,
-          height: rect.height
-        }
-      } : current);
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [preview.phase, preview.toRect, setPreview]);
-
-  useEffect(() => {
-    if (preview.phase !== 'opening' || !preview.toRect) return undefined;
-    let cancelled = false;
-    const image = new Image();
-    image.src = activeImage.src;
-    const ready = image.decode ? image.decode().catch(() => undefined) : Promise.resolve();
-
-    const timer = window.setTimeout(() => {
-      ready.then(() => {
-        if (!cancelled) {
-          setPreview((current) => current ? { ...current, phase: 'open' } : current);
-        }
-      });
-    }, 580);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [preview.phase, preview.toRect, activeImage.src, setPreview]);
-
-  const updateProgress = () => {
-    const element = scrollRef.current;
-    if (!element) return;
-    const max = element.scrollHeight - element.clientHeight;
-    const progress = max > 0 ? element.scrollTop / max : 0;
-    setPreview((current) => current ? { ...current, progress } : current);
-  };
-
-  const startDrag = (event) => {
-    const element = scrollRef.current;
-    if (!element || event.button > 0) return;
-    dragRef.current = {
-      active: true,
-      x: event.clientX,
-      y: event.clientY,
-      scrollLeft: element.scrollLeft,
-      scrollTop: element.scrollTop
-    };
-    element.classList.add('is-dragging');
-    element.setPointerCapture?.(event.pointerId);
-  };
-
-  const dragPreview = (event) => {
-    const element = scrollRef.current;
-    const drag = dragRef.current;
-    if (!element || !drag.active) return;
-    event.preventDefault();
-    element.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
-    element.scrollTop = drag.scrollTop - (event.clientY - drag.y);
-    updateProgress();
-  };
-
-  const endDrag = (event) => {
-    const element = scrollRef.current;
-    if (!element) return;
-    dragRef.current.active = false;
-    element.classList.remove('is-dragging');
-    element.releasePointerCapture?.(event.pointerId);
-  };
-
-  const closePreview = () => {
-    if (preview.phase === 'closing') return;
-    const thumb = document.querySelector(`[data-detail-shot="${preview.index}"]`);
-    const rect = thumb?.getBoundingClientRect();
-    hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
-    hiddenSourceRef.current = thumb ?? null;
-    thumb?.classList.add('is-preview-source-hidden');
-    setPreview((current) => current ? {
-      ...current,
-      phase: 'closing',
-      fromRect: rect ? {
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height
-      } : current.fromRect
-    } : current);
-    window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = window.setTimeout(() => {
-      thumb?.classList.remove('is-preview-source-hidden');
-      hiddenSourceRef.current = null;
-      setPreview(null);
-    }, 620);
-  };
-
-  const finishClose = () => {
-    if (preview.phase !== 'closing') return;
-    window.clearTimeout(closeTimerRef.current);
-    hiddenSourceRef.current?.classList.remove('is-preview-source-hidden');
-    hiddenSourceRef.current = null;
-    setPreview(null);
-  };
-
-  const changeImage = (nextIndex) => {
-    if (!images[nextIndex]) return;
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    setPreview((current) => current ? {
-      ...current,
-      index: nextIndex,
-      phase: 'open',
-      zoom: 1,
-      progress: 0
-    } : current);
-  };
-
-  const toggleZoom = () => {
-    setPreview((current) => current ? {
-      ...current,
-      zoom: current.zoom === 1 ? 1.45 : 1
-    } : current);
-  };
-
-  if (!activeImage) return null;
-
-  return (
-    <div className={`image-preview-layer image-preview-${preview.phase}`} style={style}>
-      {preview.phase !== 'closing' && (
-        <>
-          <div className="image-preview-scrim" onClick={closePreview} />
-          <div className="image-preview-shell">
-            <div className="image-preview-viewport" ref={viewportRef}>
-              <div
-                className="image-preview-scroll"
-                ref={scrollRef}
-                onScroll={updateProgress}
-                onPointerDown={startDrag}
-                onPointerMove={dragPreview}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
-                onPointerLeave={endDrag}
-              >
-                <img
-                  ref={previewImageRef}
-                  className={isAnimating ? 'is-preview-hidden' : ''}
-                  style={{ '--preview-zoom': preview.zoom }}
-                  src={activeImage.src}
-                  alt={activeImage.title}
-                />
-              </div>
-            </div>
-            <div className="image-preview-side">
-              <button className="image-preview-close" type="button" onClick={closePreview} aria-label="Close preview" />
-              <div className="image-preview-progress" aria-hidden="true">
-                <span style={{ transform: `scaleY(${Math.max(0.08, preview.progress)})` }} />
-              </div>
-            </div>
-            <div className="image-preview-controls">
-              <div className="image-preview-pager">
-                <button className="image-preview-page-button image-preview-page-last" type="button" disabled={preview.index === 0} onClick={() => changeImage(preview.index - 1)} />
-                <span className="image-preview-count">{String(preview.index + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}</span>
-                <button className="image-preview-page-button image-preview-page-next" type="button" disabled={preview.index === images.length - 1} onClick={() => changeImage(preview.index + 1)} />
-              </div>
-              <div className="image-preview-zoom-shell">
-                <button className="image-preview-zoom-button" type="button" onClick={toggleZoom} aria-label={preview.zoom === 1 ? 'Zoom in' : 'Zoom out'}>
-                  <img src={preview.zoom === 1 ? previewZoomInIcon : previewZoomOutIcon} alt="" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-      {showTransitionFrame && preview.toRect && (
-        <div className="image-preview-transition-frame" aria-hidden="true" onAnimationEnd={finishClose}>
-          <img src={activeImage.src} alt="" />
-        </div>
-      )}
-    </div>
   );
 }
 
