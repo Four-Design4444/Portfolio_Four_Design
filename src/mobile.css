@@ -292,27 +292,21 @@ html[data-device="mobile"] .advantage {
 
 html[data-device="mobile"] .projects,
 html[data-device="mobile"] .section.projects {
-  padding-top: 88px;
+  padding-top: 56px;
 }
 
 html[data-device="mobile"] .advantage-head .section-kicker {
   font-size: clamp(34px, 11.5vw, 54px);
   line-height: 0.94;
 }
-html[data-device="mobile"] .projects-heading h2 {
-  font-size: clamp(23px, 7.6vw, 35px);
-  line-height: 0.98;
+html[data-device="mobile"] .projects-heading {
+  display: none;
 }
 
 html[data-device="mobile"] .advantage-head h2 {
   min-height: 38px;
   padding: 0 18px;
   font-size: 16px;
-}
-html[data-device="mobile"] .projects-heading span {
-  min-height: 28px;
-  padding: 0 18px;
-  font-size: 13px;
 }
 
 html[data-device="mobile"] .advantage-grid {
@@ -436,8 +430,8 @@ html[data-device="mobile"] .mob-counter {
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(50vh, 430px);
-  margin: 4px 0;
+  height: min(40vh, 320px);
+  margin: 2px 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -508,13 +502,13 @@ html[data-device="mobile"] .mob-copy {
   gap: 3px;
 }
 html[data-device="mobile"] .mob-title {
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1.15;
   text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
 }
 html[data-device="mobile"] .mob-meta {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #cdd3de;
   text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
@@ -541,19 +535,19 @@ html[data-device="mobile"] .mob-dots i.on {
 
 html[data-device="mobile"] .mob-thumbs {
   display: flex;
-  gap: 11px;
+  gap: 8px;
   overflow-x: auto;
   padding: 4px 2px 2px;
   scroll-behavior: smooth;
-  margin-top: 10px;
+  margin-top: 6px;
   width: 100%;
 }
 html[data-device="mobile"] .mob-thumbs::-webkit-scrollbar { display: none; }
 html[data-device="mobile"] .mob-thumb {
   flex: 0 0 auto;
-  width: 72px;
-  height: 54px;            /* 4:3 */
-  border-radius: 9px;
+  width: 56px;
+  height: 42px;            /* 4:3 */
+  border-radius: 7px;
   overflow: hidden;
   opacity: .5;
   transition: all .3s;
