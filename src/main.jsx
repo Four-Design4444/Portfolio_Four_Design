@@ -225,6 +225,7 @@ const projectShowcases = [
     index: '01',
     title: 'COOMO HOME',
     meta: '家居购物小程序',
+    description: '以简洁界面与流畅购物流程重构家居线上体验，平衡品牌调性与转化效率。',
     deck: { left: 8.64, rot: -2.6, restY: 8, z: 1 }
   },
   {
@@ -234,6 +235,7 @@ const projectShowcases = [
     index: '02',
     title: '智家中控平台',
     meta: '智能家居中控界面',
+    description: '将多设备控制与场景联动整合为直观的可视化系统，降低用户决策成本。',
     deck: { left: 19.74, rot: -1.6, restY: -2, z: 2 }
   },
   {
@@ -243,6 +245,7 @@ const projectShowcases = [
     index: '03',
     title: '品牌官方网站',
     meta: '响应式官网设计',
+    description: '在多种终端上保持品牌叙事的一致性与高级感，让内容成为视觉主角。',
     deck: { left: 30.84, rot: -0.6, restY: 3, z: 3 }
   },
   {
@@ -252,6 +255,7 @@ const projectShowcases = [
     index: '04',
     title: 'Brand Visual',
     meta: '品牌视觉系统',
+    description: '以统一的图形语言与色彩体系传递品牌核心价值，建立可识别的视觉资产。',
     deck: { left: 41.94, rot: 0.2, restY: -5, z: 4 }
   },
   {
@@ -261,6 +265,7 @@ const projectShowcases = [
     index: '05',
     title: 'Campaign KV',
     meta: '商业活动视觉',
+    description: '围绕主题构建具有冲击力与记忆点的传播画面，让信息在第一眼被捕捉。',
     deck: { left: 53.04, rot: 1.0, restY: 1, z: 5 }
   },
   {
@@ -270,6 +275,7 @@ const projectShowcases = [
     index: '06',
     title: 'Product 3D',
     meta: '产品三维渲染',
+    description: '用光影与材质塑造真实可信的商品视觉表达，强化产品的高级感与细节张力。',
     deck: { left: 64.14, rot: 1.9, restY: -3, z: 6 }
   },
   {
@@ -279,9 +285,12 @@ const projectShowcases = [
     index: '07',
     title: 'AI Workflow',
     meta: 'ComfyUI 生成工作流',
+    description: '把 AI 能力固化为可复用的视觉生产管线，让创意探索从随机走向可控。',
     deck: { left: 75.24, rot: 2.8, restY: 7, z: 7 }
   }
 ];
+
+const CATEGORY_NAMES = { ui: 'UI 系统', vi: '视觉语言', '3d': '动态三维', aigc: 'AI 工作流' };
 
 const heroSignals = [
   { id: 'interface', index: '01', title: 'Interface', cn: 'UI 系统', meta: 'Product / Interaction' },
@@ -1679,6 +1688,8 @@ function MobileShowcaseDeck({ items, openWorks }) {
     startX: 0, startY: 0, curDX: 0, curDY: 0, lastDX: 0, vel: 0, downIdx: 0,
   });
 
+  const [infoOpen, setInfoOpen] = useState(false);
+
   const render = () => {
     const N = ctxRef.current.items.length;
     const s = stateRef.current;
@@ -1717,7 +1728,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
     const show = ((s.active % N) + N) % N;
     if (counterRef.current) {
       counterRef.current.textContent =
-        `FEATURED ${String(show + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
+        `Project Display ${String(show + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
     }
     thumbRefs.current.forEach((th, i) => {
       if (!th) return;
@@ -1873,9 +1884,45 @@ function MobileShowcaseDeck({ items, openWorks }) {
     };
   }, []);
 
+  const activeItem = items[stateRef.current.active] || items[0];
+  const activeProject = activeItem ? activeItem.project : null;
+
   return (
     <div className="mob-showcase">
-      <div className="mob-counter" ref={counterRef}>FEATURED 01 / 07</div>
+      <div className="mob-counter" ref={counterRef}>Project Display 01 / 07</div>
+
+      <button
+        type="button"
+        className={`mob-info-btn${infoOpen ? ' is-open' : ''}`}
+        onClick={() => setInfoOpen((o) => !o)}
+        aria-label={infoOpen ? '收起信息' : '展开信息'}
+        aria-pressed={infoOpen}
+      >
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <g className="mob-icon-dots">
+            <circle cx="10" cy="20" r="3.5" />
+            <circle cx="20" cy="20" r="3.5" />
+            <circle cx="30" cy="20" r="3.5" />
+          </g>
+          <g className="mob-icon-x">
+            <line x1="12" y1="12" x2="28" y2="28" />
+            <line x1="28" y1="12" x2="12" y2="28" />
+          </g>
+        </svg>
+      </button>
+
+      {activeProject && (
+        <div className={`mob-info-panel${infoOpen ? ' is-open' : ''}`}>
+          <div className="mob-info-meta">
+            <span className="mob-info-cat">{CATEGORY_NAMES[activeProject.category]}</span>
+            <span className="mob-info-idx">{activeProject.index}</span>
+          </div>
+          <h3 className="mob-info-title">{activeProject.title}</h3>
+          <p className="mob-info-subtitle">{activeProject.meta}</p>
+          <p className="mob-info-desc">{activeProject.description}</p>
+        </div>
+      )}
+
       <div className="mob-stage">
         <div className="mob-deck" ref={deckRef}>
           {items.map(({ project, cover }, i) => (

@@ -292,7 +292,7 @@ html[data-device="mobile"] .advantage {
 
 html[data-device="mobile"] .projects,
 html[data-device="mobile"] .section.projects {
-  padding-top: 56px;
+  padding-top: 80px;
 }
 
 html[data-device="mobile"] .advantage-head .section-kicker {
@@ -415,23 +415,139 @@ html[data-device="mobile"] .mob-showcase {
 }
 
 html[data-device="mobile"] .mob-showcase {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+html[data-device="mobile"] .mob-info-btn {
+  position: absolute;
+  top: -8px;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .14);
+  border-radius: 50%;
+  backdrop-filter: blur(12px) saturate(1.2);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .25s ease, transform .25s ease, border-color .25s ease;
+}
+html[data-device="mobile"] .mob-info-btn:active {
+  transform: scale(.92);
+  background: rgba(255, 255, 255, .24);
+  border-color: rgba(255, 255, 255, .32);
+}
+html[data-device="mobile"] .mob-info-btn svg {
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  display: block;
+}
+html[data-device="mobile"] .mob-info-btn .mob-icon-dots,
+html[data-device="mobile"] .mob-info-btn .mob-icon-x {
+  transition: opacity .35s ease, transform .35s cubic-bezier(.4, 0, .2, 1);
+  transform-origin: center;
+}
+html[data-device="mobile"] .mob-info-btn .mob-icon-dots {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+html[data-device="mobile"] .mob-info-btn .mob-icon-x {
+  opacity: 0;
+  transform: rotate(-45deg) scale(.75);
+}
+html[data-device="mobile"] .mob-info-btn.is-open .mob-icon-dots {
+  opacity: 0;
+  transform: rotate(45deg) scale(.75);
+}
+html[data-device="mobile"] .mob-info-btn.is-open .mob-icon-x {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+html[data-device="mobile"] .mob-info-panel {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  width: calc(100% - 40px);
+  max-width: 340px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(17, 19, 26, .82);
+  border: 1px solid rgba(255, 255, 255, .1);
+  backdrop-filter: blur(24px) saturate(1.2);
+  color: #fff;
+  text-align: left;
+  z-index: 10;
+  transform: translateX(-50%) translateY(-10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease, transform .3s cubic-bezier(.2, .8, .2, 1), pointer-events 0s linear .3s;
+}
+html[data-device="mobile"] .mob-info-panel.is-open {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+html[data-device="mobile"] .mob-info-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+html[data-device="mobile"] .mob-info-cat {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #8b94a4;
+}
+html[data-device="mobile"] .mob-info-idx {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, .55);
+}
+html[data-device="mobile"] .mob-info-title {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+html[data-device="mobile"] .mob-info-subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cdd3de;
+  margin: 0 0 12px;
+}
+html[data-device="mobile"] .mob-info-desc {
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .72);
+  margin: 0;
 }
 
 html[data-device="mobile"] .mob-counter {
   font-size: 12px;
   letter-spacing: 2px;
   color: #8b94a4;
-  margin-bottom: 4px;
+  margin-bottom: 28px;
 }
 
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
   height: min(40vh, 320px);
-  margin: 2px 0;
+  margin: 4px 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -518,7 +634,7 @@ html[data-device="mobile"] .mob-dots {
   display: flex;
   justify-content: center;
   gap: 9px;
-  margin: 6px 0 0;
+  margin: 28px 0 0;
 }
 html[data-device="mobile"] .mob-dots i {
   width: 7px;
@@ -537,9 +653,9 @@ html[data-device="mobile"] .mob-thumbs {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 4px 2px 2px;
+  padding: 4px 2px 28px;
   scroll-behavior: smooth;
-  margin-top: 6px;
+  margin-top: 28px;
   width: 100%;
 }
 html[data-device="mobile"] .mob-thumbs::-webkit-scrollbar { display: none; }
