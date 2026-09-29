@@ -1853,6 +1853,18 @@ img {
   background: #000000;
 }
 
+/* The advantage and projects screens drop flat black for the same ground the
+   contact screen uses: two soft washes (blue top-right, amber below it) over a
+   slightly lifted near-black. It reads warmer, and it gives the ray burst
+   something to sit on instead of glowing out of pure void. */
+.section.advantage,
+.section.projects {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
+    radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
+    #0d0c12;
+}
+
 .section-kicker {
   margin: 0 0 4px;
   color: #1e2a1e;
@@ -2655,6 +2667,42 @@ h2 {
   opacity: 1;
   mix-blend-mode: screen;
   mask-image: linear-gradient(180deg, black 0%, black 78%, transparent 100%);
+}
+
+/* The same ray burst, shared by the advantage and projects screens. It sits in
+   its own viewport-fixed layer rather than inside either section: paging scrolls
+   the sections, and a fixed layer does not move with them, so the light holds
+   its position across a page turn instead of sliding away with the content.
+   Only one instance exists - it fades in whenever either screen is on view. */
+.home-rays-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  opacity: 0;
+  transform: translate3d(0, 0, 0);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  will-change: opacity, transform;
+  mask-image: linear-gradient(180deg, black 0%, black 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, black 0%, black 78%, transparent 100%);
+  /* Leaving is quicker than arriving: once the screen that owns the light is on
+     its way out, the light should not linger behind it. */
+  transition: opacity 340ms ease;
+}
+
+.home-rays-layer.is-on {
+  opacity: 1;
+  /* Arriving is a slow swell. The settle before it is a JS delay rather than a
+     CSS transition-delay, so it is paid once per screen change and not on every
+     scroll event. */
+  transition: opacity 760ms ease;
+}
+
+.home-rays-layer .side-rays-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .contact-page .container {

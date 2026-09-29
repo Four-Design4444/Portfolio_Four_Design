@@ -499,6 +499,15 @@ html[data-device="mobile"] .showcase-deck-copy b {
   line-height: 1.42;
 }
 
+/* --- Section light rays (shared by the advantage + projects screens) ------- */
+
+/* The burst is the same one the contact screen uses, so it is present on mobile
+   too. A phone screen is much smaller, where the same cone reads noticeably
+   stronger, so it is dialled back a little instead of at full strength. */
+html[data-device="mobile"] .home-rays-layer.is-on {
+  opacity: 0.8;
+}
+
 /* --- Mobile works showcase: three-card poker stack (drag to flip) ---------- */
 
 /* The projects screen must stay within the viewport width. The base section

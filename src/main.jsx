@@ -190,15 +190,22 @@ const worksByCategory = {
   aigc: [
     {
       id: 'ai-poster-lab',
-      title: 'AI Poster Lab',
-      subtitle: '生成式海报实验',
+      title: 'AI Workflow',
+      subtitle: 'ComfyUI 工作流实验',
       image: '/detail/ai-poster-lab/v1/cover-portrait.webp',
       detailHero: '/detail/ai-poster-lab/v1/cover.webp'
     },
     {
+      id: 'aigc-model',
+      title: 'Model Consistency',
+      subtitle: 'AIGC 模特一致性',
+      image: '/detail/aigc-model/v1/cover-portrait.webp',
+      detailHero: '/detail/aigc-model/v1/cover.webp'
+    },
+    {
       id: 'aigc-style',
-      title: 'AIGC Style System',
-      subtitle: 'AI 风格探索',
+      title: 'AIGC Character',
+      subtitle: 'QQ 形象视觉设计',
       image: '/detail/aigc-style/v1/cover-portrait.webp',
       detailHero: '/detail/aigc-style/v1/cover.webp'
     }
@@ -2810,6 +2817,116 @@ function HomePage({ openWorks, paging, active = true }) {
 
   const [index, setIndex] = useState(startIndexRef.current);
 
+  // The contact screen carries a WebGL ray burst. The same burst backs the
+  // advantage and projects screens, and it lives in a viewport-fixed layer so a
+  // page turn does not drag it along with the content.
+  //
+  // Two behaviours ride on top of that:
+  //   * arriving on a lit screen should settle first, then fade the light in -
+  //     switching straight on read as a hard pop;
+  //   * scrolling back up out of a lit screen should let the light travel with
+  //     the section it belongs to instead of being pinned to the viewport, so
+  //     it slides away with the content.
+  //
+  // The sections are read as a list, not hard-coded as "advantage then
+  // projects": if the advantage screen is ever removed, everything here simply
+  // moves down to the projects screen on its own.
+  const [raysMounted, setRaysMounted] = useState(false);
+  const raysLayerRef = useRef(null);
+  const raysHitRef = useRef(false);
+  const raysLitRef = useRef(false);
+  const raysShowTimer = useRef(0);
+  const raysHideTimer = useRef(0);
+
+  useEffect(() => {
+    // How long the screen gets to sit still before the light is allowed in.
+    const RAYS_FADE_IN_DELAY = 420;
+    const RAYS_TEARDOWN_DELAY = 700;
+
+    // Read as a list, and only from the live document: if the advantage screen
+    // is ever deleted this simply becomes a one-entry list and the projects
+    // screen inherits the light, the settle-in and the travel-on-the-way-up.
+    const sections = () => [advantageRef.current, projectsRef.current].filter((el) => el && el.isConnected);
+
+    // (Re)arming on every scroll turns this into a "wait until the page has
+    // come to rest" timer: a page turn replays it, so the fade never starts
+    // while the layer is still sliding into place.
+    const armShowTimer = () => {
+      window.clearTimeout(raysShowTimer.current);
+      raysShowTimer.current = window.setTimeout(() => {
+        const target = raysLayerRef.current;
+        if (!target) return;
+        target.classList.add('is-on');
+        raysLitRef.current = true;
+      }, RAYS_FADE_IN_DELAY);
+    };
+
+    const syncRays = () => {
+      const elements = sections();
+      if (!elements.length) return;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const rects = elements.map((element) => element.getBoundingClientRect());
+      const hit = rects.some((rect) => rect.top < viewportHeight && rect.bottom > 0);
+
+      // The uppermost lit section owns the offset. While it sits above the
+      // viewport the offset clamps to 0 and the layer is pinned; once a scroll
+      // back up pushes it down, the layer rides along with it.
+      const lead = Math.min(...rects.map((rect) => rect.top));
+      const follow = Math.max(0, Math.min(lead, viewportHeight));
+      const layer = raysLayerRef.current;
+      if (layer) layer.style.transform = `translate3d(0, ${Math.round(follow)}px, 0)`;
+
+      if (hit === raysHitRef.current) {
+        // Still travelling inside the lit range with the light not yet up:
+        // keep pushing the settle timer out until the scroll actually stops.
+        if (hit && !raysLitRef.current) armShowTimer();
+        return;
+      }
+      raysHitRef.current = hit;
+      window.clearTimeout(raysHideTimer.current);
+      if (hit) {
+        raysLitRef.current = false;
+        setRaysMounted(true);
+        armShowTimer();
+      } else {
+        window.clearTimeout(raysShowTimer.current);
+        raysLitRef.current = false;
+        if (layer) layer.classList.remove('is-on');
+        // Keep the WebGL canvas alive through the fade so leaving a screen is a
+        // dissolve, not a disappearance.
+        raysHideTimer.current = window.setTimeout(() => setRaysMounted(false), RAYS_TEARDOWN_DELAY);
+      }
+    };
+
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        syncRays();
+      });
+    };
+
+    syncRays();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+      window.clearTimeout(raysShowTimer.current);
+      window.clearTimeout(raysHideTimer.current);
+    };
+  }, []);
+
+  // Unmounting always drops the lit class; lighting up is the timer's job, so
+  // a remount never skips the settle-and-fade.
+  useEffect(() => {
+    if (raysMounted) return;
+    const layer = raysLayerRef.current;
+    if (layer) layer.classList.remove('is-on');
+  }, [raysMounted]);
+
   // The first screen is already visible on the first paint. Later screens
   // reveal when their one-screen gesture arrives.
   const [hasEnteredPage, setHasEnteredPage] = useState(() => startIndexRef.current > 0);
@@ -3055,6 +3172,25 @@ function HomePage({ openWorks, paging, active = true }) {
 
   return (
     <>
+      <div className="home-rays-layer" ref={raysLayerRef} aria-hidden="true">
+        {raysMounted && (
+          <SideRays
+            className="home-rays"
+            speed={2.5}
+            rayColor1="#EAB308"
+            rayColor2="#96c8ff"
+            intensity={2}
+            spread={2}
+            origin="top-right"
+            tilt={0}
+            saturation={1.5}
+            blend={0.75}
+            falloff={1.6}
+            opacity={1}
+          />
+        )}
+      </div>
+
       <HeroSection active={active} />
 
       <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
