@@ -398,7 +398,7 @@ html[data-device="mobile"] .advantage {
 
 html[data-device="mobile"] .projects,
 html[data-device="mobile"] .section.projects {
-  padding-top: 80px;
+  padding-top: 0;
 }
 
 html[data-device="mobile"] .advantage-head .section-kicker {
@@ -512,8 +512,15 @@ html[data-device="mobile"] .section.projects {
 html[data-device="mobile"] .project-list {
   width: auto;
   max-width: 100%;
-  margin-top: 22px;
+  margin-top: 0;
   overflow: hidden;
+}
+/* Vertical rhythm measured from the iPhone 17 mock (393x852):
+   counter top ≈ 25.5% of the viewport, then generous air between
+   counter -> cards -> dots -> thumbnails instead of stacking them up top. */
+html[data-device="mobile"] .mob-showcase {
+  padding-top: 25.5vh;
+  padding-bottom: 6vh;
 }
 html[data-device="mobile"] .mob-showcase {
   width: 100%;
@@ -531,14 +538,14 @@ html[data-device="mobile"] .mob-counter {
   font-size: 12px;
   letter-spacing: 2px;
   color: #8b94a4;
-  margin-bottom: 28px;
+  margin-bottom: clamp(28px, 4.8vh, 42px);
 }
 
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(40vh, 320px);
-  margin: 4px 0;
+  height: min(33.5vh, 300px);
+  margin: 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -625,7 +632,7 @@ html[data-device="mobile"] .mob-dots {
   display: flex;
   justify-content: center;
   gap: 9px;
-  margin: 28px 0 0;
+  margin: clamp(28px, 5vh, 44px) 0 0;
 }
 html[data-device="mobile"] .mob-dots i {
   width: 7px;
@@ -642,19 +649,20 @@ html[data-device="mobile"] .mob-dots i.on {
 
 html[data-device="mobile"] .mob-thumbs {
   display: flex;
-  gap: 8px;
+  justify-content: center;
+  gap: 4px;
   overflow-x: auto;
-  padding: 4px 2px 28px;
+  padding: 4px 2px 24px;
   scroll-behavior: smooth;
-  margin-top: 28px;
+  margin-top: clamp(64px, 12.4vh, 108px);
   width: 100%;
 }
 html[data-device="mobile"] .mob-thumbs::-webkit-scrollbar { display: none; }
 html[data-device="mobile"] .mob-thumb {
   flex: 0 0 auto;
-  width: 56px;
-  height: 42px;            /* 4:3 */
-  border-radius: 7px;
+  width: 50px;
+  height: 30px;            /* 5:3, matches the mock */
+  border-radius: 6px;
   overflow: hidden;
   opacity: .5;
   transition: all .3s;
