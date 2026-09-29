@@ -90,20 +90,126 @@ html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
   height: auto;
 }
 
+/* Mobile home nav: the four text links fold away completely. Only the logo
+   (left) and a burger button (right) stay visible, like the reference. */
 html[data-device="mobile"] .morph-nav.nav-home .home-primary-items {
+  display: none;
+}
+
+/* Burger button, pinned to the right edge of the transparent home bar. */
+html[data-device="mobile"] .mobile-menu-toggle {
   grid-column: 3;
-  gap: 12px;
-  padding-top: 4px;
-  font-size: 10px;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-html[data-device="mobile"] .morph-nav.nav-home .home-primary-items a {
-  min-height: 18px;
+html[data-device="mobile"] .mobile-menu-toggle svg {
+  width: 30px;
+  height: 30px;
+  display: block;
+  overflow: visible;
 }
 
-html[data-device="mobile"] .morph-nav.nav-home .home-primary-items a::after {
-  bottom: -5px;
+html[data-device="mobile"] .mobile-menu-toggle .hm-line {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  transform-origin: 16px 16px;
+  transition: transform .38s cubic-bezier(.4, 0, .2, 1), opacity .3s ease;
 }
+
+/* Burger -> X: each line first translates onto the centre, then rotates
+   around it (rotate before translate in the transform list), so both arms
+   cross at the exact middle of the icon. */
+html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-top {
+  transform: rotate(45deg) translateY(5.5px);
+}
+
+html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-mid {
+  opacity: 0;
+  transform: scaleX(.4);
+}
+
+html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-bot {
+  transform: rotate(-45deg) translateY(-5.5px);
+}
+
+/* Fullscreen panel underneath the bar (bar keeps z-index 40, panel 30), so
+   the logo and the burger stay tappable while the menu is open. */
+html[data-device="mobile"] .mobile-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  background: rgba(0, 0, 0, 0.86);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-14px);
+  transition: opacity .38s ease, transform .38s cubic-bezier(.22, 1, .36, 1), pointer-events 0s linear .38s;
+}
+
+html[data-device="mobile"] .mobile-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition: opacity .38s ease, transform .38s cubic-bezier(.22, 1, .36, 1);
+}
+
+html[data-device="mobile"] .mobile-menu a {
+  position: relative;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 21px;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: color .25s ease, opacity .3s ease, transform .32s cubic-bezier(.22, 1, .36, 1);
+}
+
+html[data-device="mobile"] .mobile-menu.is-open a {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered entrance once the panel fades in. */
+html[data-device="mobile"] .mobile-menu a:nth-child(1) { transition-delay: .06s; }
+html[data-device="mobile"] .mobile-menu a:nth-child(2) { transition-delay: .11s; }
+html[data-device="mobile"] .mobile-menu a:nth-child(3) { transition-delay: .16s; }
+html[data-device="mobile"] .mobile-menu a:nth-child(4) { transition-delay: .21s; }
+
+html[data-device="mobile"] .mobile-menu a.is-active {
+  color: #ffffff;
+}
+
+html[data-device="mobile"] .mobile-menu a.is-active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  width: 22px;
+  height: 1px;
+  background: #ffffff;
+  transform: translateX(-50%);
+}
+
 
 /* The logo stays pinned to the left inside the capsule on every level. */
 html[data-device="mobile"] .morph-logo,
@@ -419,121 +525,6 @@ html[data-device="mobile"] .mob-showcase {
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-html[data-device="mobile"] .mob-info-btn {
-  position: absolute;
-  top: -8px;
-  right: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, .18);
-  background: rgba(255, 255, 255, .14);
-  border-radius: 50%;
-  backdrop-filter: blur(12px) saturate(1.2);
-  color: #fff;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .25s ease, transform .25s ease, border-color .25s ease;
-}
-html[data-device="mobile"] .mob-info-btn:active {
-  transform: scale(.92);
-  background: rgba(255, 255, 255, .24);
-  border-color: rgba(255, 255, 255, .32);
-}
-html[data-device="mobile"] .mob-info-btn svg {
-  width: 22px;
-  height: 22px;
-  overflow: visible;
-  display: block;
-}
-html[data-device="mobile"] .mob-info-btn .mob-icon-dots,
-html[data-device="mobile"] .mob-info-btn .mob-icon-x {
-  transition: opacity .35s ease, transform .35s cubic-bezier(.4, 0, .2, 1);
-  transform-origin: center;
-}
-html[data-device="mobile"] .mob-info-btn .mob-icon-dots {
-  opacity: 1;
-  transform: rotate(0deg) scale(1);
-}
-html[data-device="mobile"] .mob-info-btn .mob-icon-x {
-  opacity: 0;
-  transform: rotate(-45deg) scale(.75);
-}
-html[data-device="mobile"] .mob-info-btn.is-open .mob-icon-dots {
-  opacity: 0;
-  transform: rotate(45deg) scale(.75);
-}
-html[data-device="mobile"] .mob-info-btn.is-open .mob-icon-x {
-  opacity: 1;
-  transform: rotate(0deg) scale(1);
-}
-
-html[data-device="mobile"] .mob-info-panel {
-  position: absolute;
-  top: 44px;
-  left: 50%;
-  width: calc(100% - 40px);
-  max-width: 340px;
-  padding: 18px 20px;
-  border-radius: 16px;
-  background: rgba(17, 19, 26, .82);
-  border: 1px solid rgba(255, 255, 255, .1);
-  backdrop-filter: blur(24px) saturate(1.2);
-  color: #fff;
-  text-align: left;
-  z-index: 10;
-  transform: translateX(-50%) translateY(-10px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .3s ease, transform .3s cubic-bezier(.2, .8, .2, 1), pointer-events 0s linear .3s;
-}
-html[data-device="mobile"] .mob-info-panel.is-open {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-}
-html[data-device="mobile"] .mob-info-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-html[data-device="mobile"] .mob-info-cat {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: #8b94a4;
-}
-html[data-device="mobile"] .mob-info-idx {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, .55);
-}
-html[data-device="mobile"] .mob-info-title {
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.2;
-  margin: 0 0 4px;
-}
-html[data-device="mobile"] .mob-info-subtitle {
-  font-size: 13px;
-  font-weight: 500;
-  color: #cdd3de;
-  margin: 0 0 12px;
-}
-html[data-device="mobile"] .mob-info-desc {
-  font-size: 12px;
-  line-height: 1.7;
-  color: rgba(255, 255, 255, .72);
-  margin: 0;
 }
 
 html[data-device="mobile"] .mob-counter {
@@ -915,20 +906,6 @@ html[data-device="mobile"] .image-preview-controls {
     top: max(0px, calc(env(safe-area-inset-top) - 8px));
     height: 78px;
     padding: max(16px, env(safe-area-inset-top)) 20px 0;
-  }
-
-  html[data-device="mobile"] .morph-nav.nav-home .home-primary-items {
-    grid-column: 3;
-    gap: 12px;
-    font-size: 10px;
-  }
-
-  html[data-device="mobile"] .morph-nav.nav-home .home-primary-items a {
-    min-height: 18px;
-  }
-
-  html[data-device="mobile"] .morph-nav.nav-home .home-primary-items a::after {
-    bottom: -5px;
   }
 
   html[data-device="mobile"] .morph-nav.nav-home .morph-logo,

@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import { House, Mail, Phone } from 'lucide-react';
 import './styles.css';
 import './mobile.css';
@@ -290,7 +291,6 @@ const projectShowcases = [
   }
 ];
 
-const CATEGORY_NAMES = { ui: 'UI 系统', vi: '视觉语言', '3d': '动态三维', aigc: 'AI 工作流' };
 
 const heroSignals = [
   { id: 'interface', index: '01', title: 'Interface', cn: 'UI 系统', meta: 'Product / Interaction' },
@@ -1257,7 +1257,13 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
   const isFirst = activeIndex <= 0;
   const isLast = activeIndex >= total - 1;
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hideSharedWorksLabel = !isHome && !isDetail && hasSharedWorksPill;
+
+  // Leaving the home page (works/detail) must never keep the mobile menu open.
+  useEffect(() => {
+    if (!isHome) setMobileMenuOpen(false);
+  }, [isHome]);
 
   // One sliding underline for the home primary nav. The indicator is a single
   // independent element whose position is driven by the active item's box, so
@@ -1449,22 +1455,60 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
     >
       {!isDetail && <button type="button" className="morph-logo" data-shared-logo-anchor="true" onClick={goHomeWithScroll} aria-label="FOUR Home"><LogoMark /></button>}
       {isHome && (
-        <nav className="home-primary-items" aria-label="Primary navigation" ref={homeNavRef}>
-          <a data-home-nav-item="0" className={homeActiveSection === 'hero' ? 'is-active' : ''} aria-current={homeActiveSection === 'hero' ? 'location' : undefined} href="#hero" onClick={goHomeWithScroll}>Home</a>
-          <a data-home-nav-item="1" className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} aria-current={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'location' : undefined} href="#profile" onClick={(event) => {
-            lockTo(1);
-            scrollToHomeSection(event, 'profile');
-          }}>About</a>
-          <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onMouseEnter={prefetchWorksAssets} onFocus={prefetchWorksAssets} onClick={(event) => {
-            event.preventDefault();
-            goWorks();
-          }}>Portfolio</a>
-          <a data-home-nav-item="3" className={homeActiveSection === 'contact' ? 'is-active' : ''} aria-current={homeActiveSection === 'contact' ? 'location' : undefined} href="#contact" onClick={(event) => {
-            lockTo(3);
-            scrollToHomeSection(event, 'contact');
-          }}>Contact</a>
-          <span className="home-nav-indicator" aria-hidden="true" ref={indicatorRef} />
-        </nav>
+        <>
+          <nav className="home-primary-items" aria-label="Primary navigation" ref={homeNavRef}>
+            <a data-home-nav-item="0" className={homeActiveSection === 'hero' ? 'is-active' : ''} aria-current={homeActiveSection === 'hero' ? 'location' : undefined} href="#hero" onClick={goHomeWithScroll}>Home</a>
+            <a data-home-nav-item="1" className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} aria-current={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'location' : undefined} href="#profile" onClick={(event) => {
+              lockTo(1);
+              scrollToHomeSection(event, 'profile');
+            }}>About</a>
+            <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onMouseEnter={prefetchWorksAssets} onFocus={prefetchWorksAssets} onClick={(event) => {
+              event.preventDefault();
+              goWorks();
+            }}>Portfolio</a>
+            <a data-home-nav-item="3" className={homeActiveSection === 'contact' ? 'is-active' : ''} aria-current={homeActiveSection === 'contact' ? 'location' : undefined} href="#contact" onClick={(event) => {
+              lockTo(3);
+              scrollToHomeSection(event, 'contact');
+            }}>Contact</a>
+            <span className="home-nav-indicator" aria-hidden="true" ref={indicatorRef} />
+          </nav>
+          {/* Mobile: the four text links are folded away entirely; this burger
+              is the only nav affordance. The lines morph into an X while the
+              fullscreen panel fades in underneath the bar. */}
+          <button
+            type="button"
+            className={`mobile-menu-toggle${mobileMenuOpen ? ' is-open' : ''}`}
+            aria-label={mobileMenuOpen ? '关闭菜单' : '打开菜单'}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-menu-panel"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <line className="hm-line hm-top" x1="6" y1="10.5" x2="26" y2="10.5" />
+              <line className="hm-line hm-mid" x1="6" y1="16" x2="26" y2="16" />
+              <line className="hm-line hm-bot" x1="6" y1="21.5" x2="26" y2="21.5" />
+            </svg>
+          </button>
+          {/* The panel portals to <body>: .morph-nav has transform + contain:paint,
+              which would trap a fixed-position child inside the 78px bar. */}
+          {createPortal(
+            <nav
+              id="mobile-menu-panel"
+              className={`mobile-menu${mobileMenuOpen ? ' is-open' : ''}`}
+              aria-label="Mobile primary navigation"
+              aria-hidden={!mobileMenuOpen}
+              onClick={(event) => { if (event.target === event.currentTarget) setMobileMenuOpen(false); }}
+              onWheel={(event) => event.stopPropagation()}
+              onTouchMove={(event) => event.stopPropagation()}
+            >
+              <a className={homeActiveSection === 'hero' ? 'is-active' : ''} href="#hero" onClick={(event) => { setMobileMenuOpen(false); goHomeWithScroll(event); }}>Home</a>
+              <a className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} href="#profile" onClick={(event) => { setMobileMenuOpen(false); lockTo(1); scrollToHomeSection(event, 'profile'); }}>About</a>
+              <a className={homeActiveSection === 'projects' ? 'is-active' : ''} href="#/works" onClick={(event) => { event.preventDefault(); setMobileMenuOpen(false); goWorks(); }}>Portfolio</a>
+              <a className={homeActiveSection === 'contact' ? 'is-active' : ''} href="#contact" onClick={(event) => { setMobileMenuOpen(false); lockTo(3); scrollToHomeSection(event, 'contact'); }}>Contact</a>
+            </nav>,
+            document.body
+          )}
+        </>
       )}
       {isDetail && (
         <button type="button" className="detail-nav-back" onClick={goWorksBack}>
@@ -1688,7 +1732,6 @@ function MobileShowcaseDeck({ items, openWorks }) {
     startX: 0, startY: 0, curDX: 0, curDY: 0, lastDX: 0, vel: 0, downIdx: 0,
   });
 
-  const [infoOpen, setInfoOpen] = useState(false);
 
   const render = () => {
     const N = ctxRef.current.items.length;
@@ -1884,44 +1927,9 @@ function MobileShowcaseDeck({ items, openWorks }) {
     };
   }, []);
 
-  const activeItem = items[stateRef.current.active] || items[0];
-  const activeProject = activeItem ? activeItem.project : null;
-
   return (
     <div className="mob-showcase">
       <div className="mob-counter" ref={counterRef}>Project Display 01 / 07</div>
-
-      <button
-        type="button"
-        className={`mob-info-btn${infoOpen ? ' is-open' : ''}`}
-        onClick={() => setInfoOpen((o) => !o)}
-        aria-label={infoOpen ? '收起信息' : '展开信息'}
-        aria-pressed={infoOpen}
-      >
-        <svg viewBox="0 0 40 40" aria-hidden="true">
-          <g className="mob-icon-dots">
-            <circle cx="10" cy="20" r="3.5" />
-            <circle cx="20" cy="20" r="3.5" />
-            <circle cx="30" cy="20" r="3.5" />
-          </g>
-          <g className="mob-icon-x">
-            <line x1="12" y1="12" x2="28" y2="28" />
-            <line x1="28" y1="12" x2="12" y2="28" />
-          </g>
-        </svg>
-      </button>
-
-      {activeProject && (
-        <div className={`mob-info-panel${infoOpen ? ' is-open' : ''}`}>
-          <div className="mob-info-meta">
-            <span className="mob-info-cat">{CATEGORY_NAMES[activeProject.category]}</span>
-            <span className="mob-info-idx">{activeProject.index}</span>
-          </div>
-          <h3 className="mob-info-title">{activeProject.title}</h3>
-          <p className="mob-info-subtitle">{activeProject.meta}</p>
-          <p className="mob-info-desc">{activeProject.description}</p>
-        </div>
-      )}
 
       <div className="mob-stage">
         <div className="mob-deck" ref={deckRef}>

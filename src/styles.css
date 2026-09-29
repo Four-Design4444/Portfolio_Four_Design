@@ -469,6 +469,16 @@ img {
   height: auto;
 }
 
+/* Mobile-only hamburger navigation. Desktop keeps the inline text links;
+   mobile.css (scoped to html[data-device="mobile"]) turns the burger on. */
+.mobile-menu-toggle {
+  display: none;
+}
+
+.mobile-menu {
+  display: none;
+}
+
 .morph-nav {
   position: fixed;
   top: 0;
