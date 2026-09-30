@@ -2726,7 +2726,20 @@ function HeroSection({ active = true }) {
             <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
           </>
         )}
-        <div className="hero-scroll-hint" aria-hidden="true" />
+        {isMobile ? (
+          <div className="hero-scroll-hint-mobile" aria-hidden="true">
+            <img
+              className="hero-scroll-arrow"
+              src="/media/hero-scroll-arrow-mobile.svg"
+              alt=""
+              width={22}
+              height={22}
+              draggable={false}
+            />
+          </div>
+        ) : (
+          <div className="hero-scroll-hint" aria-hidden="true" />
+        )}
       </div>
     </section>
   );
