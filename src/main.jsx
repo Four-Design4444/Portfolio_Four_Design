@@ -176,15 +176,6 @@ const worksByCategory = {
       subtitle: '产品 3D 渲染',
       image: '/detail/future-chair/v1/cover-portrait.webp',
       detailHero: '/detail/future-chair/v1/cover.webp'
-    },
-    {
-      // No scroll was exported for this one yet: it keeps its placeholder art
-      // until an export lands, and then picks up tiles automatically.
-      id: 'motion-space',
-      title: 'Motion Space',
-      subtitle: '空间动态视觉',
-      image: 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=1600&q=86',
-      detailHero: 'https://images.unsplash.com/photo-1633419461186-7d40a38105ec?auto=format&fit=crop&w=1800&q=86'
     }
   ],
   aigc: [
@@ -1942,7 +1933,6 @@ function MobileShowcaseDeck({ items, openWorks }) {
               <LazyImage className="mob-card-img" src={cover} alt="" />
               <div className="mob-veil" />
               <div className="mob-dim" ref={(el) => { dimRefs.current[i] = el; }} />
-              <span className="mob-tag">{project.category.toUpperCase()}</span>
               <div className="mob-copy">
                 <strong className="mob-title">{project.title}</strong>
                 <b className="mob-meta">{project.meta}</b>
@@ -2697,18 +2687,27 @@ function HeroSection({ active = true }) {
     <section className="hero hero-video-stage" id="hero" aria-label="Hero video">
       <div className="hero-video-fixed">
         {isMobile ? (
-          <video
-            className="hero-mobile-video"
-            src={HERO_MOBILE_SRC}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            fetchPriority="high"
-            disablePictureInPicture
-            aria-label="Mobile hero video"
-          />
+          <>
+            <video
+              className="hero-mobile-video"
+              src={HERO_MOBILE_SRC}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              fetchPriority="high"
+              disablePictureInPicture
+              aria-label="Mobile hero video"
+            />
+            <div className="hero-title-stack-mobile" aria-label="Group 10 portfolio mark">
+              <div
+                className="hero-title-layer"
+                dangerouslySetInnerHTML={{ __html: heroTitleMarkup }}
+              />
+              <span className="hero-title-byline">Four Design</span>
+            </div>
+          </>
         ) : (
           <>
             <canvas ref={baseCanvasRef} className="hero-video-bg hero-video-base-canvas" aria-hidden="true" />
@@ -2799,6 +2798,17 @@ function HomePage({ openWorks, paging, active = true }) {
     return { project, cover: work?.detailHero ?? work?.image };
   });
 
+  // Mobile shows every real work (the placeholder Motion Space is excluded), so
+  // the stack grows with the portfolio. Desktop keeps the curated 7-card set.
+  const mobileWorksItems = Object.entries(worksByCategory).flatMap(([category, works]) =>
+    works
+      .filter((work) => work.id !== 'motion-space')
+      .map((work) => ({
+        project: { id: work.id, category, title: work.title, meta: work.subtitle },
+        cover: work.detailHero ?? work.image
+      }))
+  );
+
   // Where the controller thinks it is. On a paged home the scroll position is
   // the only thing that can say: the browser may have restored one from an
   // earlier visit, and starting at 0 while the page sits on 3 would leave the
@@ -2834,32 +2844,19 @@ function HomePage({ openWorks, paging, active = true }) {
   const [raysMounted, setRaysMounted] = useState(false);
   const raysLayerRef = useRef(null);
   const raysHitRef = useRef(false);
-  const raysLitRef = useRef(false);
-  const raysShowTimer = useRef(0);
   const raysHideTimer = useRef(0);
 
   useEffect(() => {
-    // How long the screen gets to sit still before the light is allowed in.
-    const RAYS_FADE_IN_DELAY = 420;
     const RAYS_TEARDOWN_DELAY = 700;
 
     // Read as a list, and only from the live document: if the advantage screen
-    // is ever deleted this simply becomes a one-entry list and the projects
-    // screen inherits the light, the settle-in and the travel-on-the-way-up.
-    const sections = () => [advantageRef.current, projectsRef.current].filter((el) => el && el.isConnected);
-
-    // (Re)arming on every scroll turns this into a "wait until the page has
-    // come to rest" timer: a page turn replays it, so the fade never starts
-    // while the layer is still sliding into place.
-    const armShowTimer = () => {
-      window.clearTimeout(raysShowTimer.current);
-      raysShowTimer.current = window.setTimeout(() => {
-        const target = raysLayerRef.current;
-        if (!target) return;
-        target.classList.add('is-on');
-        raysLitRef.current = true;
-      }, RAYS_FADE_IN_DELAY);
-    };
+    // is ever deleted this simply becomes a shorter list and the screens below
+    // it inherit the light and the travel-on-the-way-up.
+    // The contact screen is in here too - it used to own its own burst pinned
+    // inside the section, which slid into view ahead of the content and stacked
+    // on top of this one; one shared burst now covers all three.
+    const sections = () => [advantageRef.current, projectsRef.current, contactRef.current]
+      .filter((el) => el && el.isConnected);
 
     const syncRays = () => {
       const elements = sections();
@@ -2876,24 +2873,18 @@ function HomePage({ openWorks, paging, active = true }) {
       const layer = raysLayerRef.current;
       if (layer) layer.style.transform = `translate3d(0, ${Math.round(follow)}px, 0)`;
 
-      if (hit === raysHitRef.current) {
-        // Still travelling inside the lit range with the light not yet up:
-        // keep pushing the settle timer out until the scroll actually stops.
-        if (hit && !raysLitRef.current) armShowTimer();
-        return;
-      }
+      if (hit === raysHitRef.current) return;
       raysHitRef.current = hit;
       window.clearTimeout(raysHideTimer.current);
       if (hit) {
-        raysLitRef.current = false;
+        // Straight on, no settle delay and no fade: the layer rides in with the
+        // section it belongs to, so the arrival is the content's own motion.
         setRaysMounted(true);
-        armShowTimer();
+        if (layer) layer.classList.add('is-on');
       } else {
-        window.clearTimeout(raysShowTimer.current);
-        raysLitRef.current = false;
         if (layer) layer.classList.remove('is-on');
-        // Keep the WebGL canvas alive through the fade so leaving a screen is a
-        // dissolve, not a disappearance.
+        // Keep the WebGL canvas alive through the dissolve so leaving a screen
+        // is not a disappearance.
         raysHideTimer.current = window.setTimeout(() => setRaysMounted(false), RAYS_TEARDOWN_DELAY);
       }
     };
@@ -2914,13 +2905,11 @@ function HomePage({ openWorks, paging, active = true }) {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       if (frame) cancelAnimationFrame(frame);
-      window.clearTimeout(raysShowTimer.current);
       window.clearTimeout(raysHideTimer.current);
     };
   }, []);
 
-  // Unmounting always drops the lit class; lighting up is the timer's job, so
-  // a remount never skips the settle-and-fade.
+  // Unmounting always drops the lit class, so a remount cannot come back lit.
   useEffect(() => {
     if (raysMounted) return;
     const layer = raysLayerRef.current;
@@ -3197,6 +3186,11 @@ function HomePage({ openWorks, paging, active = true }) {
         <ProfileContent />
       </section>
 
+      {/* The advantage, projects and contact screens sit on one continuous
+          ground. The washes are painted once across all three instead of
+          restarting at the top of each screen, so turning a page never reveals a
+          fresh bright corner sliding in. */}
+      <div className="home-ground">
       <section ref={advantageRef} className={`section advantage motion-reveal-section${advantageVisible ? ' is-visible' : ''}`} id="advantage">
         <div className="container">
           <div className="advantage-head">
@@ -3246,7 +3240,7 @@ function HomePage({ openWorks, paging, active = true }) {
         </div>
         <div className="project-list">
           {isMobile ? (
-            <MobileShowcaseDeck items={worksItems} openWorks={openWorks} />
+            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} />
           ) : (
             <ShowcaseDeck items={worksItems} openWorks={openWorks} />
           )}
@@ -3254,20 +3248,6 @@ function HomePage({ openWorks, paging, active = true }) {
       </section>
 
       <section ref={contactRef} className={`contact-page motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
-        <SideRays
-          className="contact-side-rays"
-          speed={2.5}
-          rayColor1="#EAB308"
-          rayColor2="#96c8ff"
-          intensity={2}
-          spread={2}
-          origin="top-right"
-          tilt={0}
-          saturation={1.5}
-          blend={0.75}
-          falloff={1.6}
-          opacity={1}
-        />
         <div className="container">
           <Reveal as="div" className="contact-head" threshold={0.14} rootMargin="0px 0px -8% 0px">
             <p className="section-kicker display-reveal-title rany-display-heading">CONTACT</p>
@@ -3281,6 +3261,7 @@ function HomePage({ openWorks, paging, active = true }) {
           <Reveal as="div" className="contact-bottom" threshold={0.14} rootMargin="0px 0px -8% 0px"><span>FOUR / Personal website</span><span>Thank you for watching</span></Reveal>
         </div>
       </section>
+      </div>
 
     </>
   );

@@ -45,7 +45,7 @@ async function send(req, res, filePath) {
   };
   if (!range) {
     res.writeHead(200, { ...common, 'Content-Length': total });
-    if (req.method !== 'HEAD') createReadStream(filePath).pipe(res);
+    if (req.method !== 'HEAD') pipeSafely(filePath, res);
     else res.end();
     return;
   }
@@ -68,8 +68,23 @@ async function send(req, res, filePath) {
     'Content-Length': boundedEnd - start + 1,
     'Content-Range': `bytes ${start}-${boundedEnd}/${total}`
   });
-  if (req.method !== 'HEAD') createReadStream(filePath, { start, end: boundedEnd }).pipe(res);
+  if (req.method !== 'HEAD') pipeSafely(filePath, res, { start, end: boundedEnd });
   else res.end();
+}
+
+/* A read can fail mid-flight (a client that hangs up, a transient EIO from the
+   sandbox filesystem). The stream error arrives out of band, so without a
+   handler it becomes an unhandled 'error' event and takes the whole server down
+   - which is exactly what leaves the deploy probe with no port to reach. */
+function pipeSafely(filePath, res, options) {
+  const stream = options ? createReadStream(filePath, options) : createReadStream(filePath);
+  stream.on('error', (err) => {
+    console.error(`stream error for ${filePath}: ${err && err.code ? err.code : err}`);
+    stream.destroy();
+    try { res.end(); } catch (e) { /* the socket is already gone */ }
+  });
+  res.on('close', () => stream.destroy());
+  stream.pipe(res);
 }
 
 const server = createServer(async (req, res) => {
@@ -100,6 +115,16 @@ const server = createServer(async (req, res) => {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Internal error: ' + (err && err.message));
   }
+});
+
+// Never let one bad request stop the server: the deploy probe only asks for a
+// listening port, and a crash here reads as "service not ready".
+process.on('uncaughtException', (err) => {
+  console.error(`uncaughtException: ${err && err.stack ? err.stack : err}`);
+});
+
+server.on('error', (err) => {
+  console.error(`server error: ${err && err.code ? err.code : err}`);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

@@ -603,35 +603,23 @@ html[data-device="mobile"] .mob-dim {
 }
 html[data-device="mobile"] .mob-card.front { box-shadow: 0 24px 56px rgba(0, 0, 0, .6); }
 html[data-device="mobile"] .mob-card.lift { box-shadow: 0 36px 72px rgba(0, 0, 0, .65); }
-html[data-device="mobile"] .mob-tag {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  background: rgba(255, 255, 255, .92);
-  color: #11131a;
-  padding: 5px 11px;
-  border-radius: 20px;
-}
 html[data-device="mobile"] .mob-copy {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 15px;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 html[data-device="mobile"] .mob-title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
   text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
 }
 html[data-device="mobile"] .mob-meta {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #cdd3de;
   text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
@@ -949,10 +937,44 @@ html[data-device="mobile"] .hero.hero-video-stage .hero-video-fixed {
   position: absolute;
 }
 
-html[data-device="mobile"] .hero-video-stage .hero-title-layer {
-  top: 42%;
-  width: min(92vw, 900px);
-  padding: 0 4vw;
+html[data-device="mobile"] .hero-video-stage .hero-title-stack-mobile {
+  position: absolute;
+  left: 50%;
+  top: 23%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(86vw, 560px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+html[data-device="mobile"] .hero-video-stage .hero-title-stack-mobile .hero-title-layer {
+  position: relative;
+  left: auto;
+  top: auto;
+  display: block;
+  width: 100%;
+  padding: 0 2vw;
+  box-sizing: border-box;
+  transform: none;
+  pointer-events: none;
+  touch-action: auto;
+}
+
+html[data-device="mobile"] .hero-video-stage .hero-title-stack-mobile .hero-title-svg {
+  filter: drop-shadow(0 0 10px rgba(190, 220, 255, 0.16));
+}
+
+html[data-device="mobile"] .hero-title-byline {
+  margin-top: 16px;
+  color: #5373AB;
+  font-size: 10px;
+  letter-spacing: 0.5em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* The personal-info page arrives with no entrance animation on mobile: every
