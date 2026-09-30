@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
-import { House, Mail, Phone } from 'lucide-react';
+import { Copy, House, Mail, Phone } from 'lucide-react';
 import './styles.css';
 import './mobile.css';
 import fourLogo from './assets/four-logo.svg';
@@ -2180,6 +2180,82 @@ function ProfileContent() {
   );
 }
 
+/* Click-to-copy contact line (PC profile). Hover swaps the leading icon for
+   a copy glyph, grows a rule under the value's text and shows the 点击复制
+   tag; click rolls the value up and the confirmation line in, then reverts
+   so the interaction can be replayed. Monochrome on purpose. */
+function CopyContactLine({ icon: Icon, label, value }) {
+  const rollerRef = useRef(null);
+  const mainRef = useRef(null);
+  const doneRef = useRef(null);
+  const timerRef = useRef(0);
+  const widthsRef = useRef({ main: 0, done: 0 });
+  const copiedRef = useRef(false);
+  const [copied, setCopied] = useState(false);
+
+  // The roller is pinned to the value's natural width so the hover rule and
+  // the rolled-in confirmation line always align with the text. Fonts finish
+  // loading after mount, so re-measure once they are ready.
+  useLayoutEffect(() => {
+    const measure = () => {
+      widthsRef.current = {
+        main: mainRef.current.getBoundingClientRect().width,
+        done: doneRef.current.getBoundingClientRect().width
+      };
+      if (!copiedRef.current) rollerRef.current.style.width = widthsRef.current.main + 'px';
+    };
+    measure();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    return () => clearTimeout(timerRef.current);
+  }, []);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    clearTimeout(timerRef.current);
+    copiedRef.current = true;
+    rollerRef.current.style.width = widthsRef.current.done + 'px';
+    setCopied(true);
+    timerRef.current = setTimeout(() => {
+      copiedRef.current = false;
+      rollerRef.current.style.width = widthsRef.current.main + 'px';
+      setCopied(false);
+    }, 2600);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`pf-copy${copied ? ' is-copied' : ''}`}
+      onClick={copy}
+      aria-label={`复制${label}`}
+    >
+      <span className="pf-copy-icon" aria-hidden="true">
+        <Icon size={15} strokeWidth={1.8} className="pf-copy-ic-main" />
+        <Copy size={15} strokeWidth={1.8} className="pf-copy-ic-copy" />
+      </span>
+      <span className="pf-copy-text">
+        <span className="pf-copy-roller" ref={rollerRef}>
+          <span className="pf-copy-stack">
+            <span className="pf-copy-line" ref={mainRef}>{value}</span>
+            <span className="pf-copy-line pf-copy-done" ref={doneRef}>{`已复制${label}，欢迎联系`}</span>
+          </span>
+        </span>
+        <i className="pf-copy-rule" aria-hidden="true" />
+      </span>
+      <span className="pf-copy-hint" aria-hidden="true">点击复制</span>
+    </button>
+  );
+}
+
 /* PC-only personal-info screen. Full-bleed portrait background + all-code
    layout per the 2026-09-30 mock (个人信息.jpg / 技能展示.jpg). Mobile keeps
    the legacy ProfileContent above. */
@@ -2225,8 +2301,8 @@ function ProfileContentPC() {
                 ))}
               </div>
               <div className="pf-contact">
-                <p><Phone size={15} strokeWidth={1.8} />18219315597</p>
-                <p><Mail size={15} strokeWidth={1.8} />Four4444.Design@gmail.com</p>
+                <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
+                <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
               </div>
             </div>
             <div className={`pf-skill-card${activeSkill ? ' is-visible' : ''}`} aria-live="polite">
