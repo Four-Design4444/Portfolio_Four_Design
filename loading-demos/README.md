@@ -18,4 +18,12 @@
 | `demo-3-blur-focus.html` | 对焦成型 | 与首页 hero 的 BlurText 入场同一语言，F/O/U/R 逐字由虚到实 |
 | `demo-4-minimal-line.html` | 极简开合 | 大数字计数 + 中线生长，结束时画面如幕布向两侧打开 |
 
-每个 demo 结尾都会演示「交接给首页」的动画（黑色幕布退场 → 首页 hero 模拟画面入场），右上角有 Replay 可反复重看。
+## 无缝过渡版（直接切入真实 hero 视频）
+
+05–08 内嵌了 `public/media/` 的真实 hero（背景视频 + PORTFOLIO 标题逐字对焦 + 猫咪 alpha 抠像层 + 滚动提示），Loading 结束不换页不黑场，直接过渡进正在播放的 hero：
+
+| 文件 | 概念 | 衔接手法 |
+| --- | --- | --- |
+| `demo-5-night-sky.html` | 夜幕同频 | Loading 背景即 hero 首帧的夜空，交叠淡出无切换点 |
+| `demo-6-shooting-star.html` | 流星引路 | 主流星拖出进度，坠点光晕绽放中浮现 hero |
+| `demo-7-fireflies.html` | 萤火汇聚 | 暖色萤火向心汇聚成光晕，光晕里透出 hero |

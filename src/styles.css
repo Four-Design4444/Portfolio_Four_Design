@@ -4178,3 +4178,281 @@ html[data-paging="on"] .contact-bottom {
 .page-keep.is-hidden {
   display: none;
 }
+
+/* ==========================================================================
+   PC personal-info screen redesign (2026-09-30).
+   Layout reference: 个人信息.jpg. Hover reference: 技能展示.jpg.
+   Rendered only on data-device=desktop (ProfileContentPC); mobile keeps the
+   legacy composite. All motion uses one easing family for a silky feel.
+   ========================================================================== */
+.profile-shot {
+  overflow: hidden;
+  background: #050505;
+}
+
+.pf-inner {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.pf-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.pf-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Keep the subject (right third) framed on any viewport ratio. */
+  object-position: 76% 30%;
+  transform: scale(1.04);
+  transition: transform 1.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-shot.is-visible .pf-bg-img {
+  transform: scale(1);
+}
+
+.pf-content {
+  position: relative;
+  z-index: 1;
+  width: min(52vw, 760px);
+  padding-left: 8.4vw;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Staggered entrance for every block once the section reveals. */
+.pf-title,
+.pf-swap,
+.pf-skills {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
+.profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
+.profile-shot.is-visible .pf-skills { opacity: 1; transform: none; transition-delay: 420ms; }
+
+.pf-title {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  margin: 0;
+}
+
+.pf-title-en {
+  font-size: clamp(40px, 3.7vw, 71px);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  line-height: 1.05;
+  color: #fff;
+}
+
+.pf-title-cn {
+  font-size: clamp(15px, 0.95vw, 18px);
+  letter-spacing: 2px;
+  color: #a4a4a4;
+}
+
+.pf-swap {
+  position: relative;
+  width: 100%;
+  min-height: clamp(200px, 24.5vh, 252px);
+  margin-top: clamp(22px, 4.2vh, 46px);
+}
+
+.pf-info,
+.pf-skill-card {
+  position: absolute;
+  inset: 0;
+  transition:
+    opacity 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Default block: three stat cards + contact rows. */
+.pf-info.is-hidden {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
+}
+
+.pf-stats {
+  display: flex;
+  gap: clamp(14px, 1.2vw, 22px);
+}
+
+.pf-stat {
+  min-width: clamp(112px, 8.6vw, 158px);
+  padding: clamp(14px, 1.7vh, 20px) clamp(16px, 1.4vw, 24px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(8, 8, 10, 0.42);
+  backdrop-filter: blur(6px);
+  transition: border-color 420ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-stat:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  transform: translateY(-3px);
+}
+
+.pf-stat strong {
+  display: block;
+  font-family: "Rany Display", sans-serif;
+  font-weight: 500;
+  font-size: clamp(22px, 1.65vw, 30px);
+  line-height: 1.15;
+  color: #fff;
+}
+
+.pf-stat span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #9aa0ab;
+}
+
+.pf-contact {
+  margin-top: clamp(18px, 3.4vh, 36px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.8vh, 18px);
+}
+
+.pf-contact p {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: clamp(13px, 0.83vw, 15px);
+  letter-spacing: 0.3px;
+  color: #d6dae1;
+}
+
+.pf-contact svg {
+  color: #e8eaee;
+  flex: none;
+}
+
+/* Skill description card (hover state). */
+.pf-skill-card {
+  max-width: min(31vw, 470px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  background: rgba(9, 9, 11, 0.72);
+  backdrop-filter: blur(10px);
+  padding: clamp(20px, 3vh, 30px) clamp(22px, 1.9vw, 32px);
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+}
+
+.pf-skill-card.is-visible {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.pf-skill-card-body {
+  animation: pf-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pf-card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.pf-skill-title {
+  margin: 0 0 14px;
+  font-size: clamp(14px, 0.85vw, 16px);
+  letter-spacing: 0.6px;
+  color: #fff;
+}
+
+.pf-skill-text {
+  margin: 0;
+  font-size: clamp(12.5px, 0.76vw, 14px);
+  line-height: 1.95;
+  color: #b9bec8;
+}
+
+/* Skill row: default shows icon+name inline; once one is hovered the row
+   becomes an accordion — active pill expands with a border, the rest collapse
+   to bare icon squares (技能展示.jpg). */
+.pf-skills {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1vw, 16px);
+  margin-top: clamp(20px, 4vh, 44px);
+}
+
+.pf-skill {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  color: #fff;
+  font-family: inherit;
+  font-size: clamp(12.5px, 0.78vw, 14px);
+  letter-spacing: 0.3px;
+  transition:
+    padding 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 460ms ease,
+    background-color 460ms ease,
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-skill:hover { transform: translateY(-2px); }
+
+.pf-skill-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex: none;
+  transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-skill.is-active .pf-skill-icon { transform: scale(1.12); }
+
+.pf-skill-name {
+  max-width: 110px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 320ms ease;
+}
+
+.pf-skills.has-active .pf-skill:not(.is-active) {
+  padding: 9px;
+}
+
+.pf-skills.has-active .pf-skill:not(.is-active) .pf-skill-name {
+  max-width: 0;
+  opacity: 0;
+}
+
+.pf-skills.has-active .pf-skill.is-active {
+  padding: 9px 18px;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(16, 16, 18, 0.66);
+  backdrop-filter: blur(8px);
+}

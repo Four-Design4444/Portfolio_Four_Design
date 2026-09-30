@@ -43,11 +43,12 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 ];
 import aboutPortrait from './assets/profile/hero-composite/about-figure.jpg';
 import aboutWordsArt from './assets/profile/hero-composite/about-words.png';
-import figmaIcon from './assets/profile/figma.png';
-import comfyuiIcon from './assets/profile/comfyui.png';
-import blenderIcon from './assets/profile/blender.png';
-import codexIcon from './assets/profile/codex.png';
-import photoshopIcon from './assets/profile/photoshop.png';
+import figmaIcon from './assets/profile/figma.webp';
+import comfyuiIcon from './assets/profile/comfyui.webp';
+import blenderIcon from './assets/profile/blender.webp';
+import codexIcon from './assets/profile/codex.webp';
+import photoshopIcon from './assets/profile/photoshop.webp';
+import pcPortraitBg from './assets/profile/pc-portrait-bg.webp';
 import BorderGlow from './components/BorderGlow';
 import SideRays from './components/SideRays';
 import capabilityDeliveryIcon from './assets/capability-icons/payment.svg';
@@ -62,6 +63,33 @@ const tools = [
   { name: 'Blender', icon: blenderIcon },
   { name: 'Codex', icon: codexIcon },
   { name: 'Photoshop', icon: photoshopIcon }
+];
+
+/* PC personal-info screen (2026-09-30 redesign). Hovering a tool swaps the
+   stats/contact block for a description card and collapses the row into an
+   accordion — the reference is 技能展示.jpg. Descriptions below were drafted
+   from the mock copy for Figma; the others follow the same tone. */
+const PC_SKILLS = [
+  {
+    id: 'figma', name: 'Figma', icon: figmaIcon, title: 'UI Design',
+    text: '使用 Figma 进行 UI/UX 设计、组件化设计系统搭建与交互原型制作，具备开发思维了解组件复用、自适应、状态闭环等概念，熟悉 Auto Layout、Variants、Variables，能高效完成从设计到开发的交付。'
+  },
+  {
+    id: 'comfyui', name: 'Comfyui', icon: comfyuiIcon, title: 'AIGC Workflow',
+    text: '熟悉 ComfyUI 节点式工作流搭建，能独立完成模型加载、LoRA 微调、ControlNet 条件控制与高清放大等流程，把 AI 生成能力稳定嵌入日常设计生产链。'
+  },
+  {
+    id: 'blender', name: 'Blender', icon: blenderIcon, title: '3D Design',
+    text: '掌握 Blender 建模、材质、灯光与渲染全流程，能完成产品可视化与三维动效制作，为品牌与界面提供更具空间感的表达。'
+  },
+  {
+    id: 'codex', name: 'Codex', icon: codexIcon, title: 'AI Coding',
+    text: '借助 Codex 等 AI 编程工具参与前端实现，理解组件结构与交付逻辑，让设计方案在开发环节被高效、高保真地还原。'
+  },
+  {
+    id: 'photoshop', name: 'Photoshop', icon: photoshopIcon, title: 'Visual Design',
+    text: '精通 Photoshop 图像处理与视觉合成，覆盖精修、调色、版式与物料延展，保障每一处视觉输出的完成度与一致性。'
+  }
 ];
 
 const advantages = [
@@ -1985,10 +2013,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
       <button
         type="button"
         className="mob-viewall"
-        onClick={() => {
-          const item = ctxRef.current.items[stateRef.current.active];
-          if (item) ctxRef.current.openWorks(item.project.category);
-        }}
+        onClick={() => ctxRef.current.openWorks('ui')}
       >
         查看全部
       </button>
@@ -2090,6 +2115,69 @@ function ProfileContent() {
         </div>
       </div>
       <div className="profile-bottom-line"><span /><b>UI / VI / AI</b></div>
+    </div>
+  );
+}
+
+/* PC-only personal-info screen. Full-bleed portrait background + all-code
+   layout per the 2026-09-30 mock (个人信息.jpg / 技能展示.jpg). Mobile keeps
+   the legacy ProfileContent above. */
+function ProfileContentPC() {
+  const [hovered, setHovered] = useState(null);
+  const active = PC_SKILLS.find((s) => s.id === hovered) || null;
+  return (
+    <div className="pf-inner">
+      <div className="pf-bg" aria-hidden="true">
+        <LazyImage className="pf-bg-img" src={pcPortraitBg} alt="" />
+      </div>
+      <div className="pf-content">
+        <h2 className="pf-title">
+          <span className="pf-title-en rany-display-heading">Hi， I Am Four</span>
+          <span className="pf-title-cn">邱锋江</span>
+        </h2>
+
+        {/* Stats/contact and the skill description card occupy the same slot
+            and crossfade, so the layout never jumps on hover. */}
+        <div className="pf-swap">
+          <div className={`pf-info${active ? ' is-hidden' : ''}`}>
+            <div className="pf-stats">
+              <div className="pf-stat"><strong>5+</strong><span>Years Design</span></div>
+              <div className="pf-stat"><strong>10+</strong><span>Design Tool</span></div>
+              <div className="pf-stat"><strong>50+</strong><span>Work Case</span></div>
+            </div>
+            <div className="pf-contact">
+              <p><Phone size={15} strokeWidth={1.8} />18219315597</p>
+              <p><Mail size={15} strokeWidth={1.8} />Four4444.Design@gmail.com</p>
+            </div>
+          </div>
+          <div className={`pf-skill-card${active ? ' is-visible' : ''}`} aria-live="polite">
+            {active && (
+              <div className="pf-skill-card-body" key={active.id}>
+                <p className="pf-skill-title">{active.title}</p>
+                <p className="pf-skill-text">{active.text}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={`pf-skills${active ? ' has-active' : ''}`}
+          onMouseLeave={() => setHovered(null)}
+        >
+          {PC_SKILLS.map((s) => (
+            <button
+              type="button"
+              key={s.id}
+              className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
+              onMouseEnter={() => setHovered(s.id)}
+              onFocus={() => setHovered(s.id)}
+            >
+              <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
+              <span className="pf-skill-name">{s.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -3245,7 +3333,7 @@ function HomePage({ openWorks, paging, active = true }) {
       <HeroSection active={active} />
 
       <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
-        <ProfileContent />
+        {isMobile ? <ProfileContent /> : <ProfileContentPC />}
       </section>
 
       {/* The advantage, projects and contact screens sit on one continuous

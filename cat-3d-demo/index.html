@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黑白猫 3D Demo</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0e0e10; }
+  #app { width: 100%; height: 100%; }
+  .hud {
+    position: fixed; left: 16px; bottom: 14px; z-index: 10;
+    color: #bbb; font: 13px/1.6 system-ui, "Microsoft YaHei", sans-serif;
+    user-select: none; pointer-events: none;
+  }
+  .hud b { color: #eee; }
+  #btnRotate {
+    position: fixed; right: 16px; bottom: 14px; z-index: 10;
+    background: #26262a; color: #eee; border: 1px solid #3a3a40;
+    border-radius: 8px; padding: 8px 14px; font: 13px system-ui, "Microsoft YaHei", sans-serif;
+    cursor: pointer;
+  }
+  #btnRotate:hover { background: #333338; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="hud"><b>黑白猫 3D Demo</b> — 左键拖拽旋转 · 滚轮缩放 · 右键平移</div>
+<button id="btnRotate">自动旋转：开</button>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- 基础场景 ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x121214);
+scene.fog = new THREE.Fog(0x121214, 9, 20);
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0.8, 2.4, 7.2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.getElementById('app').appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.55, 0);
+controls.enableDamping = true;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.2;
+controls.minDistance = 3;
+controls.maxDistance = 14;
+controls.maxPolarAngle = Math.PI * 0.55;
+
+// ---------- 灯光 ----------
+scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a30, 0.75));
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(3.5, 7, 5);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -4; key.shadow.camera.right = 4;
+key.shadow.camera.top = 5;  key.shadow.camera.bottom = -1;
+key.shadow.camera.far = 20;
+key.shadow.bias = -0.0004;
+key.shadow.radius = 6;
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xbfd4ff, 0.45);
+fill.position.set(-5, 3, -3);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffffff, 0.5);
+rim.position.set(-2, 4, -6);
+scene.add(rim);
+
+// ---------- 地面 ----------
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 64),
+  new THREE.MeshStandardMaterial({ color: 0x1b1b1e, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---------- 材质 ----------
+const matBlack = new THREE.MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.55 });
+const matWhite = new THREE.MeshStandardMaterial({ color: 0xf4f0ea, roughness: 0.65 });
+const matPink  = new THREE.MeshStandardMaterial({ color: 0xf2b9c6, roughness: 0.7 });
+const matNose  = new THREE.MeshStandardMaterial({ color: 0xe08e9c, roughness: 0.45 });
+const matGreen = new THREE.MeshStandardMaterial({ color: 0xa9c838, roughness: 0.3 });
+const matPupil = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.25 });
+
+function mesh(geo, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+const sphere = (r = 1, ws = 24, hs = 18) => new THREE.SphereGeometry(r, ws, hs);
+
+// ---------- 猫 ----------
+const cat = new THREE.Group();
+scene.add(cat);
+
+// ===== 身体 =====
+const body = new THREE.Group();
+body.position.y = 1.02;
+cat.add(body);
+
+const torso = mesh(sphere(), matBlack, 0, 0, 0, 0.72, 0.92, 0.58);
+body.add(torso);
+
+// 白色肚皮
+body.add(mesh(sphere(), matWhite, 0, -0.04, 0.24, 0.52, 0.72, 0.42));
+
+// ===== 手臂 + 手 =====
+function buildArm(side) { // side: 1 右, -1 左
+  const g = new THREE.Group();
+  const shoulder = new THREE.Vector3(side * 0.5, 0.5, 0);
+  // 手臂方向：向外、略朝下
+  const dir = new THREE.Vector3(side, -0.22, 0.05).normalize();
+
+  const arm = mesh(new THREE.CapsuleGeometry(0.13, 0.55, 8, 16), matBlack);
+  arm.position.copy(shoulder).addScaledVector(dir, 0.4);
+  arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  g.add(arm);
+
+  const hand = mesh(sphere(), matWhite,
+    shoulder.x + dir.x * 0.88, shoulder.y + dir.y * 0.88, shoulder.z + dir.z * 0.88,
+    0.3, 0.26, 0.18);
+  g.add(hand);
+
+  // 四根手指（沿手臂方向展开）
+  const up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 4; i++) {
+    const t = (i - 1.5) / 1.5; // -1..1
+    const fingerDir = dir.clone().addScaledVector(up, t * 0.35).normalize();
+    const pos = hand.position.clone().addScaledVector(fingerDir, 0.26);
+    g.add(mesh(sphere(), matWhite, pos.x, pos.y, pos.z, 0.09, 0.09, 0.09));
+  }
+  return g;
+}
+body.add(buildArm(1));
+body.add(buildArm(-1));
+
+// ===== 腿 + 脚 =====
+for (const side of [1, -1]) {
+  cat.add(mesh(new THREE.CapsuleGeometry(0.15, 0.35, 8, 16), matBlack, side * 0.24, 0.45, 0.02));
+  cat.add(mesh(sphere(), matWhite, side * 0.26, 0.2, 0.1, 0.3, 0.2, 0.38));
+  // 三颗脚趾
+  for (let i = -1; i <= 1; i++) {
+    cat.add(mesh(sphere(), matWhite, side * 0.26 + i * 0.11, 0.09, 0.36, 0.09, 0.08, 0.09));
+  }
+}
+
+// ===== 尾巴 =====
+const tailPivot = new THREE.Group();
+tailPivot.position.set(0, 0.72, -0.42);
+cat.add(tailPivot);
+const tailCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(0.28, 0.12, -0.5),
+  new THREE.Vector3(0.6, 0.45, -0.68),
+  new THREE.Vector3(0.72, 0.82, -0.5),
+]);
+const tail = mesh(new THREE.TubeGeometry(tailCurve, 24, 0.1, 12), matBlack);
+tailPivot.add(tail);
+tailPivot.add(mesh(sphere(), matBlack, 0.72, 0.82, -0.5, 0.105, 0.105, 0.105));
+
+// ===== 头 =====
+const HEAD_Y = 2.48;
+const head = new THREE.Group();
+head.position.y = HEAD_Y;
+cat.add(head);
+
+// 头骨
+head.add(mesh(sphere(), matBlack, 0, 0, 0, 0.95, 0.85, 0.88));
+// 白色口鼻/下巴区域
+head.add(mesh(sphere(), matWhite, 0, -0.3, 0.56, 0.62, 0.5, 0.42));
+
+// 耳朵
+for (const side of [1, -1]) {
+  const ear = mesh(new THREE.ConeGeometry(0.3, 0.62, 24), matBlack,
+    side * 0.52, 0.72, -0.05);
+  ear.rotation.z = -side * 0.35;
+  ear.rotation.x = -0.12;
+  head.add(ear);
+  const inner = mesh(new THREE.ConeGeometry(0.17, 0.4, 20), matPink,
+    side * 0.52, 0.68, 0.08);
+  inner.rotation.z = -side * 0.35;
+  inner.rotation.x = -0.12;
+  head.add(inner);
+}
+
+// 眼睛（绿色 + 瞳孔 + 高光），眨眼时整组压扁
+const eyeGroups = [];
+for (const side of [1, -1]) {
+  const eg = new THREE.Group();
+  eg.position.set(side * 0.33, 0.1, 0.7);
+  eg.add(mesh(sphere(), matGreen, 0, 0, 0, 0.165, 0.165, 0.09));
+  eg.add(mesh(sphere(), matPupil, 0, 0, 0.075, 0.085, 0.085, 0.05));
+  eg.add(mesh(sphere(), matWhite, side * -0.04, 0.06, 0.13, 0.032, 0.032, 0.02));
+  head.add(eg);
+  eyeGroups.push(eg);
+}
+
+// 鼻子
+head.add(mesh(sphere(), matNose, 0, -0.1, 0.92, 0.075, 0.06, 0.06));
+
+// 胡须
+for (const side of [1, -1]) {
+  for (let i = -1; i <= 1; i++) {
+    const w = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.42, 6), matWhite,
+      side * 0.68, -0.22 + i * 0.02, 0.5);
+    w.rotation.z = side * (Math.PI / 2 + i * 0.22);
+    head.add(w);
+  }
+}
+
+// ---------- 交互 ----------
+const btn = document.getElementById('btnRotate');
+btn.addEventListener('click', () => {
+  controls.autoRotate = !controls.autoRotate;
+  btn.textContent = `自动旋转：${controls.autoRotate ? '开' : '关'}`;
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- 动画：呼吸 / 眨眼 / 摆尾 ----------
+const clock = new THREE.Clock();
+const BASE_BODY = { sx: 0.72, sy: 0.92, sz: 0.58 };
+
+// 调试钩子：供自动化截图从指定角度观察
+window.__view = (azimuthDeg) => {
+  controls.autoRotate = false;
+  const az = THREE.MathUtils.degToRad(azimuthDeg);
+  const r = 7.2;
+  camera.position.set(Math.sin(az) * r, 2.4, Math.cos(az) * r);
+  controls.target.set(0, 1.55, 0);
+};
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // 呼吸
+  const b = 1 + Math.sin(t * 2.2) * 0.012;
+  torso.scale.set(BASE_BODY.sx * b, BASE_BODY.sy * (2 - b), BASE_BODY.sz * b);
+
+  // 眨眼（每 3.5 秒左右一次）
+  const phase = t % 3.5;
+  const eyeScale = phase < 0.2 ? 1 - 0.92 * Math.sin(Math.PI * phase / 0.2) : 1;
+  for (const eg of eyeGroups) eg.scale.y = eyeScale;
+
+  // 摆尾
+  tailPivot.rotation.y = Math.sin(t * 1.6) * 0.22;
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

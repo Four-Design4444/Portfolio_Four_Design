@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="color-scheme" content="dark" />
-<title>Loading 原型总览 — FOUR Portfolio</title>
+<title>Loading 07 · 萤火汇聚 — FOUR Portfolio</title>
 <style>
   @font-face {
     font-family: "Rany Display";
@@ -22,121 +22,356 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
-    min-height: 100%;
-    background:
-      radial-gradient(circle at 70% -10%, rgba(79, 126, 137, 0.22), transparent 30rem),
-      #000;
+    height: 100%;
+    background: #000;
     color: #fff;
+    overflow: hidden;
     font-family: "Rany Display", "PingFang SC", Inter, ui-sans-serif, system-ui, sans-serif;
   }
 
-  .wrap { width: min(1080px, calc(100% - 48px)); margin: 0 auto; padding: 72px 0 96px; }
+  .stage { position: fixed; inset: 0; }
 
-  header .kicker {
-    font-size: 11px;
-    letter-spacing: 0.5em;
-    color: rgba(154, 222, 238, 0.75);
-    margin-bottom: 18px;
+  /* ================= 真实 HERO 复刻（视频 + 标题 + 猫咪抠像） ================= */
+  .hero { position: absolute; inset: 0; overflow: hidden; background: #000; }
+  .hero .hero-bg,
+  .hero .hero-alpha {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
   }
-  header h1 { font-weight: 300; font-size: clamp(30px, 4.6vw, 52px); letter-spacing: 0.04em; }
-  header p { margin-top: 14px; color: rgba(255, 255, 255, 0.55); font-weight: 300; line-height: 1.8; max-width: 620px; }
-
-  .grid {
-    margin-top: 52px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
+  .hero .hero-bg { z-index: 1; }
+  .hero .hero-alpha { z-index: 3; }
+  .hero .title-layer {
+    position: absolute;
+    left: 50%;
+    top: 47%;
+    z-index: 2;
+    width: min(78vw, 1320px);
+    aspect-ratio: 1640 / 241;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
   }
-  a.card {
+  .hero .title-layer svg {
     display: block;
-    padding: 26px 26px 22px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.02);
-    text-decoration: none;
-    color: inherit;
-    transition: border-color 0.3s ease, transform 0.3s ease, background 0.3s ease;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 0 18px rgba(190, 220, 255, 0.12));
   }
-  a.card:hover {
-    border-color: rgba(154, 222, 238, 0.55);
-    background: rgba(154, 222, 238, 0.05);
-    transform: translateY(-3px);
+  .hero .title-layer path {
+    opacity: 0;
+    filter: blur(52px);
+    transform-box: fill-box;
+    transform-origin: center center;
+    will-change: opacity, filter;
   }
-  .card .no { font-size: 12px; letter-spacing: 0.3em; color: rgba(154, 222, 238, 0.8); }
-  .card h2 { margin-top: 12px; font-weight: 400; font-size: 21px; letter-spacing: 0.03em; }
-  .card p { margin-top: 10px; font-weight: 300; font-size: 13.5px; line-height: 1.75; color: rgba(255, 255, 255, 0.6); }
-  .card .go { display: inline-block; margin-top: 18px; font-size: 11px; letter-spacing: 0.32em; color: rgba(255, 255, 255, 0.5); }
-  a.card:hover .go { color: rgba(154, 222, 238, 0.9); }
+  .hero.is-in .title-layer path {
+    opacity: 1;
+    filter: blur(0);
+    transition:
+      opacity 1.8s cubic-bezier(0.22, 0.8, 0.3, 1) var(--d, 0s),
+      filter 1.8s cubic-bezier(0.22, 0.8, 0.3, 1) var(--d, 0s);
+  }
 
-  footer { margin-top: 60px; font-size: 12px; font-weight: 300; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.35); line-height: 1.9; }
+  .hero .scroll-hint {
+    position: absolute;
+    left: 50%;
+    bottom: clamp(28px, 4.8vh, 54px);
+    z-index: 8;
+    width: 20px;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.56);
+    border-radius: 999px;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .hero.is-in .scroll-hint { opacity: 1; transition: opacity 1.2s ease 2.2s; }
+  .hero .scroll-hint i {
+    position: absolute;
+    left: 50%;
+    top: 6px;
+    width: 2px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.34);
+    transform: translateX(-50%);
+    animation: scrollWheel 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  @keyframes scrollWheel {
+    0% { transform: translate(-50%, 0); opacity: 0; }
+    25% { opacity: 1; }
+    100% { transform: translate(-50%, 12px); opacity: 0; }
+  }
+
+  /* ================= LOADER：萤火向心汇聚 ================= */
+  .loader {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: linear-gradient(
+      180deg,
+      #050917 0%,
+      #091838 40%,
+      #142e5c 62%,
+      #264771 74%,
+      #182742 86%,
+      #0d1626 100%
+    );
+    transition: opacity 1.6s ease;
+  }
+  .loader.is-done { opacity: 0; pointer-events: none; }
+  .loader canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* 汇聚完成后从中心绽放的暖光（同视频里萤火/屏幕的暖色） */
+  .loader .bloom {
+    position: absolute;
+    left: 50%;
+    top: 47%;
+    width: 30vmax;
+    height: 30vmax;
+    border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0.1);
+    background: radial-gradient(
+      circle,
+      rgba(255, 236, 205, 0.95),
+      rgba(255, 208, 140, 0.5) 32%,
+      rgba(160, 190, 245, 0.16) 62%,
+      transparent 78%
+    );
+    filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .loader.is-bloom .bloom {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(4.6);
+    transition: transform 1.5s cubic-bezier(0.3, 0, 0.5, 1), opacity 0.7s ease;
+  }
+
+  .hud {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    pointer-events: none;
+  }
+  .hud .pct {
+    font-weight: 300;
+    font-size: clamp(56px, 9vw, 110px);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 44px rgba(255, 214, 150, 0.35);
+  }
+  .hud .pct::after {
+    content: "%";
+    margin-left: 5px;
+    font-size: 0.34em;
+    color: rgba(255, 214, 150, 0.85);
+  }
+  .hud .label {
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 0.5em;
+    text-indent: 0.5em;
+    color: rgba(214, 230, 255, 0.5);
+  }
+
+  .replay {
+    position: fixed;
+    top: 22px;
+    right: 26px;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.4);
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: border-color 0.25s ease, color 0.25s ease;
+  }
+  .replay:hover { border-color: rgba(151, 178, 231, 0.65); color: #fff; }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="kicker">FOUR · PORTFOLIO — LOADING PROTOTYPES</div>
-      <h1>入场 Loading 动画 · 4 个方向</h1>
-      <p>基于站点现有调性（纯黑底 / 白色几何字标 / 青蓝星尘微光 / Rany Display 细体）制作的独立原型，均未接入项目。每个 demo 结尾都演示了交接给首页 hero 的效果，页面右上角可 Replay。</p>
-    </header>
+<div class="stage">
 
-    <div class="grid">
-      <a class="card" href="./demo-1-logo-stroke.html">
-        <div class="no">01</div>
-        <h2>Logo 描边</h2>
-        <p>FOUR 字标以线条逐字勾勒成型，完成后白色填充定稿、青蓝辉光亮起。品牌感最强，与几何 logo 天然契合。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-      <a class="card" href="./demo-2-starfield.html">
-        <div class="no">02</div>
-        <h2>星尘汇聚</h2>
-        <p>呼应首页星空背景：白色与青色微粒在计数过程中向中心环带汇聚，结束时向外散开让出画面。氛围感最强。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-      <a class="card" href="./demo-3-blur-focus.html">
-        <div class="no">03</div>
-        <h2>对焦成型</h2>
-        <p>F / O / U / R 逐字由 72px 高斯模糊对焦为实，与首页 hero 的 BlurText 入场是同一套语言，前后衔接最顺滑。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-      <a class="card" href="./demo-4-minimal-line.html">
-        <div class="no">04</div>
-        <h2>极简开合</h2>
-        <p>右下大数字计数，中央一条青色细线随之生长，计数完成后画面像幕布一样向两侧打开。最克制、最不着痕迹。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-    </div>
-
-    <header style="margin-top: 72px;">
-      <div class="kicker">SEAMLESS EDITION — 直接切入真实 HERO 视频</div>
-      <h1>无缝过渡版 · 3 个方向</h1>
-      <p>以下方案以 hero 视频的夜空 / 流星 / 萤火为母题，demo 内直接内嵌了真实 hero（背景视频 + PORTFOLIO 标题逐字对焦 + 猫咪抠像层 + 滚动提示）。Loading 结束不换页、不黑场，直接过渡进正在播放的 hero。</p>
-    </header>
-
-    <div class="grid">
-      <a class="card" href="./demo-5-night-sky.html">
-        <div class="no">05</div>
-        <h2>夜幕同频</h2>
-        <p>Loading 的背景就是 hero 首帧的那片夜空：星星随计数一颗颗亮起、地平线辉光渐起，结束时与视频天空交叠淡出——肉眼找不到切换点。最稳、最无缝。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-      <a class="card" href="./demo-6-shooting-star.html">
-        <div class="no">06</div>
-        <h2>流星引路</h2>
-        <p>一颗主流星从右上角划向画面中心拖出进度轨迹（呼应视频里的流星），坠点绽放成光晕，光晕中浮现 hero。叙事感最强。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-      <a class="card" href="./demo-7-fireflies.html">
-        <div class="no">07</div>
-        <h2>萤火汇聚</h2>
-        <p>暖色萤火从「草地」位置升起（正是视频里萤火虫的来历），计数完成后向中心汇成暖光，光晕绽放处即是 hero。最有生命感。</p>
-        <span class="go">OPEN DEMO →</span>
-      </a>
-    </div>
-
-    <footer>
-      原型仅用于方向评审：计数均为模拟时长（约 2.4–3s），实际接入时可替换为真实资源加载进度。<br />
-      05–07 内嵌了 public/media/ 下的 hero 视频作演示，与 src/ 无任何关联，评审后可整体删除 loading-demos/ 目录。
-    </footer>
+  <div class="hero" id="hero" aria-label="Hero video">
+    <video class="hero-bg" src="../public/media/hero-base.mp4" autoplay muted loop playsinline preload="auto"></video>
+    <div class="title-layer" id="titleLayer"></div>
+    <video class="hero-alpha" src="../public/media/hero-cat-alpha.webm" autoplay muted loop playsinline preload="auto"></video>
+    <div class="scroll-hint" aria-hidden="true"><i></i></div>
   </div>
+
+  <!-- LOADER：暖色萤火自草地升起，计数完成后向中心汇聚成光晕 -->
+  <div class="loader" id="loader">
+    <canvas id="sky"></canvas>
+    <div class="bloom"></div>
+    <div class="hud">
+      <div class="pct" id="pct">0</div>
+      <div class="label">FOUR · PORTFOLIO</div>
+    </div>
+  </div>
+
+  <script src="./hero-videos.js"></script>
+  <button class="replay" id="replay" type="button">↻ REPLAY</button>
+</div>
+
+<script src="./hero-replica.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  window.__installHeroTitle();
+
+  var hero = document.getElementById('hero');
+  var loader = document.getElementById('loader');
+  var pct = document.getElementById('pct');
+  var canvas = document.getElementById('sky');
+  var ctx = canvas.getContext('2d');
+
+  var T = { count: 3.2, converge: 0.85, done: 4.15 };
+
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var W = 0, H = 0, flies = [];
+
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function makeFlies() {
+    flies = [];
+    var n = 52;
+    for (var i = 0; i < n; i++) {
+      flies.push({
+        x: Math.random() * W,
+        // 从画面下缘（草地的位置）升起
+        y: H * (0.6 + Math.random() * 0.42),
+        r: 1.1 + Math.random() * 2.4,
+        a: 0.45 + Math.random() * 0.5,
+        tw: Math.random() * Math.PI * 2,
+        ts: 0.8 + Math.random() * 1.6,
+        rise: 5 + Math.random() * 11,
+        sway: 12 + Math.random() * 26,
+        phase: Math.random() * Math.PI * 2,
+        th: Math.random()
+      });
+    }
+  }
+  makeFlies();
+  window.addEventListener('resize', makeFlies);
+
+  var easeOut = function (t) { return 1 - Math.pow(1 - t, 3); };
+  var easeInOut = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+  var clamp01 = function (t) { return Math.min(Math.max(t, 0), 1); };
+
+  var started = 0;
+  var raf = 0;
+  var lastNow = 0;
+
+  function frame(now) {
+    var t = (now - started) / 1000;
+    var dt = Math.min((now - lastNow) / 1000, 0.05) || 0.016;
+    lastNow = now;
+    var p = easeOut(clamp01(t / T.count));
+    var convergeT = clamp01((t - T.count) / T.converge);
+    var cx = W / 2, cy = H * 0.47;
+
+    ctx.clearRect(0, 0, W, H);
+
+    for (var i = 0; i < flies.length; i++) {
+      var f = flies[i];
+      var gate = clamp01((p * 1.25 - f.th) * 6);
+      if (gate <= 0) continue;
+
+      if (convergeT <= 0) {
+        // 自由上升阶段
+        f.y -= f.rise * dt;
+        f.x += Math.sin(now * 0.0009 + f.phase) * f.sway * dt;
+        if (f.y < H * 0.3) { f.y = H * (1.02); f.x = Math.random() * W; }
+      } else {
+        // 汇聚阶段：被中心吸入
+        var pull = easeInOut(convergeT);
+        f.x += (cx - f.x) * pull * 0.09;
+        f.y += (cy - f.y) * pull * 0.09;
+        if (Math.abs(f.x - cx) < 8 && Math.abs(f.y - cy) < 8) continue;
+      }
+
+      var twinkle = 0.5 + 0.5 * Math.sin(f.tw + now * 0.002 * f.ts);
+      var alpha = f.a * twinkle * gate * (1 - convergeT * 0.4);
+      var r = f.r * (1 + twinkle * 0.4 + convergeT * 0.8);
+
+      var g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r * 5);
+      g.addColorStop(0, 'rgba(255, 232, 190, ' + (alpha * 0.95).toFixed(3) + ')');
+      g.addColorStop(0.35, 'rgba(255, 208, 140, ' + (alpha * 0.4).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255, 208, 140, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r * 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255, 244, 224, ' + alpha.toFixed(3) + ')';
+      ctx.arc(f.x, f.y, r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    pct.textContent = String(Math.round(p * 100));
+
+    if (t >= T.count && !loader.classList.contains('is-bloom')) {
+      loader.classList.add('is-bloom');
+    }
+    if (t >= T.count + 0.05 && !loader.classList.contains('is-done')) {
+      // 暖光绽放的同时揭幕：光晕里透出的就是正在播放的 hero
+      loader.classList.add('is-done');
+      hero.classList.add('is-in');
+    }
+    if (t >= T.done + 1.6) return;
+
+    raf = requestAnimationFrame(frame);
+  }
+
+  function play() {
+    cancelAnimationFrame(raf);
+    started = performance.now();
+    lastNow = started;
+    loader.classList.remove('is-done', 'is-bloom');
+    hero.classList.remove('is-in');
+    pct.textContent = '0';
+    void loader.offsetWidth;
+    makeFlies();
+    raf = requestAnimationFrame(frame);
+  }
+
+  document.getElementById('replay').addEventListener('click', play);
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    loader.classList.add('is-done');
+    hero.classList.add('is-in');
+    pct.textContent = '100';
+  } else {
+    play();
+  }
+})();
+</script>
 </body>
 </html>
