@@ -4503,6 +4503,9 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-skills.has-active .pf-skill:not(.is-active) {
   padding: 13px 16px;
+  /* Collapsed cell: the name is width 0, so the icon|name flex gap would
+     still push the icon 5px off-center. Zero the gap while collapsed. */
+  gap: 0;
 }
 
 .pf-skills.has-active .pf-skill:last-child {
