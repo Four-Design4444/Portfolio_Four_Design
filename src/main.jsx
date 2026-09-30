@@ -20,6 +20,11 @@ const HERO_MOBILE_FALLBACK_SRC = '/media/hero-mobile-fallback.mp4';
 // First frame of the mobile hero, shown before/while the video starts. WeChat
 // kernels that refuse autoplay would otherwise leave a black hero.
 const HERO_MOBILE_POSTER_SRC = '/media/hero-mobile-poster.webp';
+// MPEG-1 transport stream decoded by JSMpeg straight onto a <canvas>. Used only
+// inside WeChat's mobile browser: because no <video> element is involved, the
+// autoplay policy never applies and playback really starts on its own.
+const HERO_MOBILE_JSMPEG_SRC = '/media/hero-mobile-jsmpeg.ts';
+const JSMPEG_VENDOR_SRC = '/vendor/jsmpeg.min.js';
 const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
@@ -29,6 +34,30 @@ const HERO_HEVC_CODEC_TYPES = [
 const IS_WECHAT_BROWSER = /MicroMessenger/i.test(
   typeof navigator !== 'undefined' ? navigator.userAgent : ''
 );
+
+// JSMpeg is ~138 KB and only WeChat ever needs it, so it is injected on demand
+// rather than bundled into the main chunk. A failed load clears the cache so a
+// remount (or a retry after the fallback) can try again.
+let jsmpegScriptPromise = null;
+function loadJSMpeg() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (window.JSMpeg) return Promise.resolve(window.JSMpeg);
+  if (!jsmpegScriptPromise) {
+    jsmpegScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = JSMPEG_VENDOR_SRC;
+      script.async = true;
+      script.onload = () => (
+        window.JSMpeg ? resolve(window.JSMpeg) : reject(new Error('JSMpeg global missing after load'))
+      );
+      script.onerror = () => reject(new Error('JSMpeg script failed to load'));
+      document.head.appendChild(script);
+    });
+    jsmpegScriptPromise.catch(() => { jsmpegScriptPromise = null; });
+  }
+  return jsmpegScriptPromise;
+}
+
 const GROUP10_VIEWBOX = '0 0 1640 241';
 const GROUP10_PATH_CENTERS = [
   { x: 0.049, y: 0.431 },
@@ -2204,7 +2233,12 @@ function ProfileContentPC() {
 function HeroSection({ active = true }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [assetMode, setAssetMode] = useState(() => {
-    if (IS_WECHAT_BROWSER) return isMobile ? 'mobile-fallback' : 'fallback';
+    // WeChat's XWeb kernel refuses programmatic <video>.play() without a real
+    // gesture. JSMpeg decodes MPEG-TS in JS and paints to a <canvas>, so no
+    // media element exists and the autoplay policy simply does not apply.
+    // Only WeChat mobile pays for the (larger) TS asset; every other browser
+    // keeps the native video path untouched.
+    if (IS_WECHAT_BROWSER) return isMobile ? 'mobile-jsmpeg' : 'fallback';
     const video = document.createElement('video');
     const supportsHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
@@ -2213,7 +2247,11 @@ function HeroSection({ active = true }) {
   // Shown when the kernel refuses autoplay (e.g. WeChat mobile-data policy):
   // the poster keeps the hero visible and this hint tells visitors a tap starts it.
   const [playHint, setPlayHint] = useState(false);
+  // Flips once JSMpeg has painted its first decoded frame, which is the cue to
+  // fade the still poster out (otherwise the hero would flash empty over canvas).
+  const [jsmpegPainted, setJsmpegPainted] = useState(false);
   const useWebglRenderer = !isMobile && assetMode !== 'alpha2d';
+  const useJsmpeg = isMobile && assetMode === 'mobile-jsmpeg';
   const heroTitleMarkup = useMemo(() => {
     let welcomePart = 0;
     const splitWelcome = group10Markup.replace(
@@ -2231,12 +2269,53 @@ function HeroSection({ active = true }) {
   const alphaCanvasRef = useRef(null);
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
+  const jsmpegCanvasRef = useRef(null);
+  const jsmpegPlayerRef = useRef(null);
+  // WeChat-only path: decode the MPEG-TS stream with JSMpeg and paint it onto a
+  // canvas. No <video> element => no autoplay gate => playback starts on its own.
+  // If the decoder never reaches a first frame we fall back to the native video.
+  useEffect(() => {
+    if (!useJsmpeg) return undefined;
+    let cancelled = false;
+    let player = null;
+    let painted = false;
+    const canvas = jsmpegCanvasRef.current;
+    if (!canvas) return undefined;
+    const bail = () => { if (!cancelled) setAssetMode('mobile-fallback'); };
+    const failTimer = window.setTimeout(bail, 9000);
+    loadJSMpeg().then((JSMpeg) => {
+      if (cancelled || !canvas.isConnected) return;
+      player = new JSMpeg.Player(HERO_MOBILE_JSMPEG_SRC, {
+        canvas,
+        autoplay: true,
+        loop: true,
+        progressive: true,
+        chunkSize: 512 * 1024,
+        onVideoDecode: () => {
+          if (painted || cancelled) return;
+          painted = true;
+          window.clearTimeout(failTimer);
+          setJsmpegPainted(true);
+        }
+      });
+      jsmpegPlayerRef.current = player;
+    }).catch(bail);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(failTimer);
+      if (player) {
+        try { player.destroy(); } catch (_) { /* decoder already torn down */ }
+      }
+      if (jsmpegPlayerRef.current === player) jsmpegPlayerRef.current = null;
+    };
+  }, [useJsmpeg]);
   // WeChat kernels block programmatic video.play() until either the visitor
   // interacts OR the page answers WeixinJSBridgeReady (WeChat's own unlock
   // event, which grants playback without a gesture). Retry on a short ladder
   // so whichever unlock arrives first wins.
   useEffect(() => {
-    if (!isMobile) return undefined;
+    // (JSMpeg path needs no kick: there is no media element to unlock.)
+    if (!isMobile || useJsmpeg) return undefined;
     // Explicit ?dbg=1/#dbg switch only (auto-on for WeChat was temporary diagnosis).
     const debugOverlay = /dbg=1|#dbg/.test(window.location.href);
     const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
@@ -2315,7 +2394,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       disarm();
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
-  }, [assetMode, isMobile]);
+  }, [assetMode, isMobile, useJsmpeg]);
   const pointerRef = useRef({ x: 0.5, y: 0.5 });
   const hoverTargetRef = useRef(0);
 
@@ -2940,6 +3019,16 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       <div className="hero-video-fixed">
         {isMobile ? (
           <>
+            {useJsmpeg ? (
+              <>
+                <div
+                  className="hero-mobile-jsmpeg-poster"
+                  style={{ backgroundImage: `url(${HERO_MOBILE_POSTER_SRC})`, opacity: jsmpegPainted ? 0 : 1 }}
+                  aria-hidden="true"
+                />
+                <canvas ref={jsmpegCanvasRef} className="hero-mobile-video hero-mobile-jsmpeg-canvas" aria-hidden="true" />
+              </>
+            ) : (
             <video
               className="hero-mobile-video"
               src={assetMode === 'mobile' ? HERO_MOBILE_SRC : HERO_MOBILE_FALLBACK_SRC}
@@ -2963,7 +3052,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
               disablePictureInPicture
               aria-label="Mobile hero video"
             />
-            {playHint ? <div className="hero-play-hint" aria-hidden="true">轻触或滑动播放</div> : null}
+            )}
+            {playHint && !useJsmpeg ? <div className="hero-play-hint" aria-hidden="true">轻触或滑动播放</div> : null}
             <div className="hero-title-stack-mobile" aria-label="Group 10 portfolio mark">
               <div
                 className="hero-title-layer"

@@ -26,6 +26,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  '.ts': 'video/mp2t',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
