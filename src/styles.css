@@ -4337,11 +4337,22 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-stat span {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 6px;
   font-size: 11px;
   letter-spacing: 0.4px;
   color: #9aa0ab;
+  white-space: nowrap;
+}
+
+/* Inline stat icon (个人信息-经验.jpg 图2: small glyph left of the label). */
+.pf-stat-label img {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  flex: none;
 }
 
 .pf-contact {
@@ -4696,21 +4707,23 @@ html[data-paging="on"] .contact-bottom {
 .pf-exp-tab {
   appearance: none;
   font-family: inherit;
-  text-align: left;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
   min-width: clamp(96px, 5.9vw, 114px);
-  padding: 10px 12px 14px clamp(20px, 1.7vw, 32px);
+  /* Symmetric while collapsed so the lone icon sits dead-center; the active
+     tab transitions its left padding out to the label's left-align inset. */
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-bottom: none;
   border-radius: 10px 10px 0 0;
   background: rgba(9, 9, 11, 0.86);
   /* Collapse the shared hairline between flush neighbours to 1px. */
   margin-left: -1px;
+  transition: padding 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pf-exp-tab:first-child { margin-left: 0; }
@@ -4731,17 +4744,58 @@ html[data-paging="on"] .contact-bottom {
   transition: max-height 480ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
 }
 
-.pf-exp-tab span {
-  display: block;
-  font-size: clamp(10px, 0.55vw, 11px);
-  letter-spacing: 0.4px;
-  color: #9aa0ab;
-  white-space: nowrap;
+/* Icon + English label row. Collapsed tabs hide the name and leave the icon
+   riding alone, centered via left/transform (both animatable); activation
+   slides the row onto the left-align inset while the name expands. */
+.pf-exp-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  width: max-content;
+  left: 50%;
+  transform: translateX(-50%);
+  transition:
+    left 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-exp-tab.is-active {
+  padding-left: clamp(20px, 1.7vw, 32px);
+  padding-bottom: 14px;
 }
 
 .pf-exp-tab.is-active strong {
   max-height: 34px;
   margin-bottom: 4px;
+  opacity: 1;
+}
+
+.pf-exp-tab.is-active .pf-exp-label {
+  left: 0;
+  transform: none;
+}
+
+.pf-exp-icon {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  flex: none;
+}
+
+.pf-exp-name {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: clamp(10px, 0.55vw, 11px);
+  letter-spacing: 0.4px;
+  color: #9aa0ab;
+  transition: max-width 480ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
+}
+
+.pf-exp-tab.is-active .pf-exp-name {
+  max-width: 110px;
   opacity: 1;
 }
 

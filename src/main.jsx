@@ -97,6 +97,9 @@ import blenderIcon from './assets/profile/blender.webp';
 import codexIcon from './assets/profile/codex.webp';
 import photoshopIcon from './assets/profile/photoshop.webp';
 import pcPortraitBg from './assets/profile/pc-portrait-bg.webp';
+import expYearsIcon from './assets/profile/exp-years.svg';
+import expToolsIcon from './assets/profile/exp-tools.svg';
+import expCasesIcon from './assets/profile/exp-cases.svg';
 import BorderGlow from './components/BorderGlow';
 import SideRays from './components/SideRays';
 import capabilityDeliveryIcon from './assets/capability-icons/payment.svg';
@@ -146,15 +149,15 @@ const PC_SKILLS = [
    strip interaction below. */
 const PC_STATS = [
   {
-    id: 'years', value: '5+', label: 'Years Design',
+    id: 'years', value: '5+', label: 'Years Design', icon: expYearsIcon,
     text: '5年设计经验，横跨UI/UX、平面设计、3D建模与AIGC。擅长从用户视角构建清晰流畅的界面体验，以版式与视觉语言传递内容情绪，具备从概念到落地的完整执行能力，持续探索技术与设计的融合，让创意更自由地实现。'
   },
   {
-    id: 'tools', value: '10+', label: 'Design Tool',
+    id: 'tools', value: '10+', label: 'Design Tool', icon: expToolsIcon,
     text: '十余项专业软件掌握，具备较强学习能力与跨领域能力，近年来持续探索AIGC与设计工作流的结合，让技术成为创意的加速器。以稳定的专业输出和跨领域的适应力，持续为品牌创造价值。'
   },
   {
-    id: 'cases', value: '20+', label: 'Work Case',
+    id: 'cases', value: '20+', label: 'Work Case', icon: expCasesIcon,
     text: '多项完整商业项目经验，曾为多家企业提供年度设计支持，在长期合作中保持稳定输出，成为品牌设计环节中可信赖的长期伙伴。'
   }
 ];
@@ -2302,7 +2305,7 @@ function ProfileContentPC() {
                     onFocus={() => setHover({ type: 'stat', id: s.id })}
                   >
                     <strong>{s.value}</strong>
-                    <span>{s.label}</span>
+                    <span className="pf-stat-label"><LazyImage src={s.icon} alt="" />{s.label}</span>
                   </button>
                 ))}
               </div>
@@ -2336,7 +2339,10 @@ function ProfileContentPC() {
                         onFocus={() => setHover({ type: 'stat', id: s.id })}
                       >
                         <strong>{s.value}</strong>
-                        <span>{s.label}</span>
+                        <span className="pf-exp-label">
+                          <LazyImage className="pf-exp-icon" src={s.icon} alt="" />
+                          <span className="pf-exp-name">{s.label}</span>
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -2512,8 +2518,8 @@ function HeroSection({ active = true }) {
   // event, which grants playback without a gesture). Retry on a short ladder
   // so whichever unlock arrives first wins.
   useEffect(() => {
-    // (JSMpeg path needs no kick: there is no media element to unlock.)
-    if (!isMobile || useJsmpeg) return undefined;
+    // (Canvas paths need no kick: there is no media element to unlock.)
+    if (!isMobile || useJsmpeg || useWebCodecs) return undefined;
     // Explicit ?dbg=1/#dbg switch only (auto-on for WeChat was temporary diagnosis).
     const debugOverlay = /dbg=1|#dbg/.test(window.location.href);
     const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
