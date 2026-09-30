@@ -2493,6 +2493,7 @@ function HeroSection({ active = true }) {
           painted = true;
           window.clearTimeout(failTimer);
           setJsmpegPainted(true);
+          setCanvasPainted(true);
         }
       });
       jsmpegPlayerRef.current = player;
@@ -3216,14 +3217,18 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       <div className="hero-video-fixed">
         {isMobile ? (
           <>
-            {useJsmpeg ? (
+            {useWebCodecs || useJsmpeg ? (
               <>
                 <div
                   className="hero-mobile-jsmpeg-poster"
-                  style={{ backgroundImage: `url(${HERO_MOBILE_POSTER_SRC})`, opacity: jsmpegPainted ? 0 : 1 }}
+                  style={{ backgroundImage: `url(${HERO_MOBILE_POSTER_SRC})`, opacity: canvasPainted ? 0 : 1 }}
                   aria-hidden="true"
                 />
-                <canvas ref={jsmpegCanvasRef} className="hero-mobile-video hero-mobile-jsmpeg-canvas" aria-hidden="true" />
+                <canvas
+                  ref={useWebCodecs ? wcCanvasRef : jsmpegCanvasRef}
+                  className="hero-mobile-video hero-mobile-jsmpeg-canvas"
+                  aria-hidden="true"
+                />
               </>
             ) : (
             <video
