@@ -18,7 +18,16 @@
         var iPadDesktopUA = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
         var touchOnly = (navigator.maxTouchPoints || 0) > 0 && !window.matchMedia('(hover: hover)').matches;
         var narrow = window.matchMedia('(max-width: 900px)').matches;
-        var isMobile = forced === 'mobile' ? true : forced === 'desktop' ? false : (uaMobile || iPadDesktopUA || (touchOnly && narrow));
+        // Width-priority upgrade: a touch device whose *logical* viewport is
+        // already tablet-sized (>=1024 CSS px: 12.9" iPad, tablets landscape)
+        // gets the desktop layout. High-DPI phones stay far below the threshold
+        // (360-480 CSS px after DPR division), so they can never misjudge.
+        // Judged once at first paint; rotating a tablet mid-session does not
+        // flip the layout for the rest of the visit.
+        var bigTouch = (navigator.maxTouchPoints || 0) > 0 && window.matchMedia('(min-width: 1024px)').matches;
+        var isMobile = forced === 'mobile' ? true
+          : forced === 'desktop' ? false
+            : (bigTouch ? false : (uaMobile || iPadDesktopUA || (touchOnly && narrow)));
         root.setAttribute('data-device', isMobile ? 'mobile' : 'desktop');
         // The home route always uses one-screen paging. Keep secondary routes
         // in their regular document flow from the first paint.
