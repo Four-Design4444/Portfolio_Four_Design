@@ -56,24 +56,6 @@ import capabilityAiIcon from './assets/capability-icons/ai-nodes.svg';
 import capabilityTrendIcon from './assets/capability-icons/trend.svg';
 import { DETAIL_SCROLLS } from './data/detailScrolls';
 
-// Warm the works covers once the visitor signals intent (nav hover/focus), so the
-// secondary route paints from cache instead of triggering a fresh fetch. The long
-// scrolls themselves are tiled and lazy-loaded, so only the covers are warmable.
-const WORKS_PREFETCH_ASSETS = Object.keys(DETAIL_SCROLLS.works).map(
-  (id) => `/detail/${id}/v1/cover.webp`
-);
-let worksPrefetched = false;
-function prefetchWorksAssets() {
-  if (worksPrefetched) return;
-  worksPrefetched = true;
-  WORKS_PREFETCH_ASSETS.forEach((src) => {
-    if (!src) return;
-    const img = new Image();
-    img.decoding = 'async';
-    img.src = src;
-  });
-}
-
 const tools = [
   { name: 'Figma', icon: figmaIcon },
   { name: 'Comfyui', icon: comfyuiIcon },
@@ -1452,9 +1434,9 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
               lockTo(1);
               scrollToHomeSection(event, 'profile');
             }}>About</a>
-            <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#/works" onMouseEnter={prefetchWorksAssets} onFocus={prefetchWorksAssets} onClick={(event) => {
-              event.preventDefault();
-              goWorks();
+            <a data-home-nav-item="2" className={homeActiveSection === 'projects' ? 'is-active' : ''} aria-current={homeActiveSection === 'projects' ? 'location' : undefined} href="#projects" onClick={(event) => {
+              lockTo(2);
+              scrollToHomeSection(event, 'projects');
             }}>Portfolio</a>
             <a data-home-nav-item="3" className={homeActiveSection === 'contact' ? 'is-active' : ''} aria-current={homeActiveSection === 'contact' ? 'location' : undefined} href="#contact" onClick={(event) => {
               lockTo(3);
@@ -1493,7 +1475,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             >
               <a className={homeActiveSection === 'hero' ? 'is-active' : ''} href="#hero" onClick={(event) => { setMobileMenuOpen(false); goHomeWithScroll(event); }}>Home</a>
               <a className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} href="#profile" onClick={(event) => { setMobileMenuOpen(false); lockTo(1); scrollToHomeSection(event, 'profile'); }}>About</a>
-              <a className={homeActiveSection === 'projects' ? 'is-active' : ''} href="#/works" onClick={(event) => { event.preventDefault(); setMobileMenuOpen(false); goWorks(); }}>Portfolio</a>
+              <a className={homeActiveSection === 'projects' ? 'is-active' : ''} href="#projects" onClick={(event) => { setMobileMenuOpen(false); lockTo(2); scrollToHomeSection(event, 'projects'); }}>Portfolio</a>
               <a className={homeActiveSection === 'contact' ? 'is-active' : ''} href="#contact" onClick={(event) => { setMobileMenuOpen(false); lockTo(3); scrollToHomeSection(event, 'contact'); }}>Contact</a>
             </nav>,
             document.body
