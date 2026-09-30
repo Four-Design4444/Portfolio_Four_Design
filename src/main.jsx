@@ -17,6 +17,9 @@ const HERO_FALLBACK_MASK_SRC = '/media/hero-mask-fallback.mp4';
 const HERO_FALLBACK_ALPHA_SRC = '/media/hero-cat-alpha.webm';
 const HERO_MOBILE_SRC = '/media/hero-mobile.mp4';
 const HERO_MOBILE_FALLBACK_SRC = '/media/hero-mobile-fallback.mp4';
+// First frame of the mobile hero, shown before/while the video starts. WeChat
+// kernels that refuse autoplay would otherwise leave a black hero.
+const HERO_MOBILE_POSTER_SRC = '/media/hero-mobile-poster.webp';
 const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
@@ -2231,13 +2234,58 @@ function HeroSection({ active = true }) {
   // so whichever unlock arrives first wins.
   useEffect(() => {
     if (!isMobile) return undefined;
+    const debugOverlay = /(\?|&)dbg=1/.test(window.location.search);
+    const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
+    let overlay = null;
+    const paint = (video) => {
+      if (!overlay || !video) return;
+      overlay.textContent = `${JSON.stringify(diag)}
+src=${(video.currentSrc || video.src || '').split('/').pop()}
+paused=${video.paused} t=${(video.currentTime || 0).toFixed(2)} rs=${video.readyState}
+net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
+    };
+    if (debugOverlay && document.body) {
+      overlay = document.createElement('div');
+      overlay.className = 'hero-debug-overlay';
+      Object.assign(overlay.style, {
+        position: 'fixed', left: '8px', top: '8px', zIndex: '999999',
+        background: 'rgba(0,0,0,0.72)', color: '#7CFF7C', font: '11px/1.45 monospace',
+        padding: '6px 8px', borderRadius: '6px', pointerEvents: 'none', whiteSpace: 'pre'
+      });
+      document.body.appendChild(overlay);
+    }
     const kick = () => {
       const video = document.querySelector('video.hero-mobile-video');
-      if (video && video.paused && !video.ended) video.play().catch(() => {});
+      if (!video) return;
+      diag.attempts += 1;
+      diag.mutedAttr = video.hasAttribute('muted');
+      if (!video.paused || video.ended) { paint(video); return; }
+      const attempt = video.play();
+      if (attempt && typeof attempt.catch === 'function') {
+        attempt.catch((error) => {
+          diag.lastError = `${error && error.name}: ${error && error.message}`;
+          paint(video);
+        });
+      }
+      paint(video);
     };
     kick();
     const timers = [400, 1200, 2600, 5000, 8000].map((delay) => window.setTimeout(kick, delay));
-    const onBridgeReady = () => window.setTimeout(kick, 60);
+    const onBridgeReady = () => {
+      diag.bridge = true;
+      window.setTimeout(() => {
+        kick();
+      // Stubborn XWeb builds refuse every programmatic play() except one issued
+      // from inside a WeixinJSBridge invoke callback (WeChat treats it as a
+      // user-initiated context). Try that as the strongest available unlock.
+      try {
+        const bridge = window.WeixinJSBridge;
+        if (bridge && typeof bridge.invoke === 'function') {
+          bridge.invoke('getNetworkType', {}, () => window.setTimeout(kick, 30));
+        }
+      } catch (_) { /* bridge unavailable; ignore */ }
+      }, 60);
+    };
     if (typeof window !== 'undefined' && window.WeixinJSBridge) onBridgeReady();
     document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
     const options = { once: true, passive: true };
@@ -2248,6 +2296,7 @@ function HeroSection({ active = true }) {
       document.removeEventListener('WeixinJSBridgeReady', onBridgeReady);
       window.removeEventListener('touchstart', kick);
       window.removeEventListener('click', kick);
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
   }, [assetMode, isMobile]);
   const pointerRef = useRef({ x: 0.5, y: 0.5 });
@@ -2877,6 +2926,7 @@ function HeroSection({ active = true }) {
             <video
               className="hero-mobile-video"
               src={assetMode === 'mobile' ? HERO_MOBILE_SRC : HERO_MOBILE_FALLBACK_SRC}
+              poster={HERO_MOBILE_POSTER_SRC}
               onError={() => { setAssetMode((mode) => (mode === 'mobile' ? 'mobile-fallback' : mode)); }}
               ref={(el) => {
                 // React sets `muted` as a DOM property only and never renders the
