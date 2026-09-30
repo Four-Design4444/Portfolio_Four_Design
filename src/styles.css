@@ -4228,10 +4228,13 @@ html[data-paging="on"] .contact-bottom {
   align-items: flex-start;
 }
 
-/* Staggered entrance for every block once the section reveals. */
+/* Staggered entrance for every block once the section reveals. The skill
+   strip gets its OWN entrance wrapper: the 420ms stagger delay must never
+   live on .pf-skills itself, or it leaks into the hover leave animation
+   (strip waits 420ms before undocking = visible stall). */
 .pf-title,
 .pf-swap,
-.pf-skills {
+.pf-skills-entrance {
   opacity: 0;
   transform: translateY(22px);
   transition:
@@ -4241,13 +4244,7 @@ html[data-paging="on"] .contact-bottom {
 
 .profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
-.profile-shot.is-visible .pf-skills {
-  opacity: 1;
-  transform: translateY(var(--pf-dock, 0px));
-  transition-delay: 420ms;
-}
-/* Entering hover must not inherit the entrance stagger delay. */
-.profile-shot.is-visible .pf-skills.has-active { transition-delay: 0ms; }
+.profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }
 
 .pf-title {
   display: flex;

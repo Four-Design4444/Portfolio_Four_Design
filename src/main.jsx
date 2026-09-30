@@ -21,6 +21,11 @@ const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
 ];
+// WeChat's X5/XWeb kernels report spurious HEVC support via canPlayType but their
+// players frequently fail to decode it (silent black frame). Never trust HEVC there.
+const IS_WECHAT_BROWSER = /MicroMessenger/i.test(
+  typeof navigator !== 'undefined' ? navigator.userAgent : ''
+);
 const GROUP10_VIEWBOX = '0 0 1640 241';
 const GROUP10_PATH_CENTERS = [
   { x: 0.049, y: 0.431 },
@@ -2169,21 +2174,23 @@ function ProfileContentPC() {
             </div>
           </div>
 
-          <div
-            className={`pf-skills${active ? ' has-active' : ''}`}
-          >
-            {PC_SKILLS.map((s) => (
-              <button
-                type="button"
-                key={s.id}
-                className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
-                onMouseEnter={() => setHovered(s.id)}
-                onFocus={() => setHovered(s.id)}
-              >
-                <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
-                <span className="pf-skill-name">{s.name}</span>
-              </button>
-            ))}
+          <div className="pf-skills-entrance">
+            <div
+              className={`pf-skills${active ? ' has-active' : ''}`}
+            >
+              {PC_SKILLS.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHovered(s.id)}
+                  onFocus={() => setHovered(s.id)}
+                >
+                  <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
+                  <span className="pf-skill-name">{s.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -2194,6 +2201,7 @@ function ProfileContentPC() {
 function HeroSection({ active = true }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [assetMode, setAssetMode] = useState(() => {
+    if (IS_WECHAT_BROWSER) return isMobile ? 'mobile-fallback' : 'fallback';
     const video = document.createElement('video');
     const supportsHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
@@ -2217,6 +2225,25 @@ function HeroSection({ active = true }) {
   const alphaCanvasRef = useRef(null);
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
+  // WeChat kernels may block autoplay or start late; nudge the hero video back in
+  // on the next tick, after a short delay, and on the visitor's first interaction.
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const kick = () => {
+      const video = document.querySelector('video.hero-mobile-video');
+      if (video && video.paused && !video.ended) video.play().catch(() => {});
+    };
+    kick();
+    const timer = window.setTimeout(kick, 1200);
+    const options = { once: true, passive: true };
+    window.addEventListener('touchstart', kick, options);
+    window.addEventListener('click', kick, options);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('touchstart', kick);
+      window.removeEventListener('click', kick);
+    };
+  }, [assetMode, isMobile]);
   const pointerRef = useRef({ x: 0.5, y: 0.5 });
   const hoverTargetRef = useRef(0);
 
@@ -2849,6 +2876,9 @@ function HeroSection({ active = true }) {
               muted
               loop
               playsInline
+              webkit-playsinline="true"
+              x5-playsinline="true"
+              x5-video-player-type="h5"
               preload="auto"
               fetchPriority="high"
               disablePictureInPicture
