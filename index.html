@@ -32,6 +32,22 @@
           : forced === 'desktop' ? false
             : (bigTouch ? false : (uaMobile || iPadDesktopUA || (touchOnly && narrow)));
         root.setAttribute('data-device', isMobile ? 'mobile' : 'desktop');
+        // Mobile WeChat paints the hero through WebCodecs, which fetches a raw
+        // H.264 clip from JS — normally that request can only start once React
+        // has booted. Preloading it here lets the clip download in parallel
+        // with the app bundle, which is what keeps the bigger 1440x2560 source
+        // from delaying the first painted frame.
+        if (isMobile && /MicroMessenger/i.test(ua)) {
+          var preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'fetch';
+          // An `as="fetch"` preload only matches a fetch() request when their
+          // CORS settings agree; plain fetch() runs in CORS mode, so the
+          // attribute is required — without it the clip would download twice.
+          preload.crossOrigin = 'anonymous';
+          preload.href = '/media/hero-mobile-webcodecs.264';
+          document.head.appendChild(preload);
+        }
         // The home route always uses one-screen paging. Keep secondary routes
         // in their regular document flow from the first paint.
         var hash = window.location.hash || '';

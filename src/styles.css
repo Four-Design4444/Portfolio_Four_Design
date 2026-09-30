@@ -4286,73 +4286,155 @@ html[data-paging="on"] .contact-bottom {
   padding: 28px;
 }
 
-.pf-info,
 .pf-skill-card {
   position: absolute;
   inset: 0;
+  max-width: min(36.5vw, 660px);
   will-change: opacity, transform;
   transition:
     opacity 480ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Default block: three stat cards + contact rows. */
-.pf-info.is-hidden {
+/* ---- Stat row = tab strip (个人信息-经验 图1/图2). One persistent row:
+   the resting cards join and dock onto the description card on hover, so
+   number/icon/label glide between the two positions and glide back on
+   leave. The row keeps a constant height (the active card's height), so
+   the card docked beneath it never bounces during the morph. */
+.pf-statrow {
+  display: flex;
+  align-items: flex-end;
+  width: max-content;
+  max-width: 100%;
+  gap: clamp(14px, 1.2vw, 22px);
+  min-height: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 61px);
+  transition:
+    gap 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
+}
+
+.pf-statrow.is-hidden {
   opacity: 0;
-  transform: translateY(-12px);
   pointer-events: none;
 }
 
-.pf-stats {
-  display: flex;
-  gap: clamp(14px, 1.2vw, 22px);
+.pf-statrow.is-docked {
+  gap: 0;
 }
 
 .pf-stat {
   appearance: none;
   font-family: inherit;
-  text-align: left;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
   min-width: clamp(112px, 8.6vw, 158px);
-  padding: clamp(14px, 1.7vh, 20px) clamp(16px, 1.4vw, 24px);
+  padding: 18px 12px 20px clamp(20px, 1.7vw, 32px);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
-  /* Solid (unblurred) so the crossfade to the skill card stays cheap. */
   background: rgba(8, 8, 10, 0.55);
-  transition: border-color 420ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    min-width 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 420ms ease,
+    border-radius 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 420ms ease;
 }
 
-.pf-stat:hover {
-  border-color: rgba(255, 255, 255, 0.34);
-  transform: translateY(-3px);
+.pf-stat:hover { border-color: rgba(255, 255, 255, 0.34); }
+
+/* Docked: cards join flush (shared hairline), tops-only radius, bottom edge
+   handed to the description card's top border. Symmetric padding + centered
+   alignment so the active card's number/label sit dead-center and the
+   collapsed card's lone icon does too. */
+.pf-statrow.is-docked .pf-stat {
+  min-width: clamp(96px, 5.9vw, 114px);
+  padding-left: 12px;
+  padding-right: 12px;
+  align-items: center;
+  margin-left: -1px;
+  border-bottom-color: transparent;
+  border-radius: 10px 10px 0 0;
+  background: rgba(9, 9, 11, 0.86);
 }
+
+.pf-statrow.is-docked .pf-stat:first-child { margin-left: 0; }
+
+.pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
+
+.pf-statrow.is-docked .pf-stat.is-active:hover { background: rgba(9, 9, 11, 0.86); }
 
 .pf-stat strong {
   display: block;
+  max-height: 40px;
+  overflow: hidden;
+  margin: 0 0 4px;
+  opacity: 1;
   font-family: "Rany Display", sans-serif;
   font-weight: 500;
-  font-size: clamp(22px, 1.65vw, 30px);
+  font-size: clamp(18px, 1.15vw, 22px);
   line-height: 1.15;
   color: #fff;
+  transition:
+    max-height 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
 }
 
-.pf-stat span {
-  display: flex;
+/* Docked non-active cards shed the number and label, leaving only the
+   icon — the same content that glides back in on leave. */
+.pf-statrow.is-docked .pf-stat:not(.is-active) strong {
+  max-height: 0;
+  margin-bottom: 0;
+  opacity: 0;
+}
+
+/* Icon + English label row. Fixed height so card geometry stays stable
+   while the icon resizes; docked cards center it via align-items. */
+.pf-stat-label {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  font-size: 11px;
-  letter-spacing: 0.4px;
-  color: #9aa0ab;
-  white-space: nowrap;
+  gap: 7px;
+  width: max-content;
+  height: 17px;
 }
 
-/* Inline stat icon (个人信息-经验.jpg 图2: small glyph left of the label). */
-.pf-stat-label img {
-  width: 11px;
-  height: 11px;
+.pf-stat-icon {
+  width: 9px;
+  height: 9px;
   object-fit: contain;
   flex: none;
+  transition:
+    width 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Collapsed cards ride the full 17px glyph; resting + active share 9px. */
+.pf-statrow.is-docked .pf-stat:not(.is-active) .pf-stat-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.pf-stat-name {
+  max-width: 110px;
+  opacity: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: clamp(10px, 0.55vw, 11px);
+  letter-spacing: 0.4px;
+  color: #9aa0ab;
+  transition:
+    max-width 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
+}
+
+.pf-statrow.is-docked .pf-stat:not(.is-active) .pf-stat-name {
+  max-width: 0;
+  opacity: 0;
 }
 
 .pf-contact {
@@ -4360,6 +4442,15 @@ html[data-paging="on"] .contact-bottom {
   display: flex;
   flex-direction: column;
   gap: clamp(10px, 1.8vh, 18px);
+  transition:
+    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-contact.is-hidden {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
 }
 
 /* Click-to-copy contact lines. Monochrome on purpose — the hover affordance
@@ -4670,172 +4761,48 @@ html[data-paging="on"] .contact-bottom {
   padding: 13px 24px;
 }
 
-/* ---- Experience composite (个人信息-经验.jpg): hovering a stat card turns
-   the row into tabs docked on top of a wide description card — the mirror of
-   the skill strip, which docks UNDER its card. Geometry below is measured
-   off the mock (tabs ≈112px wide, active tab ≈72px tall vs 43px collapsed,
-   card ≈589px wide with the text block vertically centered). The composite
-   is taller than the .pf-swap slot, so it is allowed to overflow downward
-   over the (hidden) skill strip instead of stretching the slot. */
-.pf-exp {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  opacity: 0;
-  transform: translateY(16px);
-  pointer-events: none;
-  will-change: opacity, transform;
-  transition:
-    opacity 480ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pf-exp.is-visible {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-}
-
-.pf-exp-tabs {
-  display: flex;
-  width: max-content;
-  max-width: 100%;
-  /* Bottom-align so collapsed tabs keep their own (shorter) height instead
-     of stretching to the active one. */
-  align-items: flex-end;
-  /* Reserve the active tab's full height: while switching, the outgoing and
-     incoming number bars crossfade at half height, which would otherwise dip
-     the row — and the card docked under it — once per switch (the "bounce"). */
-  min-height: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 47px);
-}
-
-.pf-exp-tab {
-  appearance: none;
-  font-family: inherit;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  box-sizing: border-box;
-  min-width: clamp(96px, 5.9vw, 114px);
-  /* Symmetric while collapsed so the lone icon sits dead-center; the active
-     tab transitions its left padding out to the label's left-align inset. */
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-bottom: none;
-  border-radius: 10px 10px 0 0;
-  background: rgba(9, 9, 11, 0.86);
-  /* Collapse the shared hairline between flush neighbours to 1px. */
-  margin-left: -1px;
-  transition: padding 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pf-exp-tab:first-child { margin-left: 0; }
-
-.pf-exp-tab:hover { background: rgba(255, 255, 255, 0.045); }
-
-.pf-exp-tab strong {
-  display: block;
-  max-height: 0;
-  overflow: hidden;
-  margin: 0;
-  opacity: 0;
-  font-family: "Rany Display", sans-serif;
-  font-weight: 500;
-  font-size: clamp(18px, 1.15vw, 22px);
-  line-height: 1.15;
-  color: #fff;
-  transition: max-height 480ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
-}
-
-/* Icon + English label row. Collapsed tabs hide the name and leave the icon
-   riding alone, centered via left/transform (both animatable); activation
-   slides the row onto the left-align inset while the name expands. Fixed
-   row height keeps tab geometry stable while the icon resizes inside it. */
-.pf-exp-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  position: relative;
-  width: max-content;
-  height: 17px;
-  left: 50%;
-  transform: translateX(-50%);
-  transition:
-    left 480ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pf-exp-tab.is-active {
-  padding-left: clamp(20px, 1.7vw, 32px);
-  padding-bottom: 14px;
-}
-
-.pf-exp-tab.is-active strong {
-  max-height: 34px;
-  margin-bottom: 4px;
-  opacity: 1;
-}
-
-.pf-exp-tab.is-active .pf-exp-label {
-  left: 0;
-  transform: none;
-}
-
-/* Collapsed tabs ride the full 17px glyph; the active tab shrinks its icon
-   to the same 11px used in the resting stat cards. */
-.pf-exp-icon {
-  width: 17px;
-  height: 17px;
-  object-fit: contain;
-  flex: none;
-  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1), height 480ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pf-exp-tab.is-active .pf-exp-icon {
-  width: 11px;
-  height: 11px;
-}
-
-.pf-exp-name {
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: clamp(10px, 0.55vw, 11px);
-  letter-spacing: 0.4px;
-  color: #9aa0ab;
-  transition: max-width 480ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
-}
-
-.pf-exp-tab.is-active .pf-exp-name {
-  max-width: 110px;
-  opacity: 1;
-}
-
-.pf-exp-tab.is-active:hover { background: rgba(9, 9, 11, 0.86); }
-
-/* The card's top border doubles as the tabs' bottom edge, so the strip and
-   card read as one connected unit (single hairline under the tabs). */
+/* ---- Experience description card: expands downward from under the stat
+   row — its top border doubles as the docked cards' bottom edge, so strip
+   and card read as one connected unit — and folds back on leave. Height
+   drives the morph; text swaps fade without moving. */
 .pf-exp-card {
+  position: absolute;
+  top: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 61px);
+  left: 0;
   box-sizing: border-box;
   width: clamp(430px, 30.8vw, 592px);
   max-width: 100%;
-  min-height: clamp(190px, 24vh, 264px);
-  display: flex;
-  align-items: center;
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   background: rgba(9, 9, 11, 0.86);
-  padding: 28px clamp(28px, 2.6vw, 50px);
+  padding: 0 clamp(28px, 2.6vw, 50px);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition:
+    min-height 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
+}
+
+.pf-exp-card.is-visible {
+  min-height: clamp(190px, 24vh, 264px);
+  max-height: 420px;
+  padding-top: 28px;
+  padding-bottom: 28px;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* Text swaps on tab change: fade only — no vertical motion, the card itself
    never moves, so switching reads as a calm crossfade (no bounce). */
 .pf-exp-card-body {
+  width: 100%;
   animation: pf-exp-fade 420ms ease both;
 }
 

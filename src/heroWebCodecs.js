@@ -13,6 +13,12 @@
 // The source clip is re-encoded with `-bf 0` on purpose: without B-frames the
 // decode order equals the presentation order, so frame timestamps can simply
 // be derived as index / fps and no PTS table has to be shipped alongside.
+//
+// Playback is *streaming*: the fetch body is read chunk by chunk and fed to the
+// decoder as soon as the first key frame plus a handful of slices have arrived.
+// First paint used to wait for the whole file (2.6 MB at 1440x2560); now it
+// only waits for the opening frames, so raising the resolution no longer costs
+// extra time before the animation starts.
 
 const COMBOS = [
   { mode: 'annexb', hw: 'prefer-hardware' },   // proven on WeChat XWeb 146
@@ -20,6 +26,25 @@ const COMBOS = [
   { mode: 'avcc', hw: 'prefer-hardware' },
   { mode: 'avcc', hw: 'no-preference' }
 ];
+
+// Frames needed before the decoder can be probed: one key frame plus a few
+// deltas. Kept small so first paint is not gated on the whole clip.
+const MIN_START_FRAMES = 4;
+
+function concatBytes(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+/** Index of the next `00 00 01` start code at or after `from`, else -1. */
+function findStartCode(u8, from) {
+  for (let i = from; i + 2 < u8.length; i += 1) {
+    if (u8[i] === 0 && u8[i + 1] === 0 && u8[i + 2] === 1) return i;
+  }
+  return -1;
+}
 
 /** Split an Annex-B buffer into NAL units, remembering each payload's bounds. */
 function splitNAL(buffer) {
@@ -41,6 +66,40 @@ function splitNAL(buffer) {
     if (e > s) nals.push({ type: u8[s] & 31, data: u8.subarray(s, e) });
   }
   return nals;
+}
+
+/**
+ * Incremental Annex-B parser: push downloaded chunks in, get every NAL whose
+ * end has been seen so far out. The trailing partial NAL is kept until more
+ * bytes arrive, so nothing is emitted twice and nothing is dropped.
+ */
+function createStreamParser() {
+  let buf = new Uint8Array(0);
+  let scan = 0;
+  return {
+    push(chunk) {
+      buf = buf.length ? concatBytes(buf, chunk) : chunk;
+      const out = [];
+      for (;;) {
+        const s = findStartCode(buf, scan);
+        if (s < 0) break;
+        const payloadStart = s + 3;
+        const next = findStartCode(buf, payloadStart);
+        if (next < 0) break;                    // this NAL is still incomplete
+        let e = next;
+        while (e > payloadStart && buf[e - 1] === 0) e -= 1;
+        if (e > payloadStart) {
+          out.push({ type: buf[payloadStart] & 31, data: buf.subarray(payloadStart, e) });
+        }
+        scan = next;
+      }
+      if (scan > 0) {
+        buf = buf.subarray(scan);
+        scan = 0;
+      }
+      return out;
+    }
+  };
 }
 
 /** Build an avcC box body (SPS/PPS in length-prefixed form) for AVCC chunks. */
@@ -126,24 +185,6 @@ export async function createWebCodecsPlayer({
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) throw new Error('no 2d context');
 
-  const res = await withTimeout(fetch(src), 15000, 'fetch');
-  if (!res.ok) throw new Error(`fetch ${res.status}`);
-  const buffer = await res.arrayBuffer();
-
-  const nals = splitNAL(buffer);
-  const sps = (nals.find((n) => n.type === 7) || {}).data;
-  const pps = (nals.find((n) => n.type === 8) || {}).data;
-  const slices = nals.filter((n) => n.type === 1 || n.type === 5);
-  if (!sps || !pps || !slices.length) throw new Error('no SPS/PPS/slice');
-
-  // Start at the first key frame; anything before it cannot be decoded.
-  const firstKey = slices.findIndex((n) => n.type === 5);
-  if (firstKey < 0) throw new Error('no key frame');
-  const frames = slices.slice(firstKey);
-
-  canvas.width = width;
-  canvas.height = height;
-
   const frameMs = 1000 / fps;
   let destroyed = false;
   let decoder = null;
@@ -155,6 +196,37 @@ export async function createWebCodecsPlayer({
   let startTime = 0;
   let painted = false;
 
+  // Decoded frames are kept for looping. At 1440x2560 a frame is ~5.5 MB of
+  // YUV, so the queue is tighter than it was for the 810-wide clip.
+  const maxPending = width * height > 2000000 ? 6 : 10;
+
+  // Everything the download has produced so far.
+  const frames = [];
+  let sps = null;
+  let pps = null;
+  let started = false;          // set once the first key frame has been seen
+  let downloadDone = false;
+  let readerRef = null;
+
+  let signalReady = null;
+  const readyPromise = new Promise((resolve) => { signalReady = resolve; });
+  let readySignalled = false;
+
+  const ingest = (nal) => {
+    if (nal.type === 7 && !sps) sps = nal.data;
+    else if (nal.type === 8 && !pps) pps = nal.data;
+    else if (nal.type === 1 || nal.type === 5) {
+      // Anything before the first key frame is undecodable — skip it.
+      if (!started && nal.type !== 5) return;
+      started = true;
+      frames.push(nal);
+    }
+    if (!readySignalled && sps && pps && frames.length >= MIN_START_FRAMES) {
+      readySignalled = true;
+      signalReady();
+    }
+  };
+
   const cleanup = () => {
     destroyed = true;
     if (rafId) cancelAnimationFrame(rafId);
@@ -163,11 +235,56 @@ export async function createWebCodecsPlayer({
       try { pending[i].frame.close(); } catch (_) { /* already closed */ }
     }
     pending = [];
+    if (readerRef) {
+      try { readerRef.cancel(); } catch (_) { /* stream already closed */ }
+      readerRef = null;
+    }
     if (decoder) {
       try { decoder.close(); } catch (_) { /* already closed */ }
       decoder = null;
     }
   };
+
+  const res = await withTimeout(fetch(src), 15000, 'fetch');
+  if (!res.ok) throw new Error(`fetch ${res.status}`);
+
+  const canStream = res.body && typeof res.body.getReader === 'function';
+  if (canStream) {
+    // Deliberately not awaited: playback starts on the leading frames while the
+    // rest of the clip keeps arriving in the background.
+    (async () => {
+      const reader = res.body.getReader();
+      readerRef = reader;
+      const parser = createStreamParser();
+      try {
+        for (;;) {
+          // eslint-disable-next-line no-await-in-loop
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (destroyed) return;
+          const produced = parser.push(value);
+          for (let i = 0; i < produced.length; i += 1) ingest(produced[i]);
+        }
+      } catch (_) {
+        // Network hiccup mid-clip: keep whatever already arrived playable.
+      }
+      downloadDone = true;
+    })();
+  } else {
+    // Old kernels without a readable body: one-shot download, same behaviour
+    // as before (first paint waits for the whole file).
+    const buffer = await res.arrayBuffer();
+    const all = splitNAL(buffer);
+    for (let i = 0; i < all.length; i += 1) ingest(all[i]);
+    downloadDone = true;
+  }
+
+  // Wait only for the opening frames, not for the whole download.
+  await withTimeout(readyPromise, 15000, 'stream start');
+  if (!sps || !pps || !frames.length) throw new Error('no SPS/PPS/slice');
+
+  canvas.width = width;
+  canvas.height = height;
 
   const feed = (i) => {
     const parts = [];
@@ -269,8 +386,10 @@ export async function createWebCodecsPlayer({
     if (destroyed) return;
     if (!startTime) startTime = now;
     // Keep the decoder fed but bounded: a deep queue wastes memory and a deep
-    // pending list means frames sit around holding decoded buffers.
-    while (decoder.decodeQueueSize < 4 && feedIdx < frames.length && pending.length < 10) {
+    // pending list means frames sit around holding decoded buffers. Feeding
+    // stops at `frames.length` while the download is still in flight, so a slow
+    // network just makes playback wait for the next chunk.
+    while (decoder.decodeQueueSize < 4 && feedIdx < frames.length && pending.length < maxPending) {
       feed(feedIdx);
       feedIdx += 1;
     }
@@ -282,7 +401,9 @@ export async function createWebCodecsPlayer({
       try { item.frame.close(); } catch (_) { /* already closed */ }
       shownIdx += 1;
     }
-    if (feedIdx >= frames.length && pending.length === 0) {
+    // Only loop once the whole clip is in memory; otherwise we would restart
+    // from a partial stream.
+    if (feedIdx >= frames.length && pending.length === 0 && downloadDone) {
       feedIdx = 0;
       outIdx = 0;
       shownIdx = 0;
@@ -306,6 +427,8 @@ export async function createWebCodecsPlayer({
     destroy: () => { clearTimeout(bail); cleanup(); },
     // Exposed for diagnostics from the console / probe scripts.
     get painted() { return painted; },
-    get mode() { return `${ready.mode}/${ready.hw}`; }
+    get mode() { return `${ready.mode}/${ready.hw}`; },
+    get frames() { return frames.length; },
+    get complete() { return downloadDone; }
   };
 }

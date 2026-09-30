@@ -30,7 +30,9 @@ const JSMPEG_VENDOR_SRC = '/vendor/jsmpeg.min.js';
 // is the preferred WeChat path: smaller than the MPEG-1 stream and visually
 // lossless, and XWeb's decoder uses the hardware block.
 const HERO_MOBILE_WEBCODECS_SRC = '/media/hero-mobile-webcodecs.264';
-const HERO_MOBILE_WEBCODECS_SIZE = { width: 810, height: 1440, fps: 24 };
+// Native resolution of the hero master (1440x2560), decoded by the hardware
+// block inside WeChat. Level 5.1 matches the encode; `avc1.640033` = High/5.1.
+const HERO_MOBILE_WEBCODECS_SIZE = { width: 1440, height: 2560, fps: 24, codec: 'avc1.640033' };
 const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
@@ -2275,7 +2277,6 @@ function ProfileContentPC() {
   const [hover, setHover] = useState(null);
   const activeSkill = hover?.type === 'skill' ? PC_SKILLS.find((s) => s.id === hover.id) || null : null;
   const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
-  const active = Boolean(activeSkill || activeStat);
   return (
     <div className="pf-inner">
       <div className="pf-bg" aria-hidden="true">
@@ -2287,32 +2288,42 @@ function ProfileContentPC() {
           <span className="pf-title-cn">邱锋江</span>
         </h2>
 
-        {/* Stats/contact and the description cards occupy the same slot
-            and crossfade, so the layout never jumps on hover. The hover zone
-            wraps card + skill strip with an outer safety margin: once the
-            hover state is armed, pointer drift around the block (including
-            icon movement inside it) cannot trigger the leave reset. */}
+        {/* One persistent row doubles as the resting stat cards (个人信息-经验
+            图2) and the docked tab strip (图1): on stat hover the cards join
+            and dock onto the description card, so number/icon/label glide
+            into position and glide back on leave — no crossfade between
+            separate trees. The hover zone wraps card + skill strip with an
+            outer safety margin: once the hover state is armed, pointer drift
+            around the block cannot trigger the leave reset. */}
         <div className="pf-hover-zone" onMouseLeave={() => setHover(null)}>
           <div className="pf-swap">
-            <div className={`pf-info${active ? ' is-hidden' : ''}`}>
-              <div className="pf-stats">
-                {PC_STATS.map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    className="pf-stat"
-                    onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
-                    onFocus={() => setHover({ type: 'stat', id: s.id })}
-                  >
-                    <strong>{s.value}</strong>
-                    <span className="pf-stat-label"><LazyImage src={s.icon} alt="" />{s.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="pf-contact">
-                <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
-                <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
-              </div>
+            <div className={`pf-statrow${activeStat ? ' is-docked' : ''}${activeSkill ? ' is-hidden' : ''}`}>
+              {PC_STATS.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  className={`pf-stat${activeStat?.id === s.id ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
+                  onFocus={() => setHover({ type: 'stat', id: s.id })}
+                >
+                  <strong>{s.value}</strong>
+                  <span className="pf-stat-label">
+                    <LazyImage className="pf-stat-icon" src={s.icon} alt="" />
+                    <span className="pf-stat-name">{s.label}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className={`pf-contact${activeStat || activeSkill ? ' is-hidden' : ''}`}>
+              <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
+              <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
+            </div>
+            <div className={`pf-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
+              {activeStat && (
+                <div className="pf-exp-card-body" key={activeStat.id}>
+                  <p className="pf-exp-text">{activeStat.text}</p>
+                </div>
+              )}
             </div>
             <div className={`pf-skill-card${activeSkill ? ' is-visible' : ''}`} aria-live="polite">
               {activeSkill && (
@@ -2320,38 +2331,6 @@ function ProfileContentPC() {
                   <p className="pf-skill-title">{activeSkill.title}</p>
                   <p className="pf-skill-text">{activeSkill.text}</p>
                 </div>
-              )}
-            </div>
-            {/* Experience composite (stat hover state): the stat row returns
-                as tabs — active tab keeps number + label, the others collapse
-                to bare labels — docked flush on top of the description card,
-                the inverse of the skill strip docking under the skill card. */}
-            <div className={`pf-exp${activeStat ? ' is-visible' : ''}`} aria-live="polite">
-              {activeStat && (
-                <>
-                  <div className="pf-exp-tabs">
-                    {PC_STATS.map((s) => (
-                      <button
-                        type="button"
-                        key={s.id}
-                        className={`pf-exp-tab${s.id === activeStat.id ? ' is-active' : ''}`}
-                        onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
-                        onFocus={() => setHover({ type: 'stat', id: s.id })}
-                      >
-                        <strong>{s.value}</strong>
-                        <span className="pf-exp-label">
-                          <LazyImage className="pf-exp-icon" src={s.icon} alt="" />
-                          <span className="pf-exp-name">{s.label}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="pf-exp-card">
-                    <div className="pf-exp-card-body" key={activeStat.id}>
-                      <p className="pf-exp-text">{activeStat.text}</p>
-                    </div>
-                  </div>
-                </>
               )}
             </div>
           </div>
@@ -2456,6 +2435,7 @@ function HeroSection({ active = true }) {
       width: HERO_MOBILE_WEBCODECS_SIZE.width,
       height: HERO_MOBILE_WEBCODECS_SIZE.height,
       fps: HERO_MOBILE_WEBCODECS_SIZE.fps,
+      codec: HERO_MOBILE_WEBCODECS_SIZE.codec,
       onFirstFrame: (err) => {
         if (cancelled) return;
         if (err) { setAssetMode('mobile-jsmpeg'); return; }
