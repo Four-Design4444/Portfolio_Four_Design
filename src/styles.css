@@ -4444,9 +4444,12 @@ html[data-paging="on"] .contact-bottom {
   font-family: inherit;
   font-size: clamp(12.5px, 0.78vw, 14px);
   letter-spacing: 0.3px;
+  /* NOTE: border-color must NEVER be transitioned here. On leave the cell
+     border returns to "1px solid transparent"; if border-color animates it
+     fades FROM currentcolor (white) and every cell shows a ghost rounded
+     frame for 480ms. Border must flip instantly in both directions. */
   transition:
     padding 480ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 480ms ease,
     transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
     gap 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
