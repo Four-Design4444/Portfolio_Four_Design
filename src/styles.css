@@ -3869,6 +3869,29 @@ body:has(.work-detail-page) .detail-hero img {
   opacity: 1;
 }
 
+/* First-frame poster for the desktop hero: the canvas pipeline needs both
+   video clocks to decode before anything is drawn, and until then the stage
+   is a flat #000 rectangle. The poster is frame 0 of the HEVC clip — it sits
+   above the base canvas (DOM order), below the SVG title and the alpha cat,
+   and fades out the moment the first frame pair is presented (main.jsx sets
+   .is-gone there), so the crossfade is invisible. */
+.hero-video-stage .hero-pc-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-video-stage .hero-pc-poster.is-gone {
+  opacity: 0;
+}
+
 .hero-video-stage .hero-title-layer {
   position: absolute;
   left: 50%;
@@ -4307,7 +4330,7 @@ html[data-paging="on"] .contact-bottom {
   width: max-content;
   max-width: 100%;
   gap: clamp(14px, 1.2vw, 22px);
-  min-height: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 61px);
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
   transition:
     gap 480ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 300ms ease;
@@ -4331,8 +4354,8 @@ html[data-paging="on"] .contact-bottom {
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  min-width: clamp(112px, 8.6vw, 158px);
-  padding: 18px 12px 20px clamp(20px, 1.7vw, 32px);
+  min-width: clamp(140px, 9.5vw, 183px);
+  padding: 28px 12px 34px clamp(20px, 1.7vw, 32px);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
   background: rgba(8, 8, 10, 0.55);
@@ -4366,17 +4389,21 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
 
+.pf-statrow.is-docked .pf-stat.is-active {
+  min-width: clamp(140px, 9.2vw, 176px);
+}
+
 .pf-statrow.is-docked .pf-stat.is-active:hover { background: rgba(9, 9, 11, 0.86); }
 
 .pf-stat strong {
   display: block;
-  max-height: 40px;
+  max-height: 44px;
   overflow: hidden;
-  margin: 0 0 4px;
+  margin: 0 0 10px;
   opacity: 1;
   font-family: "Rany Display", sans-serif;
   font-weight: 500;
-  font-size: clamp(18px, 1.15vw, 22px);
+  font-size: clamp(24px, 1.56vw, 30px);
   line-height: 1.15;
   color: #fff;
   transition:
@@ -4424,7 +4451,7 @@ html[data-paging="on"] .contact-bottom {
   opacity: 1;
   overflow: hidden;
   white-space: nowrap;
-  font-size: clamp(10px, 0.55vw, 11px);
+  font-size: clamp(11px, 0.62vw, 12px);
   letter-spacing: 0.4px;
   color: #9aa0ab;
   transition:
@@ -4767,7 +4794,7 @@ html[data-paging="on"] .contact-bottom {
    drives the morph; text swaps fade without moving. */
 .pf-exp-card {
   position: absolute;
-  top: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 61px);
+  top: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
   left: 0;
   box-sizing: border-box;
   width: clamp(430px, 30.8vw, 592px);

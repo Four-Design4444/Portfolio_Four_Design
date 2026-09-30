@@ -39,11 +39,24 @@ async function send(req, res, filePath) {
   const type = MIME[extname(filePath).toLowerCase()] || 'application/octet-stream';
   const total = meta.size;
   const range = req.headers.range;
+  /* Weak validator from size+mtime. Without it every response is
+     "max-age=0, must-revalidate" with NO validator, so a revalidating request
+     (e.g. the <video> element after a rel=preload warmed the cache) had to
+     re-download the whole body. With ETag the revalidation is a 304 and the
+     preloaded body is reused. */
+  const etag = `"${total.toString(16)}-${Math.floor(meta.mtimeMs).toString(16)}"`;
   const common = {
     'Content-Type': type,
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'public, max-age=0, must-revalidate'
+    'Cache-Control': 'public, max-age=0, must-revalidate',
+    ETag: etag,
+    'Last-Modified': meta.mtime.toUTCString()
   };
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, common);
+    res.end();
+    return;
+  }
   if (!range) {
     res.writeHead(200, { ...common, 'Content-Length': total });
     if (req.method !== 'HEAD') pipeSafely(filePath, res);

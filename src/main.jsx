@@ -21,6 +21,10 @@ const HERO_MOBILE_FALLBACK_SRC = '/media/hero-mobile-fallback.mp4';
 // First frame of the mobile hero, shown before/while the video starts. WeChat
 // kernels that refuse autoplay would otherwise leave a black hero.
 const HERO_MOBILE_POSTER_SRC = '/media/hero-mobile-poster.webp';
+// PC hero first frame (extracted from hero-hevc.mp4). The three-plane canvas
+// pipeline only paints once both video clocks have decoded, so without this
+// the desktop hero sits as a flat black rectangle during warm-up.
+const HERO_PC_POSTER_SRC = '/media/hero-pc-poster.webp';
 // MPEG-1 transport stream decoded by JSMpeg straight onto a <canvas>. Used only
 // inside WeChat's mobile browser: because no <video> element is involved, the
 // autoplay policy never applies and playback really starts on its own.
@@ -2390,6 +2394,10 @@ function HeroSection({ active = true }) {
   // Shown when the kernel refuses autoplay (e.g. WeChat mobile-data policy):
   // the poster keeps the hero visible and this hint tells visitors a tap starts it.
   const [playHint, setPlayHint] = useState(false);
+  // Desktop only: flips once the first base+alpha pair is drawn to the
+  // canvases, fading the still poster out (it is that exact frame, so the
+  // crossfade is invisible).
+  const [pcPosterGone, setPcPosterGone] = useState(false);
   // Flips once JSMpeg has painted its first decoded frame, which is the cue to
   // fade the still poster out (otherwise the hero would flash empty over canvas).
   const [jsmpegPainted, setJsmpegPainted] = useState(false);
@@ -2811,6 +2819,10 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       lastPresentedKey = key;
       lastPresentedAt = performance.now();
       hasPresentedFrame = true;
+      // First composited pair is on screen — retire the still poster. Called
+      // again after seeks (hasPresentedFrame resets there) but setting the
+      // same value is a no-op for React.
+      setPcPosterGone(true);
       pending.base.delete(key);
       pending.alpha.delete(key);
       if (previousPair) {
@@ -3261,6 +3273,13 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           <>
             {playHint ? <div className={isMobile ? 'hero-play-hint' : 'hero-play-hint hero-play-hint-desktop'} aria-hidden="true">{isMobile ? '轻触或滑动播放' : '点击或滚动播放'}</div> : null}
             <canvas ref={baseCanvasRef} className="hero-video-bg hero-video-base-canvas" aria-hidden="true" />
+            <img
+              className={`hero-pc-poster${pcPosterGone ? ' is-gone' : ''}`}
+              src={HERO_PC_POSTER_SRC}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
             <div
               className="hero-title-layer"
               ref={wrapRef}
