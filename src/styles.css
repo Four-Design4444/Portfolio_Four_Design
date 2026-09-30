@@ -3915,8 +3915,8 @@ body:has(.work-detail-page) .detail-hero img {
   left: 50%;
   bottom: clamp(28px, 4.8vh, 54px);
   z-index: 8;
-  width: 13px;
-  height: 21px;
+  width: 17px;
+  height: 27px;
   box-sizing: border-box;
   overflow: hidden;
   contain: paint;
@@ -3933,9 +3933,9 @@ body:has(.work-detail-page) .detail-hero img {
   content: "";
   position: absolute;
   left: 50%;
-  top: 4px;
+  top: 5px;
   width: 2px;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.34);
@@ -3949,9 +3949,9 @@ body:has(.work-detail-page) .detail-hero img {
   content: "";
   position: absolute;
   left: 50%;
-  top: 4px;
+  top: 5px;
   width: 1px;
-  height: 8px;
+  height: 10px;
   border-radius: 999px;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0));
   opacity: 0;

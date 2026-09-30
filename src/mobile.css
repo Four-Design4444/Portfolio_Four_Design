@@ -987,18 +987,18 @@ html[data-device="mobile"] .hero-scroll-hint-mobile {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   transform: translateX(-50%);
   pointer-events: none;
   opacity: 0;
-  animation: heroScrollArrowMobile 2.4s cubic-bezier(0.22, 1, 0.36, 1) 2200ms infinite;
+  animation: heroScrollArrowMobile 1.9s linear 2200ms infinite;
 }
 
 html[data-device="mobile"] .hero-scroll-arrow {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.22));
 }
@@ -1006,23 +1006,19 @@ html[data-device="mobile"] .hero-scroll-arrow {
 @keyframes heroScrollArrowMobile {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateX(-50%) translateY(-5px);
   }
-  18% {
-    opacity: 0.82;
-    transform: translateX(-50%) translateY(0);
+  15% {
+    opacity: 0.85;
+    transform: translateX(-50%) translateY(-3px);
   }
-  56% {
-    opacity: 0.82;
-    transform: translateX(-50%) translateY(5px);
-  }
-  74% {
-    opacity: 0;
-    transform: translateX(-50%) translateY(9px);
+  85% {
+    opacity: 0.85;
+    transform: translateX(-50%) translateY(7px);
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateX(-50%) translateY(9px);
   }
 }
 
