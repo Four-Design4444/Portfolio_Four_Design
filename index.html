@@ -14,7 +14,10 @@
         var params = new URLSearchParams(window.location.search);
         var forced = params.get('device');
         var ua = navigator.userAgent || '';
-        var uaMobile = /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS|MicroMessenger/i.test(ua);
+        // `MicroMessenger` deliberately absent: desktop WeChat puts it in a
+        // Windows/Mac UA, which would wrongly classify it as a phone. Mobile
+        // WeChat always carries Android/iPhone + "Mobile" anyway.
+        var uaMobile = /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS/i.test(ua);
         var iPadDesktopUA = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
         var touchOnly = (navigator.maxTouchPoints || 0) > 0 && !window.matchMedia('(hover: hover)').matches;
         var narrow = window.matchMedia('(max-width: 900px)').matches;

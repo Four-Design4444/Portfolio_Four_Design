@@ -4349,8 +4349,8 @@ html[data-paging="on"] .contact-bottom {
 
 /* Inline stat icon (个人信息-经验.jpg 图2: small glyph left of the label). */
 .pf-stat-label img {
-  width: 13px;
-  height: 13px;
+  width: 11px;
+  height: 11px;
   object-fit: contain;
   flex: none;
 }
@@ -4702,6 +4702,13 @@ html[data-paging="on"] .contact-bottom {
   display: flex;
   width: max-content;
   max-width: 100%;
+  /* Bottom-align so collapsed tabs keep their own (shorter) height instead
+     of stretching to the active one. */
+  align-items: flex-end;
+  /* Reserve the active tab's full height: while switching, the outgoing and
+     incoming number bars crossfade at half height, which would otherwise dip
+     the row — and the card docked under it — once per switch (the "bounce"). */
+  min-height: calc(clamp(18px, 1.15vw, 22px) * 1.15 + 47px);
 }
 
 .pf-exp-tab {
@@ -4746,13 +4753,15 @@ html[data-paging="on"] .contact-bottom {
 
 /* Icon + English label row. Collapsed tabs hide the name and leave the icon
    riding alone, centered via left/transform (both animatable); activation
-   slides the row onto the left-align inset while the name expands. */
+   slides the row onto the left-align inset while the name expands. Fixed
+   row height keeps tab geometry stable while the icon resizes inside it. */
 .pf-exp-label {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   position: relative;
   width: max-content;
+  height: 17px;
   left: 50%;
   transform: translateX(-50%);
   transition:
@@ -4776,11 +4785,19 @@ html[data-paging="on"] .contact-bottom {
   transform: none;
 }
 
+/* Collapsed tabs ride the full 17px glyph; the active tab shrinks its icon
+   to the same 11px used in the resting stat cards. */
 .pf-exp-icon {
   width: 17px;
   height: 17px;
   object-fit: contain;
   flex: none;
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1), height 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-exp-tab.is-active .pf-exp-icon {
+  width: 11px;
+  height: 11px;
 }
 
 .pf-exp-name {
@@ -4816,8 +4833,15 @@ html[data-paging="on"] .contact-bottom {
   padding: 28px clamp(28px, 2.6vw, 50px);
 }
 
+/* Text swaps on tab change: fade only — no vertical motion, the card itself
+   never moves, so switching reads as a calm crossfade (no bounce). */
 .pf-exp-card-body {
-  animation: pf-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pf-exp-fade 420ms ease both;
+}
+
+@keyframes pf-exp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .pf-exp-text {
@@ -4825,4 +4849,31 @@ html[data-paging="on"] .contact-bottom {
   font-size: clamp(12.5px, 0.76vw, 14px);
   line-height: 2.15;
   color: #d6dae1;
+}
+
+/* Desktop equivalent of the mobile play hint. Shown only when the kernel
+   refuses autoplay — e.g. desktop WeChat's embedded Chromium — so the hero
+   never sits there looking broken without an explanation. */
+.hero-play-hint-desktop {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 9px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(13, 12, 18, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  pointer-events: none;
+  animation: heroHintPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes heroHintPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }

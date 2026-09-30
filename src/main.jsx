@@ -2519,7 +2519,9 @@ function HeroSection({ active = true }) {
   // so whichever unlock arrives first wins.
   useEffect(() => {
     // (Canvas paths need no kick: there is no media element to unlock.)
-    if (!isMobile || useJsmpeg || useWebCodecs) return undefined;
+    if (useJsmpeg || useWebCodecs) return undefined;
+    // Desktop may need the kick too: desktop WeChat's embedded Chromium can
+    // block autoplay just like its mobile counterpart.
     // Explicit ?dbg=1/#dbg switch only (auto-on for WeChat was temporary diagnosis).
     const debugOverlay = /dbg=1|#dbg/.test(window.location.href);
     const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
@@ -2541,12 +2543,17 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       });
       document.body.appendChild(overlay);
     }
+    const pickVideo = () => document.querySelector('video.hero-mobile-video, video.hero-video-base');
     const kick = () => {
-      const video = document.querySelector('video.hero-mobile-video');
+      const video = pickVideo();
       if (!video) return;
       diag.attempts += 1;
       diag.mutedAttr = video.hasAttribute('muted');
       if (!video.paused || video.ended) { paint(video); return; }
+      // The desktop hero pairs a base clip with a matte clip; both must run.
+      document.querySelectorAll('video.hero-video-alpha').forEach((extra) => {
+        if (extra.paused) { const p = extra.play(); if (p && p.catch) p.catch(() => {}); }
+      });
       const attempt = video.play();
       if (attempt && typeof attempt.then === 'function') {
         attempt.then(() => {
@@ -2561,7 +2568,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     };
     kick();
     const hintTimer = window.setTimeout(() => {
-      const video = document.querySelector('video.hero-mobile-video');
+      const video = pickVideo();
       if (video && video.paused && !video.ended) setPlayHint(true);
     }, 3200);
     const timers = [400, 1200, 2600, 5000, 8000].map((delay) => window.setTimeout(kick, delay));
@@ -3272,6 +3279,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           </>
         ) : (
           <>
+            {playHint ? <div className={isMobile ? 'hero-play-hint' : 'hero-play-hint hero-play-hint-desktop'} aria-hidden="true">{isMobile ? '轻触或滑动播放' : '点击或滚动播放'}</div> : null}
             <canvas ref={baseCanvasRef} className="hero-video-bg hero-video-base-canvas" aria-hidden="true" />
             <div
               className="hero-title-layer"
