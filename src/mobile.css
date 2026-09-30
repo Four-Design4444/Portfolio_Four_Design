@@ -524,12 +524,14 @@ html[data-device="mobile"] .project-list {
   margin-top: 0;
   overflow: hidden;
 }
-/* Vertical rhythm measured from the iPhone 17 mock (393x852):
-   Rany heading top ≈ 19% of the viewport, then heading -> counter -> cards
-   -> dots -> view-all button -> thumbnails. */
+/* Vertical rhythm measured from the iPhone 17 mock (393x852): the mock keeps
+   a generous, roughly even ~60-68px (≈7vh) of air between EVERY pair of
+   components — title(15vh) -> counter -> cards(30.5vh) -> dots -> view-all
+   -> thumbnails -> ~11vh bottom. Clamps shrink the gaps on short viewports
+   so a 667px-tall phone still fits one paged screen. */
 html[data-device="mobile"] .mob-showcase {
-  padding-top: 19vh;
-  padding-bottom: 6vh;
+  padding-top: clamp(84px, 15vh, 132px);
+  padding-bottom: clamp(48px, 11vh, 96px);
 }
 
 /* Standalone section title, set in the site's display face (Rany). */
@@ -564,8 +566,8 @@ html[data-device="mobile"] .mob-counter {
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(31.5vh, 272px);
-  margin: clamp(28px, 5.4vh, 48px) 0 0;
+  height: min(30.5vh, 262px);
+  margin: clamp(36px, 7.2vh, 64px) 0 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -640,7 +642,7 @@ html[data-device="mobile"] .mob-dots {
   display: flex;
   justify-content: center;
   gap: 9px;
-  margin: clamp(18px, 2.8vh, 26px) 0 0;
+  margin: clamp(36px, 7.2vh, 64px) 0 0;
 }
 html[data-device="mobile"] .mob-dots i {
   width: 7px;
@@ -658,7 +660,7 @@ html[data-device="mobile"] .mob-dots i.on {
 /* Outlined pill "view all" action under the dots (per the iPhone 17 mock). */
 html[data-device="mobile"] .mob-viewall {
   appearance: none;
-  margin-top: clamp(24px, 4.2vh, 38px);
+  margin-top: clamp(32px, 6.8vh, 60px);
   padding: 8px 34px;
   border: 1px solid rgba(255, 255, 255, .38);
   border-radius: 999px;
@@ -691,7 +693,7 @@ html[data-device="mobile"] .mob-thumbs {
   cursor: grab;
   padding: 4px 0 24px;
   scroll-behavior: smooth;
-  margin-top: clamp(40px, 7.5vh, 68px);
+  margin-top: clamp(36px, 7.7vh, 68px);
   width: 100%;
 }
 html[data-device="mobile"] .mob-thumbs.dragging { cursor: grabbing; scroll-behavior: auto; }
