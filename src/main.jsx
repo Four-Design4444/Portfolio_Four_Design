@@ -2225,8 +2225,10 @@ function HeroSection({ active = true }) {
   const alphaCanvasRef = useRef(null);
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
-  // WeChat kernels may block autoplay or start late; nudge the hero video back in
-  // on the next tick, after a short delay, and on the visitor's first interaction.
+  // WeChat kernels block programmatic video.play() until either the visitor
+  // interacts OR the page answers WeixinJSBridgeReady (WeChat's own unlock
+  // event, which grants playback without a gesture). Retry on a short ladder
+  // so whichever unlock arrives first wins.
   useEffect(() => {
     if (!isMobile) return undefined;
     const kick = () => {
@@ -2234,12 +2236,16 @@ function HeroSection({ active = true }) {
       if (video && video.paused && !video.ended) video.play().catch(() => {});
     };
     kick();
-    const timer = window.setTimeout(kick, 1200);
+    const timers = [400, 1200, 2600].map((delay) => window.setTimeout(kick, delay));
+    const onBridgeReady = () => window.setTimeout(kick, 60);
+    if (typeof window !== 'undefined' && window.WeixinJSBridge) onBridgeReady();
+    document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
     const options = { once: true, passive: true };
     window.addEventListener('touchstart', kick, options);
     window.addEventListener('click', kick, options);
     return () => {
-      window.clearTimeout(timer);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      document.removeEventListener('WeixinJSBridgeReady', onBridgeReady);
       window.removeEventListener('touchstart', kick);
       window.removeEventListener('click', kick);
     };

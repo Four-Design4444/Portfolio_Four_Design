@@ -4417,14 +4417,14 @@ html[data-paging="on"] .contact-bottom {
      animating margin/gap reflows the whole column every frame and was the
      main source of hover jank. The strip statically sits flush under the
      card; the resting gap is produced by translating it down --pf-dock,
-     with margin-bottom reserving that space in layout. */
+     with margin-bottom reserving that space in layout. No entrance delay on
+     this element — dock/undock must start immediately, both directions. */
   margin-top: 0;
   margin-bottom: var(--pf-dock);
   transform: translateY(var(--pf-dock));
   will-change: transform;
   transition:
-    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
     gap 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -4445,10 +4445,10 @@ html[data-paging="on"] .contact-bottom {
   font-size: clamp(12.5px, 0.78vw, 14px);
   letter-spacing: 0.3px;
   transition:
-    padding 460ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 460ms ease,
-    background-color 460ms ease,
-    transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+    padding 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 480ms ease,
+    background-color 480ms ease,
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pf-skill:hover { transform: translateY(-2px); }
@@ -4458,7 +4458,7 @@ html[data-paging="on"] .contact-bottom {
   height: 22px;
   object-fit: contain;
   flex: none;
-  transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pf-skill.is-active .pf-skill-icon { transform: scale(1.12); }
@@ -4469,8 +4469,8 @@ html[data-paging="on"] .contact-bottom {
   overflow: hidden;
   white-space: nowrap;
   transition:
-    max-width 460ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 320ms ease;
+    max-width 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
 }
 
 /* Hover state: the strip docks under the description card as ONE connected
