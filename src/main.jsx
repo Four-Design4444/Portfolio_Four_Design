@@ -134,6 +134,25 @@ const PC_SKILLS = [
   }
 ];
 
+/* The three personal-experience stats. Hovering one swaps the contact block
+   for a tab-style composite (个人信息-经验.jpg): the stat row returns as
+   tabs docked on top of a wide description card — the mirror of the skill
+   strip interaction below. */
+const PC_STATS = [
+  {
+    id: 'years', value: '5+', label: 'Years Design',
+    text: '5年设计经验，横跨UI/UX、平面设计、3D建模与AIGC。擅长从用户视角构建清晰流畅的界面体验，以版式与视觉语言传递内容情绪，具备从概念到落地的完整执行能力，持续探索技术与设计的融合，让创意更自由地实现。'
+  },
+  {
+    id: 'tools', value: '10+', label: 'Design Tool',
+    text: '十余项专业软件掌握，具备较强学习能力与跨领域能力，近年来持续探索AIGC与设计工作流的结合，让技术成为创意的加速器。以稳定的专业输出和跨领域的适应力，持续为品牌创造价值。'
+  },
+  {
+    id: 'cases', value: '20+', label: 'Work Case',
+    text: '多项完整商业项目经验，曾为多家企业提供年度设计支持，在长期合作中保持稳定输出，成为品牌设计环节中可信赖的长期伙伴。'
+  }
+];
+
 const advantages = [
   {
     title: '高效协作交付',
@@ -2149,7 +2168,7 @@ function ProfileContent() {
         <LazyImage className="profile-portrait-art" src={aboutPortrait} alt="邱锋江 portrait" />
       </div>
       <div className="profile-contact-line"><span>Guangdong / Remote</span><span>Four4444.Design@gmail.com</span><span>18219315597</span></div>
-      <div className="profile-stats-row"><div><strong>6+</strong><span>Years Design</span></div><div><strong>10</strong><span>Design Tool</span></div><div><strong>50</strong><span>Work Case</span></div></div>
+      <div className="profile-stats-row"><div><strong>5+</strong><span>Years Design</span></div><div><strong>10+</strong><span>Design Tool</span></div><div><strong>20+</strong><span>Work Case</span></div></div>
       <div className="profile-tools">
         <p>专业技能</p>
         <div className="profile-tool-list">
@@ -2165,8 +2184,13 @@ function ProfileContent() {
    layout per the 2026-09-30 mock (个人信息.jpg / 技能展示.jpg). Mobile keeps
    the legacy ProfileContent above. */
 function ProfileContentPC() {
-  const [hovered, setHovered] = useState(null);
-  const active = PC_SKILLS.find((s) => s.id === hovered) || null;
+  // One slot of hover intent at a time: whichever row was entered last wins,
+  // so dragging from a stat card down to the skill strip hands over cleanly
+  // instead of leaving two description cards mounted at once.
+  const [hover, setHover] = useState(null);
+  const activeSkill = hover?.type === 'skill' ? PC_SKILLS.find((s) => s.id === hover.id) || null : null;
+  const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
+  const active = Boolean(activeSkill || activeStat);
   return (
     <div className="pf-inner">
       <div className="pf-bg" aria-hidden="true">
@@ -2174,49 +2198,90 @@ function ProfileContentPC() {
       </div>
       <div className="pf-content">
         <h2 className="pf-title">
-          <span className="pf-title-en rany-display-heading">Hi， I Am Four</span>
+          <span className="pf-title-en rany-display-heading">Hi , I Am Four</span>
           <span className="pf-title-cn">邱锋江</span>
         </h2>
 
-        {/* Stats/contact and the skill description card occupy the same slot
+        {/* Stats/contact and the description cards occupy the same slot
             and crossfade, so the layout never jumps on hover. The hover zone
             wraps card + skill strip with an outer safety margin: once the
             hover state is armed, pointer drift around the block (including
             icon movement inside it) cannot trigger the leave reset. */}
-        <div className="pf-hover-zone" onMouseLeave={() => setHovered(null)}>
+        <div className="pf-hover-zone" onMouseLeave={() => setHover(null)}>
           <div className="pf-swap">
             <div className={`pf-info${active ? ' is-hidden' : ''}`}>
               <div className="pf-stats">
-                <div className="pf-stat"><strong>5+</strong><span>Years Design</span></div>
-                <div className="pf-stat"><strong>10+</strong><span>Design Tool</span></div>
-                <div className="pf-stat"><strong>50+</strong><span>Work Case</span></div>
+                {PC_STATS.map((s) => (
+                  <button
+                    type="button"
+                    key={s.id}
+                    className="pf-stat"
+                    onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
+                    onFocus={() => setHover({ type: 'stat', id: s.id })}
+                  >
+                    <strong>{s.value}</strong>
+                    <span>{s.label}</span>
+                  </button>
+                ))}
               </div>
               <div className="pf-contact">
                 <p><Phone size={15} strokeWidth={1.8} />18219315597</p>
                 <p><Mail size={15} strokeWidth={1.8} />Four4444.Design@gmail.com</p>
               </div>
             </div>
-            <div className={`pf-skill-card${active ? ' is-visible' : ''}`} aria-live="polite">
-              {active && (
-                <div className="pf-skill-card-body" key={active.id}>
-                  <p className="pf-skill-title">{active.title}</p>
-                  <p className="pf-skill-text">{active.text}</p>
+            <div className={`pf-skill-card${activeSkill ? ' is-visible' : ''}`} aria-live="polite">
+              {activeSkill && (
+                <div className="pf-skill-card-body" key={activeSkill.id}>
+                  <p className="pf-skill-title">{activeSkill.title}</p>
+                  <p className="pf-skill-text">{activeSkill.text}</p>
                 </div>
+              )}
+            </div>
+            {/* Experience composite (stat hover state): the stat row returns
+                as tabs — active tab keeps number + label, the others collapse
+                to bare labels — docked flush on top of the description card,
+                the inverse of the skill strip docking under the skill card. */}
+            <div className={`pf-exp${activeStat ? ' is-visible' : ''}`} aria-live="polite">
+              {activeStat && (
+                <>
+                  <div className="pf-exp-tabs">
+                    {PC_STATS.map((s) => (
+                      <button
+                        type="button"
+                        key={s.id}
+                        className={`pf-exp-tab${s.id === activeStat.id ? ' is-active' : ''}`}
+                        onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
+                        onFocus={() => setHover({ type: 'stat', id: s.id })}
+                      >
+                        <strong>{s.value}</strong>
+                        <span>{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pf-exp-card">
+                    <div className="pf-exp-card-body" key={activeStat.id}>
+                      <p className="pf-exp-text">{activeStat.text}</p>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
 
-          <div className="pf-skills-entrance">
+          <div
+            className="pf-skills-entrance"
+            onMouseEnter={() => { if (hover?.type === 'stat') setHover(null); }}
+          >
             <div
-              className={`pf-skills${active ? ' has-active' : ''}`}
+              className={`pf-skills${activeSkill ? ' has-active' : ''}${activeStat ? ' is-hidden' : ''}`}
             >
               {PC_SKILLS.map((s) => (
                 <button
                   type="button"
                   key={s.id}
-                  className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
-                  onMouseEnter={() => setHovered(s.id)}
-                  onFocus={() => setHovered(s.id)}
+                  className={`pf-skill${activeSkill?.id === s.id ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHover({ type: 'skill', id: s.id })}
+                  onFocus={() => setHover({ type: 'skill', id: s.id })}
                 >
                   <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
                   <span className="pf-skill-name">{s.name}</span>

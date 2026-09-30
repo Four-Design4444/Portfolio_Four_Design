@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Demo 3 · 蓝色扫幕 Sweep</title>
+<style>
+  :root{
+    --bg:#0d0c12; --ink:#f5f5f7; --dim:#9a97a3;
+    --blue:#005df5; --blue-lit:#96c8ff;
+    --ease:cubic-bezier(0.22,1,0.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Rany Display","Segoe UI",system-ui,sans-serif;
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:56px;
+  }
+  h1{position:fixed;top:28px;left:32px;font-size:14px;font-weight:400;color:var(--dim);letter-spacing:.08em}
+  .rows{display:flex;flex-direction:column;gap:36px}
+
+  .copy{
+    display:flex;align-items:center;gap:22px;
+    background:none;border:0;color:inherit;cursor:pointer;
+    font:inherit;font-size:30px;letter-spacing:.02em;
+    padding:6px 2px;position:relative;
+  }
+  .icon{position:relative;width:30px;height:30px;flex:none;color:var(--ink);transition:color .45s var(--ease)}
+  .icon svg{position:absolute;inset:0;width:100%;height:100%;transition:opacity .45s var(--ease),transform .45s var(--ease)}
+  .icon .ic-copy{opacity:0;transform:scale(.6) rotate(-30deg)}
+  .copy:hover .ic-main{opacity:0;transform:scale(.6) rotate(30deg)}
+  .copy:hover .ic-copy{opacity:1;transform:scale(1) rotate(0)}
+  .copy:hover .icon{color:var(--blue-lit)}
+  .copy.copied .icon{color:#fff}
+
+  .text{
+    position:relative;display:inline-block;
+    padding:2px 6px; /* 给扫幕留一点出血 */
+    transition:color .3s var(--ease);
+  }
+  /* 扫幕色块:斜切,从左盖入、从右抽走 */
+  .text .wipe{
+    position:absolute;inset:-2px -6px;
+    background:var(--blue);
+    transform:scaleX(0) skewX(-10deg);
+    transform-origin:left;
+    pointer-events:none;
+  }
+  .copy:hover .text{color:var(--blue-lit)}
+
+  /* 阶段1:幕布盖入(文字反白) */
+  .copy.covering .wipe{transform:scaleX(1) skewX(-10deg);transition:transform .34s var(--ease)}
+  .copy.covering .text{color:transparent}
+  /* 阶段2:换字后幕布抽走,露出新文案 */
+  .copy.revealing .wipe{transform:scaleX(0) skewX(-10deg);transform-origin:right;transition:transform .42s var(--ease)}
+  .copy.revealing .text{color:#fff;transition:color .01s}
+
+  .copy::after{
+    content:"";position:absolute;left:54px;right:0;bottom:0;height:2px;
+    background:var(--blue);transform:scaleX(0);transform-origin:left;
+    transition:transform .55s var(--ease);
+  }
+  .copy:hover::after{transform:scaleX(1)}
+  .copy.revealing::after{transform:scaleX(1);background:var(--blue-lit)}
+
+  .hint{
+    position:absolute;left:54px;top:-.9em;
+    font-size:11px;letter-spacing:.28em;color:var(--blue-lit);
+    opacity:0;transform:translateY(6px);
+    transition:opacity .45s var(--ease),transform .45s var(--ease);
+    pointer-events:none;
+  }
+  .copy:hover .hint{opacity:1;transform:translateY(0)}
+  .copy.covering .hint,.copy.revealing .hint{opacity:0}
+</style>
+</head>
+<body>
+<h1>DEMO 3 — 蓝色扫幕 SWEEP</h1>
+
+<div class="rows">
+  <button class="copy" data-value="18219315597" data-msg="已复制手机号,欢迎联系">
+    <span class="icon">
+      <svg class="ic-main" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+    </span>
+    <span class="text"><span class="label">182 1931 5597</span><span class="wipe"></span></span>
+    <span class="hint">点击复制 CLICK TO COPY</span>
+  </button>
+
+  <button class="copy" data-value="Four4444.Design@gmail.com" data-msg="已复制邮箱,欢迎联系">
+    <span class="icon">
+      <svg class="ic-main" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      <svg class="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+    </span>
+    <span class="text"><span class="label">Four4444.Design@gmail.com</span><span class="wipe"></span></span>
+    <span class="hint">点击复制 CLICK TO COPY</span>
+  </button>
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(btn=>{
+  const label=btn.querySelector('.label');
+  const original=label.textContent;
+  let busy=false,t1,t2,t3;
+
+  btn.addEventListener('click',async()=>{
+    if(busy)return; busy=true;
+    try{ await navigator.clipboard.writeText(btn.dataset.value); }
+    catch(e){
+      const ta=document.createElement('textarea');
+      ta.value=btn.dataset.value;document.body.appendChild(ta);
+      ta.select();document.execCommand('copy');ta.remove();
+    }
+    // 幕布盖入 → 盖满瞬间换字 → 幕布抽走
+    btn.classList.add('covering');
+    t1=setTimeout(()=>{
+      label.textContent=btn.dataset.msg;
+      btn.classList.remove('covering');
+      btn.classList.add('revealing');
+    },350);
+    t2=setTimeout(()=>btn.classList.remove('revealing'),800);
+    t3=setTimeout(()=>{ label.textContent=original; busy=false; },3400); // 自动还原
+  });
+});
+</script>
+</body>
+</html>
