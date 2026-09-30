@@ -566,7 +566,7 @@ html[data-device="mobile"] .mob-counter {
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(30.5vh, 262px);
+  height: min(33.5vh, 288px);
   margin: clamp(36px, 7.2vh, 64px) 0 0;
 }
 

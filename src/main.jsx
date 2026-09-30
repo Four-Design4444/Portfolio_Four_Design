@@ -1674,22 +1674,22 @@ function MobileShowcaseDeck({ items, openWorks }) {
     if (eff >= 0) {
       if (eff <= 1) {                                  // right slot -> centre (covers up)
         const f = eff;
-        return { x: 96 * f, s: 1 - 0.14 * f, r: 8 * f, dim: 0.62 * f, o: 1 };
+        return { x: 64 * f, s: 1 - 0.14 * f, r: 8 * f, dim: 0.62 * f, o: 1 };
       }
       const f = CL(eff - 1, 0, 1);                     // 0 (right slot) -> 1 (inside deck)
       return {
-        x: 96 * (1 - f), s: 0.86 + 0.09 * f, r: 8 * (1 - f),
+        x: 64 * (1 - f), s: 0.86 + 0.09 * f, r: 8 * (1 - f),
         dim: 0.62 + 0.18 * f,
         o: 1 - CL((f - 0.5) / 0.5, 0, 1),
       };
     }
     if (eff >= -1) {                                   // centre -> left slot
       const f = -eff;
-      return { x: -96 * f, s: 1 - 0.14 * f, r: -8 * f, dim: 0.62 * f, o: 1 };
+      return { x: -64 * f, s: 1 - 0.14 * f, r: -8 * f, dim: 0.62 * f, o: 1 };
     }
     const f = CL(-eff - 1, 0, 1);                      // left slot -> back into deck (slides right)
     return {
-      x: -96 * (1 - f), s: 0.86 + 0.09 * f, r: -8 * (1 - f),
+      x: -64 * (1 - f), s: 0.86 + 0.09 * f, r: -8 * (1 - f),
       dim: 0.62 + 0.18 * f,
       o: 1 - CL((f - 0.5) / 0.5, 0, 1),
     };
