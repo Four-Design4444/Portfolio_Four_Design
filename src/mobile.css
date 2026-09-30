@@ -525,11 +525,22 @@ html[data-device="mobile"] .project-list {
   overflow: hidden;
 }
 /* Vertical rhythm measured from the iPhone 17 mock (393x852):
-   counter top ≈ 25.5% of the viewport, then generous air between
-   counter -> cards -> dots -> thumbnails instead of stacking them up top. */
+   Rany heading top ≈ 19% of the viewport, then heading -> counter -> cards
+   -> dots -> view-all button -> thumbnails. */
 html[data-device="mobile"] .mob-showcase {
-  padding-top: 25.5vh;
+  padding-top: 19vh;
   padding-bottom: 6vh;
+}
+
+/* Standalone section title, set in the site's display face (Rany). */
+html[data-device="mobile"] .mob-heading {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 30px);
+  font-weight: 500;
+  letter-spacing: .5px;
+  line-height: 1.1;
+  color: #fff;
+  text-align: center;
 }
 html[data-device="mobile"] .mob-showcase {
   width: 100%;
@@ -544,17 +555,17 @@ html[data-device="mobile"] .mob-showcase {
 }
 
 html[data-device="mobile"] .mob-counter {
-  font-size: 12px;
-  letter-spacing: 2px;
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 3px;
   color: #8b94a4;
-  margin-bottom: clamp(28px, 4.8vh, 42px);
 }
 
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(33.5vh, 300px);
-  margin: 0;
+  height: min(31.5vh, 272px);
+  margin: clamp(28px, 5.4vh, 48px) 0 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -629,7 +640,7 @@ html[data-device="mobile"] .mob-dots {
   display: flex;
   justify-content: center;
   gap: 9px;
-  margin: clamp(28px, 5vh, 44px) 0 0;
+  margin: clamp(18px, 2.8vh, 26px) 0 0;
 }
 html[data-device="mobile"] .mob-dots i {
   width: 7px;
@@ -644,16 +655,46 @@ html[data-device="mobile"] .mob-dots i.on {
   border-radius: 5px;
 }
 
+/* Outlined pill "view all" action under the dots (per the iPhone 17 mock). */
+html[data-device="mobile"] .mob-viewall {
+  appearance: none;
+  margin-top: clamp(24px, 4.2vh, 38px);
+  padding: 8px 34px;
+  border: 1px solid rgba(255, 255, 255, .38);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: background .25s ease, border-color .25s ease;
+}
+html[data-device="mobile"] .mob-viewall:active {
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(255, 255, 255, .6);
+}
+
+/* Horizontal scroller: NO justify-content here — centring inside an
+   overflow-x container clips the left overflow and makes those thumbnails
+   unreachable (the "显示不全" bug). Content starts at the left edge and the
+   render loop centres the active thumbnail via scrollTo instead.
+   touch-action:pan-x keeps native horizontal panning on touch; the pager's
+   touchmove handler exempts touches starting on this strip, so horizontal
+   swipes scroll it instead of flipping the page. */
 html[data-device="mobile"] .mob-thumbs {
   display: flex;
-  justify-content: center;
   gap: 4px;
   overflow-x: auto;
-  padding: 4px 2px 24px;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  cursor: grab;
+  padding: 4px 0 24px;
   scroll-behavior: smooth;
-  margin-top: clamp(64px, 12.4vh, 108px);
+  margin-top: clamp(40px, 7.5vh, 68px);
   width: 100%;
 }
+html[data-device="mobile"] .mob-thumbs.dragging { cursor: grabbing; scroll-behavior: auto; }
 html[data-device="mobile"] .mob-thumbs::-webkit-scrollbar { display: none; }
 html[data-device="mobile"] .mob-thumb {
   flex: 0 0 auto;

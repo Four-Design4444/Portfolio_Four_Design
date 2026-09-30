@@ -1648,6 +1648,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
   const thumbRefs = useRef([]);
   const dotRefs = useRef([]);
   const counterRef = useRef(null);
+  const stripRef = useRef(null);
   const ctxRef = useRef({ items, openWorks });
   ctxRef.current = { items, openWorks };
 
@@ -1743,7 +1744,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
     const show = ((s.active % N) + N) % N;
     if (counterRef.current) {
       counterRef.current.textContent =
-        `Project Display ${String(show + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
+        `${String(show + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
     }
     thumbRefs.current.forEach((th, i) => {
       if (!th) return;
@@ -1899,9 +1900,62 @@ function MobileShowcaseDeck({ items, openWorks }) {
     };
   }, []);
 
+  /* Thumbnail strip: horizontal drag-to-scroll for mouse/pen pointers (real
+     touch devices pan natively via touch-action:pan-x, and the home pager's
+     touchmove handler exempts touches that start on the strip). A drag that
+     actually scrolled suppresses the following click, so a drag never also
+     selects a thumbnail. */
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return undefined;
+    let active = false, moved = false, startX = 0, startLeft = 0;
+    const onDown = (e) => {
+      if (e.pointerType === 'touch') return;
+      active = true; moved = false;
+      startX = e.clientX; startLeft = strip.scrollLeft;
+    };
+    const onMove = (e) => {
+      if (!active || e.pointerType === 'touch') return;
+      const dx = e.clientX - startX;
+      if (!moved && Math.abs(dx) > 5) {
+        moved = true;
+        strip.classList.add('dragging');
+        try { strip.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      if (moved) {
+        strip.scrollLeft = startLeft - dx;
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    const onUp = () => {
+      active = false;
+      strip.classList.remove('dragging');
+    };
+    const onClick = (e) => {
+      if (moved) {
+        e.stopPropagation();
+        e.preventDefault();
+        moved = false;
+      }
+    };
+    strip.addEventListener('pointerdown', onDown);
+    strip.addEventListener('pointermove', onMove);
+    strip.addEventListener('pointerup', onUp);
+    strip.addEventListener('pointercancel', onUp);
+    strip.addEventListener('click', onClick, true);
+    return () => {
+      strip.removeEventListener('pointerdown', onDown);
+      strip.removeEventListener('pointermove', onMove);
+      strip.removeEventListener('pointerup', onUp);
+      strip.removeEventListener('pointercancel', onUp);
+      strip.removeEventListener('click', onClick, true);
+    };
+  }, []);
+
   return (
     <div className="mob-showcase">
-      <div className="mob-counter" ref={counterRef}>Project Display 01 / 07</div>
+      <h2 className="mob-heading rany-display-heading">Project Display</h2>
+      <div className="mob-counter" ref={counterRef}>01 / 11</div>
 
       <div className="mob-stage">
         <div className="mob-deck" ref={deckRef}>
@@ -1928,7 +1982,17 @@ function MobileShowcaseDeck({ items, openWorks }) {
           <i key={i} ref={(el) => { dotRefs.current[i] = el; }} />
         ))}
       </div>
-      <div className="mob-thumbs">
+      <button
+        type="button"
+        className="mob-viewall"
+        onClick={() => {
+          const item = ctxRef.current.items[stateRef.current.active];
+          if (item) ctxRef.current.openWorks(item.project.category);
+        }}
+      >
+        查看全部
+      </button>
+      <div className="mob-thumbs" ref={stripRef}>
         {items.map(({ project, cover }, i) => (
           <div
             className="mob-thumb"
@@ -3034,9 +3098,12 @@ function HomePage({ openWorks, paging, active = true }) {
       // Touches that start on a showcase card are "play" gestures (drag/flip the
       // card). The deck already claims them via touch-action:none + pointer
       // capture, so the pager must not also treat their vertical drift as a
-      // whole-screen page flip. Page navigation still works from any touch that
-      // begins outside the deck (heading, dots, thumbnails, padding).
-      deckGesture = !!(event.target && event.target.closest && event.target.closest('.mob-deck'));
+      // whole-screen page flip. The same exemption covers the thumbnail strip:
+      // it is an overflow-x scroller, and preventDefault() here would kill its
+      // native horizontal pan. Page navigation still works from any touch that
+      // begins outside the deck / strip (heading, dots, button, padding).
+      deckGesture = !!(event.target && event.target.closest
+        && (event.target.closest('.mob-deck') || event.target.closest('.mob-thumbs')));
       window.clearTimeout(touchEndTimer);
     };
 
