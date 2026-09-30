@@ -2236,7 +2236,7 @@ function HeroSection({ active = true }) {
       if (video && video.paused && !video.ended) video.play().catch(() => {});
     };
     kick();
-    const timers = [400, 1200, 2600].map((delay) => window.setTimeout(kick, delay));
+    const timers = [400, 1200, 2600, 5000, 8000].map((delay) => window.setTimeout(kick, delay));
     const onBridgeReady = () => window.setTimeout(kick, 60);
     if (typeof window !== 'undefined' && window.WeixinJSBridge) onBridgeReady();
     document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
@@ -2878,6 +2878,12 @@ function HeroSection({ active = true }) {
               className="hero-mobile-video"
               src={assetMode === 'mobile' ? HERO_MOBILE_SRC : HERO_MOBILE_FALLBACK_SRC}
               onError={() => { setAssetMode((mode) => (mode === 'mobile' ? 'mobile-fallback' : mode)); }}
+              ref={(el) => {
+                // React sets `muted` as a DOM property only and never renders the
+                // attribute (long-standing React gap). WeChat's XWeb autoplay
+                // whitelist checks the *attribute*, so force-write it here.
+                if (el && !el.hasAttribute('muted')) el.setAttribute('muted', '');
+              }}
               autoPlay
               muted
               loop
@@ -2912,8 +2918,8 @@ function HeroSection({ active = true }) {
             />
             <canvas ref={alphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas" style={{ display: useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
             <canvas ref={fallbackAlphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas hero-video-alpha-2d" style={{ display: !isMobile && !useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
-            <video key={`base-${assetMode}`} ref={baseRef} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
-            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : assetMode === 'fallback' ? HERO_FALLBACK_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
+            <video key={`base-${assetMode}`} ref={(el) => { baseRef.current = el; if (el && !el.hasAttribute('muted')) el.setAttribute('muted', ''); }} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
+            <video key={`alpha-${assetMode}`} ref={(el) => { alphaRef.current = el; if (el && !el.hasAttribute('muted')) el.setAttribute('muted', ''); }} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : assetMode === 'fallback' ? HERO_FALLBACK_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
           </>
         )}
         {isMobile ? (
