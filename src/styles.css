@@ -4241,7 +4241,13 @@ html[data-paging="on"] .contact-bottom {
 
 .profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
-.profile-shot.is-visible .pf-skills { opacity: 1; transform: none; transition-delay: 420ms; }
+.profile-shot.is-visible .pf-skills {
+  opacity: 1;
+  transform: translateY(var(--pf-dock, 0px));
+  transition-delay: 420ms;
+}
+/* Entering hover must not inherit the entrance stagger delay. */
+.profile-shot.is-visible .pf-skills.has-active { transition-delay: 0ms; }
 
 .pf-title {
   display: flex;
@@ -4275,6 +4281,7 @@ html[data-paging="on"] .contact-bottom {
 .pf-skill-card {
   position: absolute;
   inset: 0;
+  will-change: opacity, transform;
   transition:
     opacity 480ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -4297,8 +4304,8 @@ html[data-paging="on"] .contact-bottom {
   padding: clamp(14px, 1.7vh, 20px) clamp(16px, 1.4vw, 24px);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
-  background: rgba(8, 8, 10, 0.42);
-  backdrop-filter: blur(6px);
+  /* Solid (unblurred) so the crossfade to the skill card stays cheap. */
+  background: rgba(8, 8, 10, 0.55);
   transition: border-color 420ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -4346,13 +4353,14 @@ html[data-paging="on"] .contact-bottom {
   flex: none;
 }
 
-/* Skill description card (hover state). */
+/* Skill description card (hover state). No backdrop-filter: blurring the
+   full-bleed background each frame while the card fades in is the most
+   expensive compositing path and caused visible stutter. */
 .pf-skill-card {
-  max-width: min(31vw, 470px);
+  max-width: min(36.5vw, 660px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
-  background: rgba(9, 9, 11, 0.72);
-  backdrop-filter: blur(10px);
+  background: rgba(9, 9, 11, 0.86);
   padding: clamp(20px, 3vh, 30px) clamp(22px, 1.9vw, 32px);
   opacity: 0;
   transform: translateY(16px);
@@ -4392,10 +4400,23 @@ html[data-paging="on"] .contact-bottom {
    becomes an accordion — active pill expands with a border, the rest collapse
    to bare icon squares (技能展示.jpg). */
 .pf-skills {
+  --pf-dock: clamp(20px, 4vh, 44px);
   display: flex;
   align-items: center;
   gap: clamp(10px, 1vw, 16px);
-  margin-top: clamp(20px, 4vh, 44px);
+  /* Docking animates via transform (GPU-composited) instead of margin-top:
+     animating margin/gap reflows the whole column every frame and was the
+     main source of hover jank. The strip statically sits flush under the
+     card; the resting gap is produced by translating it down --pf-dock,
+     with margin-bottom reserving that space in layout. */
+  margin-top: 0;
+  margin-bottom: var(--pf-dock);
+  transform: translateY(var(--pf-dock));
+  will-change: transform;
+  transition:
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pf-skill {
@@ -4403,7 +4424,9 @@ html[data-paging="on"] .contact-bottom {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 0;
+  /* Same as the hover-state idle cells so padding never animates on
+     enter/leave — only the active cell's wider padding differs. */
+  padding: 13px 16px;
   border: 1px solid transparent;
   border-radius: 12px;
   background: none;
@@ -4441,8 +4464,40 @@ html[data-paging="on"] .contact-bottom {
     opacity 320ms ease;
 }
 
+/* Hover state: the strip docks under the description card as ONE connected
+   unit (reference 技能展示.jpg) — flush against the card's bottom border,
+   cells separated by hairlines, rounded only at the outer bottom corners. */
+.pf-skills.has-active {
+  /* Dock: transform returns to 0 (GPU). No margin/gap layout animation. */
+  --pf-dock: 0px;
+  gap: 0;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  overflow: hidden;
+}
+
+.pf-skills.has-active .pf-skill {
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  /* No backdrop-filter here: blur re-renders every frame during the strip's
+     transform animation. A more opaque solid bg reads the same. */
+  background: rgba(9, 9, 11, 0.86);
+  padding: 13px 24px;
+  transform: none;
+}
+
+.pf-skills.has-active .pf-skill:hover { transform: none; }
+
 .pf-skills.has-active .pf-skill:not(.is-active) {
-  padding: 9px;
+  padding: 13px 16px;
+}
+
+.pf-skills.has-active .pf-skill:last-child {
+  border-right: none;
 }
 
 .pf-skills.has-active .pf-skill:not(.is-active) .pf-skill-name {
@@ -4451,8 +4506,5 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-skills.has-active .pf-skill.is-active {
-  padding: 9px 18px;
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(16, 16, 18, 0.66);
-  backdrop-filter: blur(8px);
+  padding: 13px 24px;
 }
