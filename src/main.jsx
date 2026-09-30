@@ -6,6 +6,7 @@ import './styles.css';
 import './mobile.css';
 import fourLogo from './assets/four-logo.svg';
 import group10Markup from './assets/group-10.svg?raw';
+import { createWebCodecsPlayer } from './heroWebCodecs';
 
 const HERO_HEVC_BASE_SRC = '/media/hero-hevc.mp4';
 const HERO_HEVC_MASK_SRC = '/media/hero-mask-hevc.mp4';
@@ -25,6 +26,11 @@ const HERO_MOBILE_POSTER_SRC = '/media/hero-mobile-poster.webp';
 // autoplay policy never applies and playback really starts on its own.
 const HERO_MOBILE_JSMPEG_SRC = '/media/hero-mobile-jsmpeg.ts';
 const JSMPEG_VENDOR_SRC = '/vendor/jsmpeg.min.js';
+// Raw H.264 (Annex-B, no B-frames) decoded with WebCodecs onto a canvas. This
+// is the preferred WeChat path: smaller than the MPEG-1 stream and visually
+// lossless, and XWeb's decoder uses the hardware block.
+const HERO_MOBILE_WEBCODECS_SRC = '/media/hero-mobile-webcodecs.264';
+const HERO_MOBILE_WEBCODECS_SIZE = { width: 810, height: 1440, fps: 24 };
 const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
@@ -2379,7 +2385,18 @@ function HeroSection({ active = true }) {
     // media element exists and the autoplay policy simply does not apply.
     // Only WeChat mobile pays for the (larger) TS asset; every other browser
     // keeps the native video path untouched.
-    if (IS_WECHAT_BROWSER) return isMobile ? 'mobile-jsmpeg' : 'fallback';
+    // WeChat's XWeb kernel refuses programmatic <video>.play() without a real
+    // gesture, so inside WeChat we paint to a <canvas> instead: no media
+    // element exists and the autoplay policy simply does not apply.
+    // WebCodecs (hardware decode, H.264) is preferred over JSMpeg (software
+    // decode, MPEG-1); without it we still fall back to JSMpeg.
+    if (IS_WECHAT_BROWSER) {
+      if (!isMobile) return 'fallback';
+      const hasWebCodecs = typeof window !== 'undefined'
+        && typeof window.VideoDecoder === 'function'
+        && typeof window.EncodedVideoChunk === 'function';
+      return hasWebCodecs ? 'mobile-webcodecs' : 'mobile-jsmpeg';
+    }
     const video = document.createElement('video');
     const supportsHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
@@ -2393,6 +2410,10 @@ function HeroSection({ active = true }) {
   const [jsmpegPainted, setJsmpegPainted] = useState(false);
   const useWebglRenderer = !isMobile && assetMode !== 'alpha2d';
   const useJsmpeg = isMobile && assetMode === 'mobile-jsmpeg';
+  const useWebCodecs = isMobile && assetMode === 'mobile-webcodecs';
+  // Both canvas paths share one "first frame painted" flag so the poster fades
+  // out at the same moment regardless of which decoder won.
+  const [canvasPainted, setCanvasPainted] = useState(false);
   const heroTitleMarkup = useMemo(() => {
     let welcomePart = 0;
     const splitWelcome = group10Markup.replace(
@@ -2412,6 +2433,41 @@ function HeroSection({ active = true }) {
   const wrapRef = useRef(null);
   const jsmpegCanvasRef = useRef(null);
   const jsmpegPlayerRef = useRef(null);
+  const wcCanvasRef = useRef(null);
+  const wcPlayerRef = useRef(null);
+  // Preferred WeChat path: hardware-decode a raw H.264 stream with WebCodecs
+  // and paint it onto a canvas. Falls back to JSMpeg (and then to the native
+  // video) if the decoder is a stub that never emits frames.
+  useEffect(() => {
+    if (!useWebCodecs) return undefined;
+    let cancelled = false;
+    let handle = null;
+    const canvas = wcCanvasRef.current;
+    if (!canvas) return undefined;
+    createWebCodecsPlayer({
+      canvas,
+      src: HERO_MOBILE_WEBCODECS_SRC,
+      width: HERO_MOBILE_WEBCODECS_SIZE.width,
+      height: HERO_MOBILE_WEBCODECS_SIZE.height,
+      fps: HERO_MOBILE_WEBCODECS_SIZE.fps,
+      onFirstFrame: (err) => {
+        if (cancelled) return;
+        if (err) { setAssetMode('mobile-jsmpeg'); return; }
+        setCanvasPainted(true);
+      }
+    }).then((player) => {
+      if (cancelled) { player.destroy(); return; }
+      handle = player;
+      wcPlayerRef.current = player;
+    }).catch(() => {
+      if (!cancelled) setAssetMode('mobile-jsmpeg');
+    });
+    return () => {
+      cancelled = true;
+      if (handle) handle.destroy();
+      wcPlayerRef.current = null;
+    };
+  }, [useWebCodecs]);
   // WeChat-only path: decode the MPEG-TS stream with JSMpeg and paint it onto a
   // canvas. No <video> element => no autoplay gate => playback starts on its own.
   // If the decoder never reaches a first frame we fall back to the native video.

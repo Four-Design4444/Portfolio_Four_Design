@@ -4351,19 +4351,141 @@ html[data-paging="on"] .contact-bottom {
   gap: clamp(10px, 1.8vh, 18px);
 }
 
-.pf-contact p {
+/* Click-to-copy contact lines. Monochrome on purpose — the hover affordance
+   is the copy-icon swap, a text-width rule and the 点击复制 tag, no accent
+   color. The rule hangs off .pf-copy-text so it always matches the value's
+   width; the roller width is pinned from JS so the rolled-in confirmation
+   line never clips on the right. */
+.pf-copy {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 12px;
   margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: clamp(13px, 0.83vw, 15px);
   letter-spacing: 0.3px;
   color: #d6dae1;
+  cursor: pointer;
+  text-align: left;
+  align-self: flex-start;
 }
 
-.pf-contact svg {
-  color: #e8eaee;
+.pf-copy-icon {
+  position: relative;
+  width: 15px;
+  height: 15px;
   flex: none;
+  color: #e8eaee;
+}
+
+.pf-copy-icon svg {
+  position: absolute;
+  inset: 0;
+  transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-copy-ic-copy {
+  opacity: 0;
+  transform: scale(0.6) rotate(-30deg);
+}
+
+.pf-copy:hover .pf-copy-ic-main,
+.pf-copy.is-copied .pf-copy-ic-main {
+  opacity: 0;
+  transform: scale(0.6) rotate(30deg);
+}
+
+.pf-copy:hover .pf-copy-ic-copy,
+.pf-copy.is-copied .pf-copy-ic-copy {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+.pf-copy-text {
+  position: relative;
+  display: block;
+}
+
+.pf-copy-roller {
+  display: block;
+  overflow: hidden;
+  height: 1.4em;
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-copy-stack {
+  display: flex;
+  flex-direction: column;
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-copy-line {
+  display: block;
+  height: 1.4em;
+  line-height: 1.4em;
+  width: max-content;
+  white-space: nowrap;
+  transition: color 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-copy:hover .pf-copy-line {
+  color: #ffffff;
+}
+
+.pf-copy-done {
+  color: #e8eaee;
+}
+
+.pf-copy.is-copied .pf-copy-stack {
+  transform: translateY(-1.4em);
+}
+
+.pf-copy-rule {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: block;
+  height: 1px;
+  margin-top: 2px;
+  background: rgba(255, 255, 255, 0.55);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-copy:hover .pf-copy-rule,
+.pf-copy.is-copied .pf-copy-rule {
+  transform: scaleX(1);
+}
+
+.pf-copy-hint {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translate(6px, -50%);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: #8f95a0;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.pf-copy:hover .pf-copy-hint {
+  opacity: 1;
+  transform: translate(10px, -50%);
+}
+
+.pf-copy.is-copied .pf-copy-hint {
+  opacity: 0;
 }
 
 /* Skill description card (hover state). No backdrop-filter: blurring the

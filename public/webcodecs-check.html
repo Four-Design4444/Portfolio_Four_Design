@@ -164,12 +164,13 @@ async function probeConfig(codec, w, h) {
 }
 
 async function attempt(mode, hw, sps, pps, slices, count, waitMs) {
-  var frames = [], err = null, qlog = [];
+  var frames = [], err = null, qlog = [], times = [];
   var decoder = null;
-  var t0 = (performance && performance.now) ? performance.now() : Date.now();
+  var now = function () { return (performance && performance.now) ? performance.now() : Date.now(); };
+  var t0 = now();
   try {
     decoder = new VideoDecoder({
-      output: function (f) { frames.push(f); },
+      output: function (f) { frames.push(f); times.push(now()); },
       error: function (e) { err = (e && e.message) || 'decoder error'; }
     });
     var cfg = { codec: 'avc1.640028', codedWidth: 810, codedHeight: 1440,
@@ -196,11 +197,14 @@ async function attempt(mode, hw, sps, pps, slices, count, waitMs) {
     var flushNote = 'ok';
     try { await withTimeout(decoder.flush(), 2500, 'flush'); }
     catch (e) { flushNote = 'flush未返回（' + (e && e.message) + '）'; }
-    var dt = ((performance && performance.now) ? performance.now() : Date.now()) - t0;
+    // Measure only first->last frame arrival, so init latency and flush stalls
+    // do not distort the throughput number.
+    var span = (times.length > 1) ? (times[times.length - 1] - times[0]) : 0;
     var snapshot = frames.slice();
     try { decoder.close(); } catch (e) {}
-    return { frames: snapshot, ms: Math.round(dt), err: err, flush: flushNote,
-      waited: waited, queue: qlog.slice(0, 6), queueEnd: decoder.decodeQueueSize };
+    return { frames: snapshot, ms: Math.round(now() - t0), span: Math.round(span),
+      err: err, flush: flushNote, waited: waited, queue: qlog.slice(0, 6),
+      queueEnd: decoder.decodeQueueSize };
   } catch (e) {
     var snapshot2 = frames.slice();          // keep whatever arrived before the error
     try { if (decoder) decoder.close(); } catch (e3) {}
@@ -311,11 +315,14 @@ async function main() {
   RESULT.chunkFormat = used || 'none'; RESULT.hwAccel = usedHw || 'none';
   RESULT.decodedFrames = r.frames.length;
   RESULT.decodeMs = r.ms;
-  RESULT.fpsEstimate = r.frames.length ? Math.round(r.frames.length / (r.ms / 1000) * 10) / 10 : 0;
+  RESULT.frameSpanMs = r.span || 0;
+  RESULT.fpsEstimate = (r.frames.length > 1 && r.span > 0)
+    ? Math.round((r.frames.length - 1) / (r.span / 1000) * 10) / 10 : 0;
   row('可用组合', (used || '无') + ' / hardwareAcceleration=' + (usedHw || '无'));
   row('实际解码帧数', r.frames.length + ' / 提交 ' + useCount, r.frames.length > 0 ? 'y' : 'n');
-  row('解码耗时', r.ms + ' ms');
-  row('推算帧率', RESULT.fpsEstimate + ' fps', RESULT.fpsEstimate >= 24 ? 'y' : 'n');
+  row('首帧延迟', (r.frames.length ? '第1帧 @' + r.ms + 'ms 总耗时' : '无') + '（flush=' + (r.flush || '') + '）');
+  row('推算帧率', RESULT.fpsEstimate + ' fps（首末帧间隔 ' + RESULT.frameSpanMs + 'ms）',
+    RESULT.fpsEstimate >= 24 ? 'y' : 'n');
   if (r.err) row('最后一次错误', r.err, 'n');
 
   if (r.frames.length > 0) {
