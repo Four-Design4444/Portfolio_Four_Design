@@ -2234,7 +2234,7 @@ function HeroSection({ active = true }) {
   // so whichever unlock arrives first wins.
   useEffect(() => {
     if (!isMobile) return undefined;
-    const debugOverlay = /(\?|&)dbg=1/.test(window.location.search);
+    const debugOverlay = /dbg=1|#dbg/.test(window.location.href);
     const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
     let overlay = null;
     const paint = (video) => {
