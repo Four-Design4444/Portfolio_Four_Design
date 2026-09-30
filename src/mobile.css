@@ -975,6 +975,33 @@ html[data-device="mobile"] .hero-video-stage .hero-mobile-video {
   object-position: center;
 }
 
+/* Shown only when the kernel (e.g. WeChat on mobile data) refuses autoplay. */
+html[data-device="mobile"] .hero-play-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 108px;
+  z-index: 5;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(13, 12, 18, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: heroPlayHintPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes heroPlayHintPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
 /* The desktop and mobile hero use separate media sources. */
 html[data-device="mobile"] .hero.hero-video-stage .hero-video-fixed {
   position: absolute;

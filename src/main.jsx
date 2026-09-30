@@ -2210,6 +2210,9 @@ function HeroSection({ active = true }) {
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
     return supportsHEVC ? 'hevc' : 'fallback';
   });
+  // Shown when the kernel refuses autoplay (e.g. WeChat mobile-data policy):
+  // the poster keeps the hero visible and this hint tells visitors a tap starts it.
+  const [playHint, setPlayHint] = useState(false);
   const useWebglRenderer = !isMobile && assetMode !== 'alpha2d';
   const heroTitleMarkup = useMemo(() => {
     let welcomePart = 0;
@@ -2234,6 +2237,7 @@ function HeroSection({ active = true }) {
   // so whichever unlock arrives first wins.
   useEffect(() => {
     if (!isMobile) return undefined;
+    // Explicit ?dbg=1/#dbg switch only (auto-on for WeChat was temporary diagnosis).
     const debugOverlay = /dbg=1|#dbg/.test(window.location.href);
     const diag = { attempts: 0, bridge: false, mutedAttr: null, lastError: null };
     let overlay = null;
@@ -2261,8 +2265,11 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       diag.mutedAttr = video.hasAttribute('muted');
       if (!video.paused || video.ended) { paint(video); return; }
       const attempt = video.play();
-      if (attempt && typeof attempt.catch === 'function') {
-        attempt.catch((error) => {
+      if (attempt && typeof attempt.then === 'function') {
+        attempt.then(() => {
+          setPlayHint(false);
+          disarm();
+        }).catch((error) => {
           diag.lastError = `${error && error.name}: ${error && error.message}`;
           paint(video);
         });
@@ -2270,6 +2277,10 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       paint(video);
     };
     kick();
+    const hintTimer = window.setTimeout(() => {
+      const video = document.querySelector('video.hero-mobile-video');
+      if (video && video.paused && !video.ended) setPlayHint(true);
+    }, 3200);
     const timers = [400, 1200, 2600, 5000, 8000].map((delay) => window.setTimeout(kick, delay));
     const onBridgeReady = () => {
       diag.bridge = true;
@@ -2288,14 +2299,20 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     };
     if (typeof window !== 'undefined' && window.WeixinJSBridge) onBridgeReady();
     document.addEventListener('WeixinJSBridgeReady', onBridgeReady, false);
-    const options = { once: true, passive: true };
-    window.addEventListener('touchstart', kick, options);
-    window.addEventListener('click', kick, options);
+    // Any of these count as a user gesture (WeChat lets swipes through too), so
+    // keep them armed until playback actually starts — a `{ once: true }` listener
+    // can be burned by an attempt that fails while the video is still buffering.
+    const GESTURE_EVENTS = ['touchstart', 'touchmove', 'click', 'pointerdown', 'wheel', 'scroll', 'keydown'];
+    const gestureOptions = { passive: true, capture: true };
+    function disarm() {
+      GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, kick, gestureOptions));
+    }
+    GESTURE_EVENTS.forEach((event) => window.addEventListener(event, kick, gestureOptions));
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(hintTimer);
       document.removeEventListener('WeixinJSBridgeReady', onBridgeReady);
-      window.removeEventListener('touchstart', kick);
-      window.removeEventListener('click', kick);
+      disarm();
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     };
   }, [assetMode, isMobile]);
@@ -2946,6 +2963,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
               disablePictureInPicture
               aria-label="Mobile hero video"
             />
+            {playHint ? <div className="hero-play-hint" aria-hidden="true">轻触或滑动播放</div> : null}
             <div className="hero-title-stack-mobile" aria-label="Group 10 portfolio mark">
               <div
                 className="hero-title-layer"
