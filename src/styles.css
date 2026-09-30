@@ -4277,6 +4277,18 @@ html[data-paging="on"] .contact-bottom {
   margin-top: clamp(22px, 4.2vh, 46px);
 }
 
+/* Hover safety zone: wraps card + skill strip. Padding extends the pointer
+   area 28px beyond the block on every side; equal negative margins cancel it
+   visually and in layout, so nothing shifts. mouseleave only fires when the
+   pointer truly exits the whole zone, so icon movement inside (accordion,
+   scale) can never reset the hover state. */
+.pf-hover-zone {
+  box-sizing: border-box;
+  width: calc(100% + 56px);
+  margin: -28px;
+  padding: 28px;
+}
+
 .pf-info,
 .pf-skill-card {
   position: absolute;

@@ -10,8 +10,13 @@ import group10Markup from './assets/group-10.svg?raw';
 const HERO_HEVC_BASE_SRC = '/media/hero-hevc.mp4';
 const HERO_HEVC_MASK_SRC = '/media/hero-mask-hevc.mp4';
 const HERO_FALLBACK_BASE_SRC = '/media/hero-base.mp4';
+// Grayscale matte for the no-HEVC path (composited through the same WebGL
+// matte pipeline as the HEVC pair). The VP9 alpha webm remains only as the
+// terminal no-WebGL fallback via HERO_FALLBACK_ALPHA_SRC below.
+const HERO_FALLBACK_MASK_SRC = '/media/hero-mask-fallback.mp4';
 const HERO_FALLBACK_ALPHA_SRC = '/media/hero-cat-alpha.webm';
 const HERO_MOBILE_SRC = '/media/hero-mobile.mp4';
+const HERO_MOBILE_FALLBACK_SRC = '/media/hero-mobile-fallback.mp4';
 const HERO_HEVC_CODEC_TYPES = [
   'video/mp4; codecs="hvc1.1.6.L153.B0"',
   'video/mp4; codecs="hvc1"'
@@ -2137,45 +2142,49 @@ function ProfileContentPC() {
         </h2>
 
         {/* Stats/contact and the skill description card occupy the same slot
-            and crossfade, so the layout never jumps on hover. */}
-        <div className="pf-swap">
-          <div className={`pf-info${active ? ' is-hidden' : ''}`}>
-            <div className="pf-stats">
-              <div className="pf-stat"><strong>5+</strong><span>Years Design</span></div>
-              <div className="pf-stat"><strong>10+</strong><span>Design Tool</span></div>
-              <div className="pf-stat"><strong>50+</strong><span>Work Case</span></div>
-            </div>
-            <div className="pf-contact">
-              <p><Phone size={15} strokeWidth={1.8} />18219315597</p>
-              <p><Mail size={15} strokeWidth={1.8} />Four4444.Design@gmail.com</p>
-            </div>
-          </div>
-          <div className={`pf-skill-card${active ? ' is-visible' : ''}`} aria-live="polite">
-            {active && (
-              <div className="pf-skill-card-body" key={active.id}>
-                <p className="pf-skill-title">{active.title}</p>
-                <p className="pf-skill-text">{active.text}</p>
+            and crossfade, so the layout never jumps on hover. The hover zone
+            wraps card + skill strip with an outer safety margin: once the
+            hover state is armed, pointer drift around the block (including
+            icon movement inside it) cannot trigger the leave reset. */}
+        <div className="pf-hover-zone" onMouseLeave={() => setHovered(null)}>
+          <div className="pf-swap">
+            <div className={`pf-info${active ? ' is-hidden' : ''}`}>
+              <div className="pf-stats">
+                <div className="pf-stat"><strong>5+</strong><span>Years Design</span></div>
+                <div className="pf-stat"><strong>10+</strong><span>Design Tool</span></div>
+                <div className="pf-stat"><strong>50+</strong><span>Work Case</span></div>
               </div>
-            )}
+              <div className="pf-contact">
+                <p><Phone size={15} strokeWidth={1.8} />18219315597</p>
+                <p><Mail size={15} strokeWidth={1.8} />Four4444.Design@gmail.com</p>
+              </div>
+            </div>
+            <div className={`pf-skill-card${active ? ' is-visible' : ''}`} aria-live="polite">
+              {active && (
+                <div className="pf-skill-card-body" key={active.id}>
+                  <p className="pf-skill-title">{active.title}</p>
+                  <p className="pf-skill-text">{active.text}</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div
-          className={`pf-skills${active ? ' has-active' : ''}`}
-          onMouseLeave={() => setHovered(null)}
-        >
-          {PC_SKILLS.map((s) => (
-            <button
-              type="button"
-              key={s.id}
-              className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
-              onMouseEnter={() => setHovered(s.id)}
-              onFocus={() => setHovered(s.id)}
-            >
-              <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
-              <span className="pf-skill-name">{s.name}</span>
-            </button>
-          ))}
+          <div
+            className={`pf-skills${active ? ' has-active' : ''}`}
+          >
+            {PC_SKILLS.map((s) => (
+              <button
+                type="button"
+                key={s.id}
+                className={`pf-skill${hovered === s.id ? ' is-active' : ''}`}
+                onMouseEnter={() => setHovered(s.id)}
+                onFocus={() => setHovered(s.id)}
+              >
+                <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
+                <span className="pf-skill-name">{s.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -2185,11 +2194,12 @@ function ProfileContentPC() {
 function HeroSection({ active = true }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [assetMode, setAssetMode] = useState(() => {
-    if (isMobile) return 'mobile';
     const video = document.createElement('video');
-    return HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type))) ? 'hevc' : 'fallback';
+    const supportsHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
+    if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
+    return supportsHEVC ? 'hevc' : 'fallback';
   });
-  const useWebglRenderer = !isMobile && assetMode === 'hevc';
+  const useWebglRenderer = !isMobile && assetMode !== 'alpha2d';
   const heroTitleMarkup = useMemo(() => {
     let welcomePart = 0;
     const splitWelcome = group10Markup.replace(
@@ -2225,6 +2235,7 @@ function HeroSection({ active = true }) {
     const alphaContext = alphaGl ? null : (!useWebglRenderer ? alphaCanvas.getContext('2d', { alpha: true }) : null);
     if (!baseContext || (useWebglRenderer && !alphaGl)) {
       if (assetMode === 'hevc') setAssetMode('fallback');
+      else if (assetMode === 'fallback') setAssetMode('alpha2d');
       return undefined;
     }
     if (!useWebglRenderer && !alphaContext) return undefined;
@@ -2382,6 +2393,7 @@ function HeroSection({ active = true }) {
         drawPair(visiblePair.base, visiblePair.alpha);
       } catch {
         if (assetMode === 'hevc') setAssetMode('fallback');
+        else if (assetMode === 'fallback') setAssetMode('alpha2d');
       }
     };
     resizeCanvases();
@@ -2416,6 +2428,7 @@ function HeroSection({ active = true }) {
         drawPair(baseSnapshot, alphaSnapshot);
       } catch {
         if (assetMode === 'hevc') setAssetMode('fallback');
+        else if (assetMode === 'fallback') setAssetMode('alpha2d');
         return;
       }
       showImmediatePair = false;
@@ -2578,9 +2591,10 @@ function HeroSection({ active = true }) {
       const alphaStopped = hasPresentedFrame && !alpha.paused && !alpha.ended && now - lastDecoderProgressAt.alpha > STALL_CHECK_MS;
       const pairStopped = hasPresentedFrame && now - lastPresentedAt > STALL_CHECK_MS;
       const unexpectedlyPaused = hasPresentedFrame && (base.paused || alpha.paused);
-      if (assetMode === 'hevc' && (waitingForInitialFrame || baseStopped || alphaStopped || pairStopped)) {
+      if ((assetMode === 'hevc' || assetMode === 'fallback') && (waitingForInitialFrame || baseStopped || alphaStopped || pairStopped)) {
         baseCanvas.dataset.fallbackReason = waitingForInitialFrame ? 'hevc-no-first-frame' : 'hevc-frame-stalled';
-        setAssetMode('fallback');
+        if (assetMode === 'hevc') setAssetMode('fallback');
+        else setAssetMode('alpha2d');
         return;
       }
       if (waitingForInitialFrame || baseStopped || alphaStopped || pairStopped || unexpectedlyPaused) {
@@ -2592,6 +2606,11 @@ function HeroSection({ active = true }) {
       if (assetMode === 'hevc') {
         baseCanvas.dataset.fallbackReason = 'hevc-media-error';
         setAssetMode('fallback');
+        return;
+      }
+      if (assetMode === 'fallback') {
+        baseCanvas.dataset.fallbackReason = 'fallback-media-error';
+        setAssetMode('alpha2d');
         return;
       }
       const now = performance.now();
@@ -2824,7 +2843,8 @@ function HeroSection({ active = true }) {
           <>
             <video
               className="hero-mobile-video"
-              src={HERO_MOBILE_SRC}
+              src={assetMode === 'mobile' ? HERO_MOBILE_SRC : HERO_MOBILE_FALLBACK_SRC}
+              onError={() => { setAssetMode((mode) => (mode === 'mobile' ? 'mobile-fallback' : mode)); }}
               autoPlay
               muted
               loop
@@ -2857,7 +2877,7 @@ function HeroSection({ active = true }) {
             <canvas ref={alphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas" style={{ display: useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
             <canvas ref={fallbackAlphaCanvasRef} className="hero-video-bg hero-video-alpha-canvas hero-video-alpha-2d" style={{ display: !isMobile && !useWebglRenderer ? 'block' : 'none' }} aria-hidden="true" />
             <video key={`base-${assetMode}`} ref={baseRef} className="hero-video-clock hero-video-base" src={assetMode === 'hevc' ? HERO_HEVC_BASE_SRC : HERO_FALLBACK_BASE_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
-            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
+            <video key={`alpha-${assetMode}`} ref={alphaRef} className="hero-video-clock hero-video-alpha" src={assetMode === 'hevc' ? HERO_HEVC_MASK_SRC : assetMode === 'fallback' ? HERO_FALLBACK_MASK_SRC : HERO_FALLBACK_ALPHA_SRC} autoPlay muted loop playsInline preload="auto" fetchPriority="high" disablePictureInPicture />
           </>
         )}
         {isMobile ? (
