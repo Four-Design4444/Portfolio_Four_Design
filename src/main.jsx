@@ -538,6 +538,8 @@ function App() {
   const [navMotion, setNavMotion] = useState('');
   const [sharedPill, setSharedPill] = useState(null);
   const [sharedImage, setSharedImage] = useState(null);
+  const sharedImageRef = useRef(null);
+  sharedImageRef.current = sharedImage;
   const [worksActiveLocked, setWorksActiveLocked] = useState(false);
   const previousPageRef = useRef(route.page);
 
@@ -681,20 +683,65 @@ function App() {
   }, [route.page, activeCategory.id, activeCategory.title]);
 
   useLayoutEffect(() => {
-    if (route.page !== 'detail' || !sharedImage || sharedImage.toRect) return undefined;
+    if (route.page !== 'detail' || !sharedImageRef.current) return undefined;
 
+    // The morph target is the detail hero, whose box only becomes meaningful
+    // once its bitmap is in: with `height: auto` an unloaded hero collapses to
+    // a 0px inline or a ~22px alt-text line, and aiming the morph at such a
+    // rect squashed the whole cover onto the top edge (seen on mobile). So:
+    // wait for the real bitmap before aiming, keep re-aiming while the morph
+    // runs (late loads / toolbar resizes then glide instead of snapping), and
+    // never leave the overlay stuck if the bitmap never shows up.
     let frame = 0;
+    let disposed = false;
     let attempts = 0;
+    let hasTarget = false;
+    let trackedFrames = 0;
+    const selector = '[data-detail-hero-image="true"]';
+
+    const apply = (rect) => {
+      setSharedImage((current) => {
+        if (!current) return current;
+        const prev = current.toRect;
+        if (
+          prev &&
+          Math.abs(prev.x - rect.x) < 0.5 &&
+          Math.abs(prev.y - rect.y) < 0.5 &&
+          Math.abs(prev.width - rect.width) < 0.5 &&
+          Math.abs(prev.height - rect.height) < 0.5
+        ) return current;
+        return { ...current, toRect: rect };
+      });
+      hasTarget = true;
+    };
+
     const updateImageTarget = () => {
-      const rect = readNavRect('[data-detail-hero-image="true"]');
+      if (disposed || !sharedImageRef.current) return;
       attempts += 1;
 
-      if (rect && rect.width > 0 && rect.height > 0) {
-        setSharedImage((current) => current ? { ...current, toRect: rect } : current);
-        return;
+      const hero = document.querySelector(selector);
+      const rect = hero ? readNavRect(selector) : null;
+      const ready = Boolean(hero && hero.complete && hero.naturalWidth > 0);
+
+      if (rect && rect.width > 0 && rect.height > 0 && ready) {
+        apply(rect);
+        trackedFrames += 1;
+      } else if (!hasTarget && attempts >= 260) {
+        // Bitmap never arrived (~4s). Derive the hero box from the overlay
+        // image's own ratio, or drop the overlay rather than freezing it.
+        const layerImg = document.querySelector('.shared-image-transition img');
+        if (layerImg && layerImg.naturalWidth > 0 && layerImg.naturalHeight > 0) {
+          const width = window.innerWidth || 390;
+          apply({ x: 0, y: 0, width, height: width * (layerImg.naturalHeight / layerImg.naturalWidth) });
+        } else {
+          setSharedImage(null);
+          return;
+        }
       }
 
-      if (attempts < 12) {
+      // While the morph runs, keep following the hero for about its duration
+      // so a late layout change retargets the running transition smoothly.
+      if (!hasTarget || trackedFrames < 90) {
         frame = window.requestAnimationFrame(updateImageTarget);
       }
     };
@@ -703,8 +750,11 @@ function App() {
       frame = window.requestAnimationFrame(updateImageTarget);
     });
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [route.page, sharedImage]);
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [route.page, sharedImage?.workId]);
 
   const restoreScroll = (key, fallback) => {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
@@ -817,6 +867,9 @@ function App() {
   const goDetailBack = () => {
     const entryCategory = window.sessionStorage.getItem('portfolioDetailEntryCategory');
     const shouldRestore = entryCategory === route.category;
+    // A back tap during the entry morph would otherwise strand the overlay on
+    // the works page: nothing re-aims it there, so drop it explicitly.
+    setSharedImage(null);
     setWorksActiveLocked(true);
     window.setTimeout(() => setWorksActiveLocked(false), 860);
     setNavMotion('to-works');

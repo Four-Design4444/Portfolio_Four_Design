@@ -4208,6 +4208,9 @@ html[data-paging="on"] .contact-bottom {
    collapsed card's lone icon does too. */
 .pf-statrow.is-docked .pf-stat {
   min-width: clamp(96px, 5.9vw, 114px);
+  /* 垂直内边距收紧(继承自静止卡的 28/34):dock 后的标签条整体高度压下来。 */
+  padding-top: 16px;
+  padding-bottom: 18px;
   padding-left: 12px;
   padding-right: 12px;
   align-items: center;
@@ -4223,6 +4226,10 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-statrow.is-docked .pf-stat.is-active {
   min-width: clamp(140px, 9.2vw, 176px);
+  /* 选中标签保持「未移入态」的左对齐版式:数字在上、图标+名称在下,一律左对齐
+     (dock 态此前整体居中,数字不再对着下方的左边图标)。内边距也回到静止卡的值。 */
+  align-items: flex-start;
+  padding-left: clamp(20px, 1.7vw, 32px);
 }
 
 .pf-statrow.is-docked .pf-stat.is-active:hover { background: rgba(9, 9, 11, 0.86); }
@@ -4457,7 +4464,7 @@ html[data-paging="on"] .contact-bottom {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   background: rgba(9, 9, 11, 0.86);
-  padding: clamp(18px, 2.2vh, 26px) clamp(22px, 1.9vw, 32px);
+  padding: clamp(16px, 1.9vh, 22px) clamp(22px, 1.9vw, 32px);
   opacity: 0;
   pointer-events: none;
 }
@@ -4482,7 +4489,7 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-skill-title {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   font-size: clamp(14px, 0.85vw, 16px);
   letter-spacing: 0.6px;
   color: #fff;
@@ -4491,7 +4498,7 @@ html[data-paging="on"] .contact-bottom {
 .pf-skill-text {
   margin: 0;
   font-size: clamp(12.5px, 0.76vw, 14px);
-  line-height: 1.95;
+  line-height: 1.8;
   color: #b9bec8;
 }
 
@@ -4499,9 +4506,9 @@ html[data-paging="on"] .contact-bottom {
    becomes an accordion — active pill expands with a border, the rest collapse
    to bare icon squares (技能展示.jpg). */
 .pf-skills {
-  /* dock 间距收紧(原 clamp(20px,4vh,44px)):静止态技能条与经验卡之间的空隙
-     = 槽位预留区 + 这段 dock,原值叠加后留白过大。 */
-  --pf-dock: clamp(14px, 2.2vh, 26px);
+  /* dock 间距(原 clamp(20px,4vh,44px)→clamp(14px,2.2vh,26px)→再收):静止态
+     技能条与经验卡之间的空隙 = 槽位预留区 + 这段 dock。 */
+  --pf-dock: clamp(10px, 1.5vh, 18px);
   display: flex;
   align-items: center;
   gap: clamp(10px, 1vw, 16px);
@@ -4664,12 +4671,12 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-exp-card.is-visible {
-  /* 高度收紧(原 clamp(190px,24vh,264px)):3 行正文 + 上下 28px 内边距 ≈146px,
-     原最小高度留出大片空白。flex 居中,高度略大于内容即可。 */
-  min-height: clamp(148px, 15vh, 168px);
+  /* 高度继续收紧(原 clamp(190px,24vh,264px) → 148/15vh/168 → 现值):3 行正文
+     + 上下 22px 内边距 ≈134px。flex 居中,略高于内容即可。 */
+  min-height: clamp(140px, 13.5vh, 156px);
   max-height: 420px;
-  padding-top: 28px;
-  padding-bottom: 28px;
+  padding-top: 22px;
+  padding-bottom: 22px;
   opacity: 1;
   pointer-events: auto;
 }
