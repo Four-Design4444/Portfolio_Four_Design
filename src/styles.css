@@ -4271,11 +4271,22 @@ html[data-paging="on"] .contact-bottom {
    strip gets its OWN entrance wrapper: the 420ms stagger delay must never
    live on .pf-skills itself, or it leaks into the hover leave animation
    (strip waits 420ms before undocking = visible stall). */
-.pf-title,
-.pf-swap,
-.pf-skills-entrance {
+/* 标题保留进场淡入,离场随整屏滑走;经验卡与技能条改为常驻:默认 opacity:1,
+   进场首次用 @starting-style 淡入,离场(.is-visible 移除)不回到 0 —— 因此下滑
+   切页时这两张卡不再"消失"。不支持 starting-style 的旧浏览器直接常驻,同样
+   不消失。此前它们与标题共用 opacity:0 默认态,离场被 is-visible 移除触发淡出。 */
+.pf-title {
   opacity: 0;
   transform: translateY(22px);
+  transition:
+    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-swap,
+.pf-skills-entrance {
+  opacity: 1;
+  transform: none;
   transition:
     opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -4284,6 +4295,14 @@ html[data-paging="on"] .contact-bottom {
 .profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
 .profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }
+
+@starting-style {
+  .profile-shot.is-visible .pf-swap,
+  .profile-shot.is-visible .pf-skills-entrance {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
 
 /* 调换后:技能条与上方经验卡之间留 dock 间距;hover skill 时收拢,卡片与条
    在视觉上连成一体(参考图2)。 */

@@ -1099,17 +1099,56 @@ html[data-device="mobile"] .profile.motion-reveal-section * {
   transition-delay: 0ms !important;
 }
 
-/* --- Mobile profile info (PC-style tap interactions) --------------------
-   Layout order follows the PC component: title → contact lines → stat cards
-   (tap to expand experience) → skill chips (tap to expand description).
-   The global 1ms transition override above is intentionally re-overridden
-   for the tap-expand cards so they still animate smoothly. */
+/* --- Mobile personal info (iPhone 17 mock, 2026-10-01) -------------------
+   Full-bleed portrait backdrop; the info stack docks to the lower half,
+   left-aligned: Rany title → phone/mail rows → three outlined stat cards
+   (tap to expand experience) → plain icon+name skill row (tap to expand
+   description). The 1ms global transition override is re-overridden for
+   the tap-expand cards so they still animate smoothly. */
+
+html[data-device="mobile"] .profile-shot-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Full-bleed portrait backdrop (same master photo as the PC screen). The
+   1920x1080 master puts the face at ~76% x / ~30% y; on a narrow portrait
+   viewport cover crops to ~26% of the width, so 85% x centers the face. */
+html[data-device="mobile"] .mob-profile-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 85% 50%;
+}
+
+/* Legibility wash: keeps the photo moody where the text docks. */
+html[data-device="mobile"] .profile-shot-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.58) 78%, rgba(0, 0, 0, 0.72) 100%);
+  pointer-events: none;
+}
 
 html[data-device="mobile"] .mob-profile-info {
   position: relative;
-  z-index: 3;
-  margin-top: clamp(-40px, -10vw, -16px);
-  padding: 0 max(20px, env(safe-area-inset-left)) 48px max(20px, env(safe-area-inset-right));
+  z-index: 2;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+  width: 100%;
+  padding: 0 clamp(20px, 6vw, 30px) clamp(30px, 6.5vh, 56px);
   color: #ffffff;
 }
 
@@ -1117,46 +1156,44 @@ html[data-device="mobile"] .mob-profile-title {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px 14px;
-  margin: 0 0 clamp(18px, 4.8vw, 28px);
-  font-weight: 700;
-  line-height: 1.1;
+  gap: 6px 12px;
+  margin: 0 0 clamp(16px, 3.4vh, 30px);
+  line-height: 1.08;
 }
 
 html[data-device="mobile"] .mob-profile-title-en {
-  font-size: clamp(30px, 9.2vw, 52px);
-  letter-spacing: -0.02em;
+  font-size: clamp(27px, 7vw, 44px);
+  letter-spacing: -0.01em;
   color: #ffffff;
 }
 
 html[data-device="mobile"] .mob-profile-title-cn {
-  font-size: clamp(15px, 4.4vw, 22px);
-  color: rgba(255, 255, 255, 0.56);
+  font-size: clamp(13px, 3.9vw, 18px);
+  color: #a4a4a4;
   font-weight: 500;
 }
 
+/* Contact rows: plain icon + value lines, no pill chrome (per the mock). */
 html[data-device="mobile"] .mob-profile-contact {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: clamp(20px, 5.3vw, 32px);
+  align-items: flex-start;
+  gap: clamp(12px, 2vh, 16px);
+  margin-bottom: clamp(22px, 4.6vh, 40px);
 }
 
-/* Mobile full-width copy rows inside the profile card stack. */
 html[data-device="mobile"] .mob-profile-contact .pf-copy {
-  box-sizing: border-box;
-  width: 100%;
-  justify-content: flex-start;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: clamp(13px, 3.6vw, 15px);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: clamp(12px, 3.4vw, 14px);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 html[data-device="mobile"] .mob-profile-contact .pf-copy-text {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -1170,34 +1207,34 @@ html[data-device="mobile"] .mob-profile-contact .pf-copy-line {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* The 点击复制 tag stays PC-only; the roller's 已复制 line is the mobile cue. */
 html[data-device="mobile"] .mob-profile-contact .pf-copy-hint {
-  position: static;
-  transform: none;
-  margin-left: auto;
-  opacity: 0.55;
+  display: none;
 }
 
 html[data-device="mobile"] .mob-profile-contact .pf-copy.is-copied .pf-copy-hint {
-  opacity: 0;
+  display: none;
 }
 
+/* Stat cards: three outlined equal columns, no icons (per the mock). */
 html[data-device="mobile"] .mob-profile-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: clamp(9px, 2.6vw, 12px);
 }
 
 html[data-device="mobile"] .mob-profile-stat {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 14px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  gap: clamp(7px, 1.8vh, 10px);
+  padding: clamp(11px, 2.4vh, 16px) clamp(11px, 3vw, 15px);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
   color: #ffffff;
   text-align: left;
   cursor: pointer;
@@ -1212,28 +1249,20 @@ html[data-device="mobile"] .mob-profile-stat:active {
 }
 
 html[data-device="mobile"] .mob-profile-stat.is-active {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.55);
 }
 
 html[data-device="mobile"] .mob-profile-stat strong {
-  font-size: clamp(22px, 7vw, 36px);
-  font-weight: 700;
+  font-size: clamp(19px, 5.9vw, 28px);
+  font-weight: 600;
   line-height: 1;
 }
 
 html[data-device="mobile"] .mob-profile-stat-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: clamp(11px, 3.2vw, 13px);
-  color: rgba(255, 255, 255, 0.64);
-}
-
-html[data-device="mobile"] .mob-profile-stat-icon {
-  width: 13px;
-  height: 13px;
-  object-fit: contain;
+  font-size: clamp(9px, 2.55vw, 11.5px);
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* Expandable experience / skill cards. Grid-template-rows 0fr → 1fr gives
@@ -1260,30 +1289,32 @@ html[data-device="mobile"] .mob-profile-skill-card.is-visible {
 html[data-device="mobile"] .mob-profile-card-body {
   overflow: hidden;
   min-height: 0;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(10, 10, 12, 0.66);
 }
 
 html[data-device="mobile"] .mob-profile-card-body p {
   margin: 0;
-  font-size: clamp(13px, 3.6vw, 15px);
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: clamp(12px, 3.3vw, 14px);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 html[data-device="mobile"] .mob-profile-card-title {
-  margin: 0 0 8px;
-  font-size: clamp(15px, 4.2vw, 18px);
+  margin: 0 0 6px;
+  font-size: clamp(14px, 3.9vw, 17px);
   font-weight: 700;
   color: #ffffff;
 }
 
+/* Skill row: plain icon + name, no chip chrome (per the mock). */
 html[data-device="mobile"] .mob-profile-skills {
   display: flex;
-  gap: 10px;
-  margin-top: clamp(20px, 5.3vw, 32px);
+  align-items: center;
+  gap: clamp(10px, 2.9vw, 14px);
+  margin-top: clamp(18px, 3.8vh, 30px);
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -1296,100 +1327,34 @@ html[data-device="mobile"] .mob-profile-skills::-webkit-scrollbar {
 html[data-device="mobile"] .mob-profile-skill {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  font-size: clamp(12px, 3.4vw, 14px);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: clamp(10px, 2.55vw, 13px);
   cursor: pointer;
   transition:
-    background-color 240ms ease,
-    border-color 240ms ease,
+    color 200ms ease,
     transform 160ms ease !important;
 }
 
 html[data-device="mobile"] .mob-profile-skill:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 
 html[data-device="mobile"] .mob-profile-skill.is-active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.42);
+  color: #ffffff;
 }
 
 html[data-device="mobile"] .mob-profile-skill-icon {
-  width: 18px;
-  height: 18px;
+  width: clamp(13px, 3.5vw, 16px);
+  height: clamp(13px, 3.5vw, 16px);
   object-fit: contain;
 }
 
 html[data-device="mobile"] .mob-profile-skill-name {
   white-space: nowrap;
-}
-
-/* Mobile profile layout: keep the stat/skill cards always visible inside the
-   100vh paged screen. On mobile the portrait must not consume the full
-   viewport; it becomes a top banner and the info card stack fills the rest. */
-html[data-device="mobile"] .profile-shot-inner {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  height: 100%;
-  min-height: 0;
-}
-
-html[data-device="mobile"] .profile-hero-stage {
-  position: relative;
-  flex: 0 0 auto;
-  height: auto;
-  min-height: 0;
-  background: #101010;
-}
-
-html[data-device="mobile"] .profile-portrait-art {
-  height: auto;
-  max-height: 38vh;
-  width: 100%;
-  object-fit: cover;
-  object-position: 50% 0%;
-}
-
-html[data-device="mobile"] .profile-words-art {
-  width: min(47.55%, 62vh);
-}
-
-html[data-device="mobile"] .mob-profile-info {
-  box-sizing: border-box;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 0;
-  padding: 0 clamp(14px, 4.6vw, 22px) clamp(10px, 3vh, 20px);
-}
-
-/* Tighten vertical spacing so the whole stack fits on short viewports. */
-html[data-device="mobile"] .mob-profile-title {
-  margin-bottom: clamp(10px, 2.4vh, 18px);
-}
-
-html[data-device="mobile"] .mob-profile-contact {
-  margin-bottom: clamp(14px, 3.6vh, 24px);
-  gap: clamp(8px, 1.8vh, 12px);
-}
-
-html[data-device="mobile"] .mob-profile-stats {
-  gap: clamp(8px, 2vw, 10px);
-}
-
-html[data-device="mobile"] .mob-profile-stat {
-  padding: clamp(10px, 2.8vh, 14px) clamp(8px, 2.4vw, 12px);
-  gap: clamp(6px, 1.6vh, 8px);
-}
-
-html[data-device="mobile"] .mob-profile-skills {
-  margin-top: clamp(14px, 3.6vh, 24px);
 }

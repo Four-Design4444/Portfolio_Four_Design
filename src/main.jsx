@@ -95,8 +95,6 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
   { x: 0.802, y: 0.894 },
   { x: 0.776, y: 0.894 }
 ];
-import aboutPortrait from './assets/profile/hero-composite/about-figure.jpg';
-import aboutWordsArt from './assets/profile/hero-composite/about-words.png';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
 import blenderIcon from './assets/profile/blender.webp';
