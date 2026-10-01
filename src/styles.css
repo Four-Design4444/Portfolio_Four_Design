@@ -4871,29 +4871,3 @@ html[data-paging="on"] .contact-bottom {
   color: #d6dae1;
 }
 
-/* Desktop equivalent of the mobile play hint. Shown only when the kernel
-   refuses autoplay — e.g. desktop WeChat's embedded Chromium — so the hero
-   never sits there looking broken without an explanation. */
-.hero-play-hint-desktop {
-  position: fixed;
-  left: 50%;
-  bottom: 96px;
-  z-index: 60;
-  transform: translateX(-50%);
-  padding: 9px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  border-radius: 999px;
-  background: rgba(13, 12, 18, 0.45);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 12px;
-  letter-spacing: 0.3em;
-  pointer-events: none;
-  animation: heroHintPulse 2.4s ease-in-out infinite;
-}
-
-@keyframes heroHintPulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}

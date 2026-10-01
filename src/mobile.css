@@ -993,33 +993,6 @@ html[data-device="mobile"] .hero-video-stage .hero-mobile-jsmpeg-poster {
   transition: opacity 420ms ease;
 }
 
-/* Shown only when the kernel (e.g. WeChat on mobile data) refuses autoplay. */
-html[data-device="mobile"] .hero-play-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 108px;
-  z-index: 5;
-  transform: translateX(-50%);
-  padding: 7px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 999px;
-  background: rgba(13, 12, 18, 0.42);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 11px;
-  letter-spacing: 0.32em;
-  text-indent: 0.32em;
-  white-space: nowrap;
-  pointer-events: none;
-  animation: heroPlayHintPulse 2.4s ease-in-out infinite;
-}
-
-@keyframes heroPlayHintPulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
 /* The desktop and mobile hero use separate media sources. */
 html[data-device="mobile"] .hero.hero-video-stage .hero-video-fixed {
   position: absolute;
@@ -1355,4 +1328,68 @@ html[data-device="mobile"] .mob-profile-skill-icon {
 
 html[data-device="mobile"] .mob-profile-skill-name {
   white-space: nowrap;
+}
+
+/* Mobile profile layout: keep the stat/skill cards always visible inside the
+   100vh paged screen. On mobile the portrait must not consume the full
+   viewport; it becomes a top banner and the info card stack fills the rest. */
+html[data-device="mobile"] .profile-shot-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+  min-height: 0;
+}
+
+html[data-device="mobile"] .profile-hero-stage {
+  position: relative;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  background: #101010;
+}
+
+html[data-device="mobile"] .profile-portrait-art {
+  height: auto;
+  max-height: 38vh;
+  width: 100%;
+  object-fit: cover;
+  object-position: 50% 0%;
+}
+
+html[data-device="mobile"] .profile-words-art {
+  width: min(47.55%, 62vh);
+}
+
+html[data-device="mobile"] .mob-profile-info {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  padding: 0 clamp(14px, 4.6vw, 22px) clamp(10px, 3vh, 20px);
+}
+
+/* Tighten vertical spacing so the whole stack fits on short viewports. */
+html[data-device="mobile"] .mob-profile-title {
+  margin-bottom: clamp(10px, 2.4vh, 18px);
+}
+
+html[data-device="mobile"] .mob-profile-contact {
+  margin-bottom: clamp(14px, 3.6vh, 24px);
+  gap: clamp(8px, 1.8vh, 12px);
+}
+
+html[data-device="mobile"] .mob-profile-stats {
+  gap: clamp(8px, 2vw, 10px);
+}
+
+html[data-device="mobile"] .mob-profile-stat {
+  padding: clamp(10px, 2.8vh, 14px) clamp(8px, 2.4vw, 12px);
+  gap: clamp(6px, 1.6vh, 8px);
+}
+
+html[data-device="mobile"] .mob-profile-skills {
+  margin-top: clamp(14px, 3.6vh, 24px);
 }

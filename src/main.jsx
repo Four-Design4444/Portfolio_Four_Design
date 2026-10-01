@@ -2506,9 +2506,6 @@ function HeroSection({ active = true }) {
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
     return supportsHEVC ? 'hevc' : 'fallback';
   });
-  // Shown when the kernel refuses autoplay (e.g. WeChat mobile-data policy):
-  // the poster keeps the hero visible and this hint tells visitors a tap starts it.
-  const [playHint, setPlayHint] = useState(false);
   // Desktop only: flips once the first base+alpha pair is drawn to the
   // canvases, fading the still poster out (it is that exact frame, so the
   // crossfade is invisible).
@@ -2660,7 +2657,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       const attempt = video.play();
       if (attempt && typeof attempt.then === 'function') {
         attempt.then(() => {
-          setPlayHint(false);
           disarm();
         }).catch((error) => {
           diag.lastError = `${error && error.name}: ${error && error.message}`;
@@ -2670,10 +2666,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       paint(video);
     };
     kick();
-    const hintTimer = window.setTimeout(() => {
-      const video = pickVideo();
-      if (video && video.paused && !video.ended) setPlayHint(true);
-    }, 3200);
     const timers = [400, 1200, 2600, 5000, 8000].map((delay) => window.setTimeout(kick, delay));
     const onBridgeReady = () => {
       diag.bridge = true;
@@ -2703,7 +2695,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     GESTURE_EVENTS.forEach((event) => window.addEventListener(event, kick, gestureOptions));
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
-      window.clearTimeout(hintTimer);
       document.removeEventListener('WeixinJSBridgeReady', onBridgeReady);
       disarm();
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -3375,7 +3366,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
               aria-label="Mobile hero video"
             />
             )}
-            {playHint && !useJsmpeg ? <div className="hero-play-hint" aria-hidden="true">轻触或滑动播放</div> : null}
             <div className="hero-title-stack-mobile" aria-label="Group 10 portfolio mark">
               <div
                 className="hero-title-layer"
@@ -3386,7 +3376,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           </>
         ) : (
           <>
-            {playHint ? <div className={isMobile ? 'hero-play-hint' : 'hero-play-hint hero-play-hint-desktop'} aria-hidden="true">{isMobile ? '轻触或滑动播放' : '点击或滚动播放'}</div> : null}
             <canvas ref={baseCanvasRef} className="hero-video-bg hero-video-base-canvas" aria-hidden="true" />
             <img
               className={`hero-pc-poster${pcPosterGone ? ' is-gone' : ''}`}
