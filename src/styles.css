@@ -4133,10 +4133,10 @@ html[data-paging="on"] .contact-bottom {
   position: absolute;
   inset: 0;
   max-width: min(36.5vw, 660px);
-  will-change: opacity, transform;
-  transition:
-    opacity 480ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity;
+  /* 快速淡入(260ms),与插槽 min-height 增长(480ms)同步,卡片不再是「先空着长大
+     再出字」的两段感;不位移,文字随展开即时显现。 */
+  transition: opacity 260ms ease;
 }
 
 /* ---- Stat row = tab strip (个人信息-经验 图1/图2). One persistent row:
@@ -4454,7 +4454,6 @@ html[data-paging="on"] .contact-bottom {
   background: rgba(9, 9, 11, 0.86);
   padding: clamp(20px, 3vh, 30px) clamp(22px, 1.9vw, 32px);
   opacity: 0;
-  transform: translateY(16px);
   pointer-events: none;
 }
 
@@ -4465,12 +4464,12 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-skill-card-body {
-  animation: pf-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pf-card-in 260ms ease both;
 }
 
 @keyframes pf-card-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .pf-skill-title {

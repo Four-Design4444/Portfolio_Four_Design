@@ -2315,6 +2315,66 @@ function ProfileContentPC() {
   const activeSkill = hover?.type === 'skill' ? PC_SKILLS.find((s) => s.id === hover.id) || null : null;
   const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
 
+  // 意图只由真实指针移动驱动(移植自 demo 的 mousemove 意图逻辑):
+  // - 布局变动时按钮滑到停泊光标下方,浏览器只 fire mouseenter 不会 fire mousemove,
+  //   因此 parked 光标永远偷不到选择(解决「悬停 Blender 时 Codex/Photoshop 滑过来被切走」)。
+  // - 移动还需距上次落点 >8px(64=8^2),停驻微抖不误触。
+  // - 离场侧保留 LEAVE_GRACE 宽限 + 离场时复核 zone 真实 :hover 才复位(解决 Photoshop
+  //   角落反复 enter/leave 的抖动),且宽限只在「刚移入后」生效,切换不同技能卡不受延迟影响。
+  const zoneRef = useRef(null);
+  const hoverRef = useRef(null);
+  useEffect(() => {
+    const zone = zoneRef.current;
+    if (!zone) return undefined;
+    const LEAVE_GRACE = 300;
+    let lastEnterAt = 0;
+    let resetTimer = 0;
+    let anchorPos = null;
+    const buttonIntent = (target) => {
+      if (!target || !target.closest) return null;
+      const skillBtn = target.closest('.pf-skill');
+      if (skillBtn) return { type: 'skill', id: skillBtn.dataset.id };
+      const statBtn = target.closest('.pf-stat');
+      if (statBtn) return { type: 'stat', id: statBtn.dataset.id };
+      return null;
+    };
+    const applyIntent = (intent) => {
+      lastEnterAt = performance.now();
+      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
+      if (hoverRef.current && hoverRef.current.type === intent.type && hoverRef.current.id === intent.id) return;
+      hoverRef.current = intent;
+      setHover(intent);
+    };
+    const onMove = (e) => {
+      const intent = buttonIntent(e.target);
+      if (!intent) return;
+      if (anchorPos) {
+        const dx = e.clientX - anchorPos.x;
+        const dy = e.clientY - anchorPos.y;
+        if (dx * dx + dy * dy < 64) return;
+      }
+      anchorPos = { x: e.clientX, y: e.clientY };
+      applyIntent(intent);
+    };
+    const onLeave = () => {
+      anchorPos = null;
+      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
+      const wait = Math.max(0, LEAVE_GRACE - (performance.now() - lastEnterAt));
+      if (wait <= 0) { hoverRef.current = null; setHover(null); return; }
+      resetTimer = setTimeout(() => {
+        resetTimer = 0;
+        if (!zone.matches(':hover')) { hoverRef.current = null; setHover(null); }
+      }, wait);
+    };
+    zone.addEventListener('mousemove', onMove, { passive: true });
+    zone.addEventListener('mouseleave', onLeave);
+    return () => {
+      zone.removeEventListener('mousemove', onMove);
+      zone.removeEventListener('mouseleave', onLeave);
+      if (resetTimer) clearTimeout(resetTimer);
+    };
+  }, []);
+
   return (
     <div className="pf-inner">
       <div className="pf-bg" aria-hidden="true">
@@ -2334,7 +2394,7 @@ function ProfileContentPC() {
 
         {/* 持久 stat row 兼作静止经验卡与 dock 后的 tab 条; hover 时卡片并入并
            dock 到描述卡上。zone 包裹 card+技能条并接管 mousemove 意图(见 effect)。 */}
-        <div className="pf-hover-zone" onMouseLeave={() => setHover(null)}>
+        <div className="pf-hover-zone" ref={zoneRef}>
           <div className={`pf-swap${activeSkill ? ' has-skill' : ''}`}>
             <div className={`pf-statrow${activeStat ? ' is-docked' : ''}${activeSkill ? ' is-hidden' : ''}`}>
               {PC_STATS.map((s) => (
@@ -2342,7 +2402,6 @@ function ProfileContentPC() {
                   type="button"
                   key={s.id}
                   className={`pf-stat${activeStat?.id === s.id ? ' is-active' : ''}`}
-                  onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
                   onFocus={() => setHover({ type: 'stat', id: s.id })}
                 >
                   <strong>{s.value}</strong>
@@ -2379,7 +2438,6 @@ function ProfileContentPC() {
                   type="button"
                   key={s.id}
                   className={`pf-skill${activeSkill?.id === s.id ? ' is-active' : ''}`}
-                  onMouseEnter={() => setHover({ type: 'skill', id: s.id })}
                   onFocus={() => setHover({ type: 'skill', id: s.id })}
                 >
                   <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
