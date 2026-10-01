@@ -163,7 +163,7 @@ const PC_STATS = [
     text: '十余项专业软件掌握，具备较强学习能力与跨领域能力，近年来持续探索AIGC与设计工作流的结合，让技术成为创意的加速器。以稳定的专业输出和跨领域的适应力，持续为品牌创造价值。'
   },
   {
-    id: 'cases', value: '20+', label: 'Work Case', icon: expCasesIcon,
+    id: 'cases', value: '50+', label: 'Work Case', icon: expCasesIcon,
     text: '多项完整商业项目经验，曾为多家企业提供年度设计支持，在长期合作中保持稳定输出，成为品牌设计环节中可信赖的长期伙伴。'
   }
 ];
@@ -2183,7 +2183,7 @@ function ProfileContent() {
         <LazyImage className="profile-portrait-art" src={aboutPortrait} alt="邱锋江 portrait" />
       </div>
       <div className="profile-contact-line"><span>Guangdong / Remote</span><span>Four4444.Design@gmail.com</span><span>18219315597</span></div>
-      <div className="profile-stats-row"><div><strong>5+</strong><span>Years Design</span></div><div><strong>10+</strong><span>Design Tool</span></div><div><strong>20+</strong><span>Work Case</span></div></div>
+      <div className="profile-stats-row"><div><strong>5+</strong><span>Years Design</span></div><div><strong>10+</strong><span>Design Tool</span></div><div><strong>50+</strong><span>Work Case</span></div></div>
       <div className="profile-tools">
         <p>专业技能</p>
         <div className="profile-tool-list">

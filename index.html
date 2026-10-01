@@ -48,6 +48,63 @@
           preload.href = '/media/hero-mobile-webcodecs.264';
           document.head.appendChild(preload);
         }
+        // Native-video paths: preload the exact hero clips this device will
+        // play, using the SAME decision React makes in HeroSection (device +
+        // HEVC canPlayType + WeChat branch). Without this the browser only
+        // discovers the videos after the JS bundle has downloaded, parsed and
+        // mounted HeroSection, so the ~1.9MB of hero media queues behind the
+        // app instead of downloading in parallel with it. as="video" (no
+        // crossOrigin) matches the media element's same-origin no-cors
+        // request, and the ETag on the server turns the media element's
+        // revalidation into a 304 so nothing downloads twice.
+        var heroPreload = function (href) {
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'video';
+          link.href = href;
+          link.fetchPriority = 'high';
+          document.head.appendChild(link);
+        };
+        // Desktop hero poster (first frame still): 83KB, but without a preload
+        // it queues behind the whole app bundle and the black-hero window
+        // grows instead of shrinking.
+        var heroPosterPreload = function () {
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = '/media/hero-pc-poster.webp';
+          link.fetchPriority = 'high';
+          document.head.appendChild(link);
+        };
+        var heroSupportsHEVC = (function () {
+          try {
+            var v = document.createElement('video');
+            return /^(probably|maybe)$/.test(v.canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'))
+              || /^(probably|maybe)$/.test(v.canPlayType('video/mp4; codecs="hvc1"'));
+          } catch (e) { return false; }
+        })();
+        if (isMobile) {
+          // WeChat mobile paints through WebCodecs (preloaded above); its
+          // native-video fallbacks only engage after a decoder failure, so
+          // they are deliberately NOT preloaded.
+          if (!/MicroMessenger/i.test(ua)) {
+            heroPreload(heroSupportsHEVC ? '/media/hero-mobile.mp4' : '/media/hero-mobile-fallback.mp4');
+          }
+        } else if (/MicroMessenger/i.test(ua)) {
+          // Desktop WeChat is forced onto the H.264 fallback pair in
+          // HeroSection regardless of HEVC support.
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
+        } else if (heroSupportsHEVC) {
+          heroPreload('/media/hero-hevc.mp4');
+          heroPreload('/media/hero-mask-hevc.mp4');
+          heroPosterPreload();
+        } else {
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
+        }
         // The home route always uses one-screen paging. Keep secondary routes
         // in their regular document flow from the first paint.
         var hash = window.location.hash || '';
