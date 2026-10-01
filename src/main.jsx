@@ -2173,10 +2173,11 @@ const HIDDEN_HERO_FOUR_LOGO_ARCHIVE = {
   selector: '.shared-hero-logo'
 };
 
-/* Mobile personal-info body. Mirrors the PC layout/interaction pattern:
-   title → contact lines → stat cards (tap to expand experience) → skill
-   chips (tap to expand description). Tapping an already-active card closes
-   it; switching between stat and skill closes the other panel. */
+/* Mobile personal-info body, matching the iPhone 17 mock: full-bleed
+   portrait background with the title/contact/stats/skills stack docked to
+   the lower half. Mirrors the PC data (PC_STATS / PC_SKILLS) with tap-to-
+   expand cards; tapping an already-active card closes it and switching
+   between stat and skill closes the other panel. */
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
@@ -2196,13 +2197,10 @@ function ProfileContent() {
 
   return (
     <div className="profile-shot-inner">
-      <div className="profile-hero-stage">
-        <LazyImage className="profile-words-art" src={aboutWordsArt} alt="FOUR 邱锋江" />
-        <LazyImage className="profile-portrait-art" src={aboutPortrait} alt="邱锋江 portrait" />
-      </div>
+      <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
       <div className="mob-profile-info">
         <h2 className="mob-profile-title">
-          <span className="mob-profile-title-en rany-display-heading">Hi , I Am Four</span>
+          <span className="mob-profile-title-en rany-display-heading">Hi， I Am Four</span>
           <span className="mob-profile-title-cn">邱锋江</span>
         </h2>
 
@@ -2221,10 +2219,7 @@ function ProfileContent() {
               aria-pressed={activeStat === s.id}
             >
               <strong>{s.value}</strong>
-              <span className="mob-profile-stat-label">
-                <LazyImage className="mob-profile-stat-icon" src={s.icon} alt="" />
-                <span>{s.label}</span>
-              </span>
+              <span className="mob-profile-stat-label">{s.label}</span>
             </button>
           ))}
         </div>

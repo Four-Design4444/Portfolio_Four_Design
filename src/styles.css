@@ -4109,6 +4109,22 @@ html[data-paging="on"] .profile-hero-stage {
   min-height: 0;
 }
 
+/* PC 端等价容器 .pf-inner 此前漏了 height:100% 约束(移动端 .profile-shot-inner
+   有),导致 paging 全屏下它与 .profile-shot{overflow:hidden} 的 100vh 裁切容器
+   高度基准不一致,经验卡(.pf-statrow)与技能条(.pf-skills-entrance)被裁掉、下滑
+   切走时整块消失。补上严格 100vh 高度,并适度收紧垂直间距,保证静止态两张卡
+   常驻在视口内。只调布局,不动 hover 动效曲线与展开态 slot。 */
+html[data-paging="on"] .pf-inner {
+  height: calc(var(--vh, 1vh) * 100);
+  min-height: 0;
+}
+html[data-paging="on"] .pf-swap {
+  margin-top: clamp(28px, 5.2vh, 60px);
+}
+html[data-paging="on"] .pf-hover-zone {
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 210px);
+}
+
 /* The figure is 16:9 and the screen usually is not, so it gets cropped rather
    than letterboxed. Anchoring to the top right keeps the subject exactly
    where it has always sat and takes the whole crop out of the empty left side
