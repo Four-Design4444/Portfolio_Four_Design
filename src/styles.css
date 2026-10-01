@@ -4073,13 +4073,14 @@ html[data-paging="on"] .contact-bottom {
   }
 }
 
-/* 调换后:技能条与上方经验卡之间留 dock 间距;hover skill 时收拢,卡片与条
-   在视觉上连成一体(参考图2)。 */
+/* 技能条外层**不做任何过渡**。此前这里 margin-top 480ms 会被
+   `.profile-shot.is-visible .pf-skills-entrance { transition-delay: 420ms }`
+   (进场专用、优先级更高)注入延迟:hover 收拢时主体动画 0~480ms 完成,外层
+   margin-top 却 420ms 后才上移 —— 正是「名称先收缩、二段再上移」的第二段来源。
+   收拢位移全部交给 .pf-skills 自身 transform(480ms 无延迟),与名字收缩同曲线同起始。 */
 .pf-skills-entrance {
-  margin-top: 10px;
-  transition: margin-top 480ms cubic-bezier(0.22, 1, 0.36, 1);
+  margin-top: 0;
 }
-.pf-skills-entrance.is-flush { margin-top: 0; }
 
 .pf-title {
   display: flex;
@@ -4106,10 +4107,10 @@ html[data-paging="on"] .contact-bottom {
   position: relative;
   width: 100%;
   /* 槽位高度**恒定**(不再随 has-skill 增长)。技能卡是 inset:0,高度完全由槽位
-     决定:槽位若从 91px 动画涨到 200px,卡片就会「先被文字顶死(91px 装不下
-     186px 正文)、第二段再往下撑开间距」= 必然两段。恒定后卡片尺寸永不变化,
-     移入时只有淡入 + 技能条 dock + 名字收缩,三者同为 480ms 同时开始结束。 */
-  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 200px);
+     决定:槽位若做动画,卡片就会「先被文字顶死、再往下撑开」= 两段。恒定后卡片
+     尺寸永不变化,移入时只有淡入 + 技能条 dock + 名字收缩,三者同为 480ms。
+     150px = 按最长文案(Figma 3 行)收紧:卡内底部留白≈顶部内边距,不再大片空。 */
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 150px);
   margin-top: clamp(36px, 7.1vh, 78px);
 }
 
@@ -4455,7 +4456,7 @@ html[data-paging="on"] .contact-bottom {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 14px;
   background: rgba(9, 9, 11, 0.86);
-  padding: clamp(20px, 3vh, 30px) clamp(22px, 1.9vw, 32px);
+  padding: clamp(18px, 2.2vh, 26px) clamp(22px, 1.9vw, 32px);
   opacity: 0;
   pointer-events: none;
 }
@@ -4494,7 +4495,9 @@ html[data-paging="on"] .contact-bottom {
    becomes an accordion — active pill expands with a border, the rest collapse
    to bare icon squares (技能展示.jpg). */
 .pf-skills {
-  --pf-dock: clamp(20px, 4vh, 44px);
+  /* dock 间距收紧(原 clamp(20px,4vh,44px)):静止态技能条与经验卡之间的空隙
+     = 槽位预留区 + 这段 dock,原值叠加后留白过大。 */
+  --pf-dock: clamp(14px, 2.2vh, 26px);
   display: flex;
   align-items: center;
   gap: clamp(10px, 1vw, 16px);
@@ -4657,7 +4660,9 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-exp-card.is-visible {
-  min-height: clamp(190px, 24vh, 264px);
+  /* 高度收紧(原 clamp(190px,24vh,264px)):3 行正文 + 上下 28px 内边距 ≈146px,
+     原最小高度留出大片空白。flex 居中,高度略大于内容即可。 */
+  min-height: clamp(148px, 15vh, 168px);
   max-height: 420px;
   padding-top: 28px;
   padding-bottom: 28px;
