@@ -4137,9 +4137,10 @@ html[data-paging="on"] .contact-bottom {
   inset: 0;
   max-width: min(36.5vw, 660px);
   will-change: opacity;
-  /* 快速淡入(260ms),与插槽 min-height 增长(480ms)同步,卡片不再是「先空着长大
-     再出字」的两段感;不位移,文字随展开即时显现。 */
-  transition: opacity 260ms ease;
+  /* 必须与 .pf-swap 的 min-height 增长**同时长(480ms)同曲线**:若文字淡入比
+     槽位快(此前 260ms),文字会先显完、盒子再继续往下撑,被看成「先出字、再挤开」
+     两段。统一后四者(槽位增长/技能条 dock/名字收缩/文字淡入)一次成型。 */
+  transition: opacity 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ---- Stat row = tab strip (个人信息-经验 图1/图2). One persistent row:
