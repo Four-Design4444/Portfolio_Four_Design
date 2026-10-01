@@ -1125,3 +1125,234 @@ html[data-device="mobile"] .profile.motion-reveal-section * {
   transition-duration: 1ms !important;
   transition-delay: 0ms !important;
 }
+
+/* --- Mobile profile info (PC-style tap interactions) --------------------
+   Layout order follows the PC component: title → contact lines → stat cards
+   (tap to expand experience) → skill chips (tap to expand description).
+   The global 1ms transition override above is intentionally re-overridden
+   for the tap-expand cards so they still animate smoothly. */
+
+html[data-device="mobile"] .mob-profile-info {
+  position: relative;
+  z-index: 3;
+  margin-top: clamp(-40px, -10vw, -16px);
+  padding: 0 max(20px, env(safe-area-inset-left)) 48px max(20px, env(safe-area-inset-right));
+  color: #ffffff;
+}
+
+html[data-device="mobile"] .mob-profile-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+  margin: 0 0 clamp(18px, 4.8vw, 28px);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+html[data-device="mobile"] .mob-profile-title-en {
+  font-size: clamp(30px, 9.2vw, 52px);
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+html[data-device="mobile"] .mob-profile-title-cn {
+  font-size: clamp(15px, 4.4vw, 22px);
+  color: rgba(255, 255, 255, 0.56);
+  font-weight: 500;
+}
+
+html[data-device="mobile"] .mob-profile-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: clamp(20px, 5.3vw, 32px);
+}
+
+/* Mobile full-width copy rows inside the profile card stack. */
+html[data-device="mobile"] .mob-profile-contact .pf-copy {
+  box-sizing: border-box;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: clamp(13px, 3.6vw, 15px);
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy-roller {
+  width: auto !important;
+  max-width: 100%;
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy-line {
+  width: auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy-hint {
+  position: static;
+  transform: none;
+  margin-left: auto;
+  opacity: 0.55;
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy.is-copied .pf-copy-hint {
+  opacity: 0;
+}
+
+html[data-device="mobile"] .mob-profile-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+html[data-device="mobile"] .mob-profile-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    transform 160ms ease !important;
+}
+
+html[data-device="mobile"] .mob-profile-stat:active {
+  transform: scale(0.97);
+}
+
+html[data-device="mobile"] .mob-profile-stat.is-active {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+html[data-device="mobile"] .mob-profile-stat strong {
+  font-size: clamp(22px, 7vw, 36px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+html[data-device="mobile"] .mob-profile-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(11px, 3.2vw, 13px);
+  color: rgba(255, 255, 255, 0.64);
+}
+
+html[data-device="mobile"] .mob-profile-stat-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
+/* Expandable experience / skill cards. Grid-template-rows 0fr → 1fr gives
+   a smooth height animation without hard-coding content height. */
+html[data-device="mobile"] .mob-profile-exp-card,
+html[data-device="mobile"] .mob-profile-skill-card {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    grid-template-rows 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 360ms ease,
+    transform 360ms ease !important;
+}
+
+html[data-device="mobile"] .mob-profile-exp-card.is-visible,
+html[data-device="mobile"] .mob-profile-skill-card.is-visible {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+html[data-device="mobile"] .mob-profile-card-body {
+  overflow: hidden;
+  min-height: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+html[data-device="mobile"] .mob-profile-card-body p {
+  margin: 0;
+  font-size: clamp(13px, 3.6vw, 15px);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+html[data-device="mobile"] .mob-profile-card-title {
+  margin: 0 0 8px;
+  font-size: clamp(15px, 4.2vw, 18px);
+  font-weight: 700;
+  color: #ffffff;
+}
+
+html[data-device="mobile"] .mob-profile-skills {
+  display: flex;
+  gap: 10px;
+  margin-top: clamp(20px, 5.3vw, 32px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html[data-device="mobile"] .mob-profile-skills::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-device="mobile"] .mob-profile-skill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  font-size: clamp(12px, 3.4vw, 14px);
+  cursor: pointer;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    transform 160ms ease !important;
+}
+
+html[data-device="mobile"] .mob-profile-skill:active {
+  transform: scale(0.96);
+}
+
+html[data-device="mobile"] .mob-profile-skill.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+html[data-device="mobile"] .mob-profile-skill-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+html[data-device="mobile"] .mob-profile-skill-name {
+  white-space: nowrap;
+}

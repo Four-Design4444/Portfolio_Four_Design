@@ -2173,24 +2173,94 @@ const HIDDEN_HERO_FOUR_LOGO_ARCHIVE = {
   selector: '.shared-hero-logo'
 };
 
-/* The personal-info body used by page 02. It remains a normal page section;
-   the former screen-map copy and HERO-to-profile transition were removed. */
+/* Mobile personal-info body. Mirrors the PC layout/interaction pattern:
+   title → contact lines → stat cards (tap to expand experience) → skill
+   chips (tap to expand description). Tapping an already-active card closes
+   it; switching between stat and skill closes the other panel. */
 function ProfileContent() {
+  const [activeStat, setActiveStat] = useState(null);
+  const [activeSkill, setActiveSkill] = useState(null);
+
+  const toggleStat = (id) => {
+    setActiveStat((prev) => (prev === id ? null : id));
+    setActiveSkill(null);
+  };
+
+  const toggleSkill = (id) => {
+    setActiveSkill((prev) => (prev === id ? null : id));
+    setActiveStat(null);
+  };
+
+  const activeStatData = activeStat ? PC_STATS.find((s) => s.id === activeStat) : null;
+  const activeSkillData = activeSkill ? PC_SKILLS.find((s) => s.id === activeSkill) : null;
+
   return (
     <div className="profile-shot-inner">
       <div className="profile-hero-stage">
         <LazyImage className="profile-words-art" src={aboutWordsArt} alt="FOUR 邱锋江" />
         <LazyImage className="profile-portrait-art" src={aboutPortrait} alt="邱锋江 portrait" />
       </div>
-      <div className="profile-contact-line"><span>Guangdong / Remote</span><span>Four4444.Design@gmail.com</span><span>18219315597</span></div>
-      <div className="profile-stats-row"><div><strong>5+</strong><span>Years Design</span></div><div><strong>10+</strong><span>Design Tool</span></div><div><strong>50+</strong><span>Work Case</span></div></div>
-      <div className="profile-tools">
-        <p>专业技能</p>
-        <div className="profile-tool-list">
-          {tools.map((tool) => <span key={tool.name}><LazyImage src={tool.icon} alt="" />{tool.name}</span>)}
+      <div className="mob-profile-info">
+        <h2 className="mob-profile-title">
+          <span className="mob-profile-title-en rany-display-heading">Hi , I Am Four</span>
+          <span className="mob-profile-title-cn">邱锋江</span>
+        </h2>
+
+        <div className="mob-profile-contact">
+          <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
+          <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
+        </div>
+
+        <div className="mob-profile-stats">
+          {PC_STATS.map((s) => (
+            <button
+              type="button"
+              key={s.id}
+              className={`mob-profile-stat${activeStat === s.id ? ' is-active' : ''}`}
+              onClick={() => toggleStat(s.id)}
+              aria-pressed={activeStat === s.id}
+            >
+              <strong>{s.value}</strong>
+              <span className="mob-profile-stat-label">
+                <LazyImage className="mob-profile-stat-icon" src={s.icon} alt="" />
+                <span>{s.label}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
+          {activeStatData && (
+            <div className="mob-profile-card-body" key={activeStatData.id}>
+              <p>{activeStatData.text}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="mob-profile-skills">
+          {PC_SKILLS.map((s) => (
+            <button
+              type="button"
+              key={s.id}
+              className={`mob-profile-skill${activeSkill === s.id ? ' is-active' : ''}`}
+              onClick={() => toggleSkill(s.id)}
+              aria-pressed={activeSkill === s.id}
+            >
+              <LazyImage className="mob-profile-skill-icon" src={s.icon} alt={s.name} />
+              <span className="mob-profile-skill-name">{s.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className={`mob-profile-skill-card${activeSkill ? ' is-visible' : ''}`} aria-live="polite">
+          {activeSkillData && (
+            <div className="mob-profile-card-body" key={activeSkillData.id}>
+              <p className="mob-profile-card-title">{activeSkillData.title}</p>
+              <p>{activeSkillData.text}</p>
+            </div>
+          )}
         </div>
       </div>
-      <div className="profile-bottom-line"><span /><b>UI / VI / AI</b></div>
     </div>
   );
 }
