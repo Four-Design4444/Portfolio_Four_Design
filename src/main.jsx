@@ -106,10 +106,6 @@ import expToolsIcon from './assets/profile/exp-tools.svg';
 import expCasesIcon from './assets/profile/exp-cases.svg';
 import BorderGlow from './components/BorderGlow';
 import SideRays from './components/SideRays';
-import capabilityDeliveryIcon from './assets/capability-icons/payment.svg';
-import capabilityCodeIcon from './assets/capability-icons/programmatic-ads.svg';
-import capabilityAiIcon from './assets/capability-icons/ai-nodes.svg';
-import capabilityTrendIcon from './assets/capability-icons/trend.svg';
 import { DETAIL_SCROLLS } from './data/detailScrolls';
 
 const tools = [
@@ -166,28 +162,6 @@ const PC_STATS = [
   }
 ];
 
-const advantages = [
-  {
-    title: '高效协作交付',
-    icon: capabilityDeliveryIcon,
-    text: '可独立完成需求拆解、方案构思、修改优化与跨部门沟通。'
-  },
-  {
-    title: '程序化设计思维',
-    icon: capabilityCodeIcon,
-    text: '善于以开发者思维洞察交互逻辑，熟悉组件库功能，框架化 UI 设计。'
-  },
-  {
-    title: 'AI 辅助工作流',
-    icon: capabilityAiIcon,
-    text: '熟悉 AI 创作领域，使创意更快进入可判断状态。'
-  },
-  {
-    title: '趋势与风格迭代',
-    icon: capabilityTrendIcon,
-    text: '持续探索新的设计趋势，紧跟行业风向，让工具重塑工作流。'
-  }
-];
 const categories = [
   { id: 'ui', title: 'UI Design', cn: 'UI 设计', label: 'Product Interface' },
   { id: 'vi', title: 'VI Design', cn: 'VI 设计', label: 'Brand Visual' },
@@ -2345,58 +2319,6 @@ function ProfileContentPC() {
   const activeSkill = hover?.type === 'skill' ? PC_SKILLS.find((s) => s.id === hover.id) || null : null;
   const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
 
-  // 意图只由真实指针移动驱动（移植自 demo）：逻辑跑在 mousemove 里，主动切换依旧即时；
-  // 而 morph 把按钮滑到停泊光标下方时浏览器会 fire mouseenter 但不会 fire mousemove，
-  // 因此 parked 光标永远偷不到选择。移动还需距上次落点 >8px，避免停驻微抖误触。
-  // 离开侧保留 300ms 宽限，并重新核对 zone 真实 :hover 再复位。
-  const zoneRef = useRef(null);
-  useEffect(() => {
-    const zone = zoneRef.current;
-    if (!zone) return undefined;
-    const LEAVE_GRACE = 300;
-    let lastEnterAt = 0;
-    let resetTimer = 0;
-    let anchorPos = null;
-    const buttonIntent = (target) => {
-      if (!target || !target.closest) return null;
-      const skillBtn = target.closest('.pf-skill');
-      if (skillBtn) return { type: 'skill', id: skillBtn.dataset.id };
-      const statBtn = target.closest('.pf-stat');
-      if (statBtn) return { type: 'stat', id: statBtn.dataset.id };
-      return null;
-    };
-    const onMove = (e) => {
-      const intent = buttonIntent(e.target);
-      if (!intent) return;
-      if (anchorPos) {
-        const dx = e.clientX - anchorPos.x;
-        const dy = e.clientY - anchorPos.y;
-        if (dx * dx + dy * dy < 64) return;
-      }
-      anchorPos = { x: e.clientX, y: e.clientY };
-      lastEnterAt = performance.now();
-      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
-      setHover(intent);
-    };
-    const onLeave = () => {
-      anchorPos = null;
-      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
-      const wait = Math.max(0, LEAVE_GRACE - (performance.now() - lastEnterAt));
-      if (wait <= 0) { setHover(null); return; }
-      resetTimer = setTimeout(() => {
-        resetTimer = 0;
-        if (!zone.matches(':hover')) setHover(null);
-      }, wait);
-    };
-    zone.addEventListener('mousemove', onMove, { passive: true });
-    zone.addEventListener('mouseleave', onLeave);
-    return () => {
-      zone.removeEventListener('mousemove', onMove);
-      zone.removeEventListener('mouseleave', onLeave);
-      if (resetTimer) clearTimeout(resetTimer);
-    };
-  }, [setHover]);
-
   return (
     <div className="pf-inner">
       <div className="pf-bg" aria-hidden="true">
@@ -2416,7 +2338,7 @@ function ProfileContentPC() {
 
         {/* 持久 stat row 兼作静止经验卡与 dock 后的 tab 条; hover 时卡片并入并
            dock 到描述卡上。zone 包裹 card+技能条并接管 mousemove 意图(见 effect)。 */}
-        <div className="pf-hover-zone" ref={zoneRef}>
+        <div className="pf-hover-zone" onMouseLeave={() => setHover(null)}>
           <div className={`pf-swap${activeSkill ? ' has-skill' : ''}`}>
             <div className={`pf-statrow${activeStat ? ' is-docked' : ''}${activeSkill ? ' is-hidden' : ''}`}>
               {PC_STATS.map((s) => (
@@ -2424,6 +2346,7 @@ function ProfileContentPC() {
                   type="button"
                   key={s.id}
                   className={`pf-stat${activeStat?.id === s.id ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
                   onFocus={() => setHover({ type: 'stat', id: s.id })}
                 >
                   <strong>{s.value}</strong>
@@ -2460,6 +2383,7 @@ function ProfileContentPC() {
                   type="button"
                   key={s.id}
                   className={`pf-skill${activeSkill?.id === s.id ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHover({ type: 'skill', id: s.id })}
                   onFocus={() => setHover({ type: 'skill', id: s.id })}
                 >
                   <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />
@@ -3413,12 +3337,13 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
 /* ---------------------------------------------------------------------------
    HOME PAGING
 
-   The home page is five screens and the wheel moves between them one screen at
-   a time. The HERO itself stays in place and loops continuously. A wheel notch
-   from page 01 moves directly to page 02 with the regular page scroll; no
-   cinematic playback, screen map, whiteout, or hand-off state is involved.
+   The home page is four screens and the wheel moves between them one screen at
+   a time: HERO → 个人信息 → 作品展示 → 联系合作. The HERO itself stays in
+   place and loops continuously. A wheel notch from page 01 moves directly to
+   page 02 with the regular page scroll; no cinematic playback, screen map,
+   whiteout, or hand-off state is involved.
 --------------------------------------------------------------------------- */
-const HOME_PAGE_IDS = ['hero', 'profile', 'advantage', 'projects', 'contact'];
+const HOME_PAGE_IDS = ['hero', 'profile', 'projects', 'contact'];
 const HOME_PAGE_COUNT = HOME_PAGE_IDS.length;
 
 // Long enough for a one-screen smooth scroll plus its settle, so a second
@@ -3465,7 +3390,6 @@ function usePagingEnabled(active = true) {
 }
 function HomePage({ openWorks, paging, active = true }) {
   const [profileRef, profileSeen] = useRevealOnView();
-  const [advantageRef, advantageSeen] = useRevealOnView();
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
 
@@ -3507,8 +3431,8 @@ function HomePage({ openWorks, paging, active = true }) {
   const [index, setIndex] = useState(startIndexRef.current);
 
   // The contact screen carries a WebGL ray burst. The same burst backs the
-  // advantage and projects screens, and it lives in a viewport-fixed layer so a
-  // page turn does not drag it along with the content.
+  // projects screen, and it lives in a viewport-fixed layer so a page turn
+  // does not drag it along with the content.
   //
   // Two behaviours ride on top of that:
   //   * arriving on a lit screen should settle first, then fade the light in -
@@ -3517,9 +3441,9 @@ function HomePage({ openWorks, paging, active = true }) {
   //     the section it belongs to instead of being pinned to the viewport, so
   //     it slides away with the content.
   //
-  // The sections are read as a list, not hard-coded as "advantage then
-  // projects": if the advantage screen is ever removed, everything here simply
-  // moves down to the projects screen on its own.
+  // The sections are read as a list, not hard-coded by name: adding or
+  // removing a lit screen here simply changes how far the shared burst
+  // reaches.
   const [raysMounted, setRaysMounted] = useState(false);
   const raysLayerRef = useRef(null);
   const raysHitRef = useRef(false);
@@ -3528,13 +3452,13 @@ function HomePage({ openWorks, paging, active = true }) {
   useEffect(() => {
     const RAYS_TEARDOWN_DELAY = 700;
 
-    // Read as a list, and only from the live document: if the advantage screen
-    // is ever deleted this simply becomes a shorter list and the screens below
-    // it inherit the light and the travel-on-the-way-up.
+    // Read as a list, and only from the live document, so a removed screen
+    // simply shortens the list and the screens below keep the light and the
+    // travel-on-the-way-up.
     // The contact screen is in here too - it used to own its own burst pinned
     // inside the section, which slid into view ahead of the content and stacked
-    // on top of this one; one shared burst now covers all three.
-    const sections = () => [advantageRef.current, projectsRef.current, contactRef.current]
+    // on top of this one; one shared burst now covers the whole tail.
+    const sections = () => [projectsRef.current, contactRef.current]
       .filter((el) => el && el.isConnected);
 
     const syncRays = () => {
@@ -3837,9 +3761,8 @@ function HomePage({ openWorks, paging, active = true }) {
   // With paging on, arrival at a page is what reveals it - the observer is only
   // there for the unpaged (touch and narrow) layout.
   const profileVisible = paging ? hasEnteredPage && index === 1 : profileSeen;
-  const advantageVisible = paging ? hasEnteredPage && index === 2 : advantageSeen;
-  const projectsVisible = paging ? hasEnteredPage && index === 3 : projectsSeen;
-  const contactVisible = paging ? hasEnteredPage && index === 4 : contactSeen;
+  const projectsVisible = paging ? hasEnteredPage && index === 2 : projectsSeen;
+  const contactVisible = paging ? hasEnteredPage && index === 3 : contactSeen;
 
   return (
     <>
@@ -3873,46 +3796,6 @@ function HomePage({ openWorks, paging, active = true }) {
           restarting at the top of each screen, so turning a page never reveals a
           fresh bright corner sliding in. */}
       <div className="home-ground">
-      <section ref={advantageRef} className={`section advantage motion-reveal-section${advantageVisible ? ' is-visible' : ''}`} id="advantage">
-        <div className="container">
-          <div className="advantage-head">
-            <p className="section-kicker display-reveal-title rany-display-heading">CAPABILITIES</p>
-            <h2 className="display-reveal-subtitle">个人优势</h2>
-            <p>将 UI、视觉、AI 与项目交付整合成稳定的设计生产力。</p>
-          </div>
-          <div className="advantage-grid">
-            {advantages.map((item) => (
-              <Reveal
-                key={item.title}
-                as="div"
-                className="advantage-reveal"
-                threshold={0.25}
-                rootMargin="0px 0px -6% 0px"
-              >
-                <BorderGlow
-                  className="advantage-glow-card"
-                  edgeSensitivity={30}
-                  glowColor="40 80 80"
-                  backgroundColor="#131313"
-                  borderRadius={8}
-                  glowRadius={44}
-                  glowIntensity={1}
-                  coneSpread={25}
-                  fillOpacity={0.36}
-                  colors={['#c084fc', '#f472b6', '#38bdf8']}
-                >
-                  <article className="advantage-card">
-                    <LazyImage className="advantage-icon-image" src={item.icon} alt="" />
-                    <h3>{item.title}</h3>
-                    <p>{item.text}</p>
-                  </article>
-                </BorderGlow>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}`} id="projects">
         <div className="container">
           <div className="projects-heading">
