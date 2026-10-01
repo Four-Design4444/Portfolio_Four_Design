@@ -2320,19 +2320,22 @@ function ProfileContentPC() {
   const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
 
   // 意图只由真实指针移动驱动(移植自 demo 的 mousemove 意图逻辑):
-  // - 布局变动时按钮滑到停泊光标下方,浏览器只 fire mouseenter 不会 fire mousemove,
-  //   因此 parked 光标永远偷不到选择(解决「悬停 Blender 时 Codex/Photoshop 滑过来被切走」)。
-  // - 移动还需距上次落点 >8px(64=8^2),停驻微抖不误触。
-  // - 离场侧保留 LEAVE_GRACE 宽限 + 离场时复核 zone 真实 :hover 才复位(解决 Photoshop
-  //   角落反复 enter/leave 的抖动),且宽限只在「刚移入后」生效,切换不同技能卡不受延迟影响。
+  // - 停泊光标不移动就不会派发 mousemove,布局变动(技能卡展开把按钮顶走)也
+  //   不派发 mousemove,因此 parked 光标永远偷不到选择(解决「悬停 Blender 时
+  //   Codex/Photoshop 滑过来被切走」)。这条是防偷选的根本保证,不靠任何阈值。
+  // - 切换不同卡片:命中即生效,**无任何阈值/延迟**。
+  // - 移出判定:**不用 zone 的 mouseleave**,改成「指针真的移动到 zone 框外」。
+  //   因为布局变动会让光标瞬间落到框外并触发 mouseleave → 收起 → 又回到框内 →
+  //   再展开,形成右下角反复移入/移出的抖动;而布局变动不派发 mousemove,所以
+  //   改用移动判定即可从根上消除抖动。另加 LEAVE_LOCK(移入后 260ms 内不触发
+  //   移出)作边界兜底——它只作用于「移出」,不参与切换,不影响切换效率。
   const zoneRef = useRef(null);
   const hoverRef = useRef(null);
   useEffect(() => {
     const zone = zoneRef.current;
-    const LEAVE_GRACE = 300;
-    let lastEnterAt = 0;
-    let resetTimer = 0;
-    let anchorPos = null;
+    const LEAVE_LOCK = 260;
+    const ZONE_PAD = 12;
+    let leaveLockedUntil = 0;
     const buttonIntent = (target) => {
       if (!target || !target.closest) return null;
       const skillBtn = target.closest('.pf-skill');
@@ -2342,43 +2345,34 @@ function ProfileContentPC() {
       return null;
     };
     const applyIntent = (intent) => {
-      lastEnterAt = performance.now();
-      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
+      leaveLockedUntil = performance.now() + LEAVE_LOCK;
       if (hoverRef.current && hoverRef.current.type === intent.type && hoverRef.current.id === intent.id) return;
       hoverRef.current = intent;
       setHover(intent);
     };
+    const tryReset = (force) => {
+      if (!hoverRef.current) return;
+      if (!force && performance.now() < leaveLockedUntil) return;
+      hoverRef.current = null;
+      setHover(null);
+    };
     const onMove = (e) => {
       const intent = buttonIntent(e.target);
-      if (!intent) return;
-      if (anchorPos) {
-        const dx = e.clientX - anchorPos.x;
-        const dy = e.clientY - anchorPos.y;
-        if (dx * dx + dy * dy < 64) return;
-      }
-      anchorPos = { x: e.clientX, y: e.clientY };
-      applyIntent(intent);
+      // 命中即生效:去掉 8px 锚点阈值,切换不同卡片零延迟。
+      if (intent) { applyIntent(intent); return; }
+      if (!hoverRef.current || !zone) return;
+      const r = zone.getBoundingClientRect();
+      const outside = e.clientX < r.left - ZONE_PAD || e.clientX > r.right + ZONE_PAD
+        || e.clientY < r.top - ZONE_PAD || e.clientY > r.bottom + ZONE_PAD;
+      if (outside) tryReset(false);
     };
-    const onLeave = () => {
-      anchorPos = null;
-      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
-      const wait = Math.max(0, LEAVE_GRACE - (performance.now() - lastEnterAt));
-      if (wait <= 0) { hoverRef.current = null; setHover(null); return; }
-      resetTimer = setTimeout(() => {
-        resetTimer = 0;
-        if (!zone || !zone.matches(':hover')) { hoverRef.current = null; setHover(null); }
-      }, wait);
-    };
-    // 鼠标移动监听挂到 window 而非 zone:zone 级监听在某些布局/重渲染下收不到
-    // move 事件,导致 hover 完全失效(只剩点击 focus 兜底)。window 级保证一定能
-    // 收到指针移动;且停驻光标不移动就不会派发 move,同样能防「按钮滑到停泊光标下
-    // 偷选」。离场仍由 zone 的 mouseleave(+300ms 宽限 + :hover 复核)负责。
+    // 指针快速甩出整个窗口时补一次强制收起(此时可能已无后续 mousemove)。
+    const onDocLeave = () => tryReset(true);
     window.addEventListener('mousemove', onMove, { passive: true });
-    if (zone) zone.addEventListener('mouseleave', onLeave);
+    document.addEventListener('mouseleave', onDocLeave);
     return () => {
       window.removeEventListener('mousemove', onMove);
-      if (zone) zone.removeEventListener('mouseleave', onLeave);
-      if (resetTimer) clearTimeout(resetTimer);
+      document.removeEventListener('mouseleave', onDocLeave);
     };
   }, []);
 
