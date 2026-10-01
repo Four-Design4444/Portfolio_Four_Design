@@ -1338,15 +1338,11 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
   // frames up front, which keeps every move at the same measured px/ms.
   const NAV_FRAME_BUDGET_MS = 32;
 
-  // Five home screens map onto four nav items: profile and advantage both sit
-  // under About.
+  // Four home screens map onto four nav items, one per screen.
   const itemIndexFromScroll = () => {
     const pageH = window.innerHeight || 1;
-    const section = Math.min(4, Math.max(0, Math.round(window.scrollY / pageH)));
-    if (section <= 0) return 0;
-    if (section <= 2) return 1;
-    if (section === 3) return 2;
-    return 3;
+    const section = Math.min(3, Math.max(0, Math.round(window.scrollY / pageH)));
+    return section;
   };
 
   // Written straight to the node instead of through state: no React re-render
@@ -1506,7 +1502,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
         <>
           <nav className="home-primary-items" aria-label="Primary navigation" ref={homeNavRef}>
             <a data-home-nav-item="0" className={homeActiveSection === 'hero' ? 'is-active' : ''} aria-current={homeActiveSection === 'hero' ? 'location' : undefined} href="#hero" onClick={goHomeWithScroll}>Home</a>
-            <a data-home-nav-item="1" className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} aria-current={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'location' : undefined} href="#profile" onClick={(event) => {
+            <a data-home-nav-item="1" className={homeActiveSection === 'profile' ? 'is-active' : ''} aria-current={homeActiveSection === 'profile' ? 'location' : undefined} href="#profile" onClick={(event) => {
               lockTo(1);
               scrollToHomeSection(event, 'profile');
             }}>About</a>
@@ -1550,7 +1546,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
               onTouchMove={(event) => event.stopPropagation()}
             >
               <a className={homeActiveSection === 'hero' ? 'is-active' : ''} href="#hero" onClick={(event) => { setMobileMenuOpen(false); goHomeWithScroll(event); }}>Home</a>
-              <a className={homeActiveSection === 'profile' || homeActiveSection === 'advantage' ? 'is-active' : ''} href="#profile" onClick={(event) => { setMobileMenuOpen(false); lockTo(1); scrollToHomeSection(event, 'profile'); }}>About</a>
+              <a className={homeActiveSection === 'profile' ? 'is-active' : ''} href="#profile" onClick={(event) => { setMobileMenuOpen(false); lockTo(1); scrollToHomeSection(event, 'profile'); }}>About</a>
               <a className={homeActiveSection === 'projects' ? 'is-active' : ''} href="#projects" onClick={(event) => { setMobileMenuOpen(false); lockTo(2); scrollToHomeSection(event, 'projects'); }}>Portfolio</a>
               <a className={homeActiveSection === 'contact' ? 'is-active' : ''} href="#contact" onClick={(event) => { setMobileMenuOpen(false); lockTo(3); scrollToHomeSection(event, 'contact'); }}>Contact</a>
             </nav>,
@@ -3791,7 +3787,7 @@ function HomePage({ openWorks, paging, active = true }) {
         {isMobile ? <ProfileContent /> : <ProfileContentPC />}
       </section>
 
-      {/* The advantage, projects and contact screens sit on one continuous
+      {/* The projects and contact screens sit on one continuous
           ground. The washes are painted once across all three instead of
           restarting at the top of each screen, so turning a page never reveals a
           fresh bright corner sliding in. */}

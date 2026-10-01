@@ -44,10 +44,9 @@
   font-family: "Rany Display", sans-serif !important;
 }
 
-/* Keep the override scoped to the three selected home-page display headings.
+/* Keep the override scoped to the two selected home-page display headings.
    The later component rules use more specific selectors, so repeat that
    specificity here without touching nav labels or decorative copy. */
-.advantage-head .section-kicker.rany-display-heading,
 .projects-heading h2.rany-display-heading,
 .contact-head .section-kicker.rany-display-heading {
   font-family: "Rany Display", sans-serif !important;
@@ -1854,10 +1853,10 @@ img {
 }
 
 /* The ground the contact screen was built on, lifted off that one screen and
-   painted once across the advantage, projects and contact screens.
+   painted once across the projects and contact screens.
    Painting it per screen made every screen restart the washes at its own top,
    so turning a page brought a fresh bright corner into view ahead of the
-   content. On the wrapper that spans all three the washes are continuous, so
+   content. On the wrapper that spans both the washes are continuous, so
    the seams between screens carry no visible edge. */
 .home-ground {
   background:
@@ -1867,7 +1866,6 @@ img {
 }
 
 /* The screens themselves are transparent so the shared ground shows through. */
-.section.advantage,
 .section.projects {
   background: transparent;
 }
@@ -1894,8 +1892,6 @@ h2 {
 .motion-reveal-section .profile-stats-row,
 .motion-reveal-section .profile-tools,
 .motion-reveal-section .profile-bottom-line,
-.motion-reveal-section .advantage-head,
-.motion-reveal-section .advantage-card,
 .motion-reveal-section.contact-page .section-kicker,
 .motion-reveal-section.contact-page h2,
 .motion-reveal-section .contact-sentence,
@@ -1909,7 +1905,6 @@ h2 {
 }
 
 .motion-reveal-section .profile-bg,
-.motion-reveal-section .advantage-head,
 .motion-reveal-section.contact-page .section-kicker,
 .motion-reveal-section.contact-page h2 {
   clip-path: inset(0 0 100% 0);
@@ -1922,8 +1917,6 @@ h2 {
 .motion-reveal-section.is-visible .profile-stats-row,
 .motion-reveal-section.is-visible .profile-tools,
 .motion-reveal-section.is-visible .profile-bottom-line,
-.motion-reveal-section.is-visible .advantage-head,
-.motion-reveal-section.is-visible .advantage-card,
 .motion-reveal-section.is-visible.contact-page .section-kicker,
 .motion-reveal-section.is-visible.contact-page h2,
 .motion-reveal-section.is-visible .contact-sentence,
@@ -1934,7 +1927,6 @@ h2 {
 }
 
 .profile-shot .profile-label,
-.advantage .advantage-head,
 .contact-page .section-kicker {
   transition-delay: 0ms;
 }
@@ -1945,24 +1937,20 @@ h2 {
 }
 
 .profile-shot .profile-contact-line,
-.advantage .advantage-card:nth-child(1),
 .contact-page .contact-sentence {
   transition-delay: 160ms;
 }
 
 .profile-shot .profile-stats-row,
-.advantage .advantage-card:nth-child(2),
 .contact-page .contact-bottom {
   transition-delay: 230ms;
 }
 
-.profile-shot .profile-tools,
-.advantage .advantage-card:nth-child(3) {
+.profile-shot .profile-tools {
   transition-delay: 300ms;
 }
 
-.profile-shot .profile-bottom-line,
-.advantage .advantage-card:nth-child(4) {
+.profile-shot .profile-bottom-line {
   transition-delay: 370ms;
 }
 
@@ -1972,11 +1960,6 @@ h2 {
 .motion-reveal-section .profile-stats-row div,
 .motion-reveal-section .profile-tools p,
 .motion-reveal-section .profile-tool-list span,
-.motion-reveal-section .advantage-head .section-kicker,
-.motion-reveal-section .advantage-head h2,
-.motion-reveal-section .advantage-head p,
-.motion-reveal-section .advantage-card h3,
-.motion-reveal-section .advantage-card p,
 .motion-reveal-section .projects-heading h2,
 .motion-reveal-section .projects-heading span,
 .motion-reveal-section.contact-page .section-kicker,
@@ -1993,8 +1976,6 @@ h2 {
 }
 
 .motion-reveal-section .profile-name-row .four-logo,
-.motion-reveal-section .advantage-head .section-kicker,
-.motion-reveal-section .advantage-head h2,
 .motion-reveal-section .projects-heading h2,
 .motion-reveal-section.contact-page .section-kicker,
 .motion-reveal-section.contact-page h2 {
@@ -2049,11 +2030,6 @@ h2 {
 .motion-reveal-section.is-visible .profile-stats-row div,
 .motion-reveal-section.is-visible .profile-tools p,
 .motion-reveal-section.is-visible .profile-tool-list span,
-.motion-reveal-section.is-visible .advantage-head .section-kicker,
-.motion-reveal-section.is-visible .advantage-head h2,
-.motion-reveal-section.is-visible .advantage-head p,
-.motion-reveal-section.is-visible .advantage-card h3,
-.motion-reveal-section.is-visible .advantage-card p,
 .motion-reveal-section.is-visible .projects-heading h2,
 .motion-reveal-section.is-visible .projects-heading span,
 .motion-reveal-section.is-visible.contact-page .section-kicker,
@@ -2072,7 +2048,6 @@ h2 {
 }
 
 .profile-shot .profile-name-row h2,
-.advantage .advantage-head h2,
 .projects .projects-heading span,
 .contact-page h2 {
   transition-delay: 120ms;
@@ -2080,7 +2055,6 @@ h2 {
 
 .profile-shot .profile-contact-line span:nth-child(1),
 .profile-shot .profile-stats-row div:nth-child(1),
-.advantage .advantage-head p,
 .contact-page .contact-sentence {
   transition-delay: 210ms;
 }
@@ -2095,29 +2069,21 @@ h2 {
 .profile-shot .profile-contact-line span:nth-child(3),
 .profile-shot .profile-stats-row div:nth-child(3),
 .profile-shot .profile-tool-list span:nth-child(2),
-.advantage-card h3,
 .contact-page .contact-bottom a {
   transition-delay: 350ms;
 }
 
 .profile-shot .profile-tool-list span:nth-child(3),
-.advantage-card p,
 .contact-page .contact-bottom span:nth-child(3) {
   transition-delay: 420ms;
 }
 
-.profile-shot .profile-tool-list span:nth-child(4),
-.advantage-card:nth-child(1) .advantage-icon-image {
+.profile-shot .profile-tool-list span:nth-child(4) {
   transition-delay: 490ms;
 }
 
-.profile-shot .profile-tool-list span:nth-child(5),
-.advantage-card:nth-child(2) .advantage-icon-image {
+.profile-shot .profile-tool-list span:nth-child(5) {
   transition-delay: 560ms;
-}
-
-.advantage-card:nth-child(3) .advantage-icon-image {
-  transition-delay: 630ms;
 }
 
 .profile-shot {
@@ -2187,150 +2153,6 @@ h2 {
 .profile-tools,
 .profile-bottom-line {
   display: none;
-}
-
-.advantage {
-  position: relative;
-  padding: 136px 0 132px;
-  overflow: hidden;
-  background: #000000;
-}
-
-.advantage::before {
-  content: none;
-}
-
-.advantage::after {
-  content: none;
-}
-
-.advantage .container {
-  position: relative;
-  z-index: 1;
-}
-
-.advantage-head {
-  display: grid;
-  justify-items: start;
-  gap: 18px;
-}
-
-.advantage-head .section-kicker,
-.advantage-head h2,
-.advantage-head p {
-  margin: 0;
-}
-
-.advantage-head .section-kicker {
-  color: #ffffff;
-  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Black", sans-serif;
-  font-size: clamp(74px, 7.2vw, 132px);
-  line-height: 0.88;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.advantage-head h2 {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 46px;
-  padding: 0 28px;
-  border: 1px solid #0060f4;
-  border-radius: 999px;
-  background: rgba(0, 96, 244, 0.1);
-  color: #0060f4;
-  font-size: 22px;
-  line-height: 1;
-  font-weight: 600;
-}
-
-.advantage-head p:last-child {
-  display: none;
-}
-
-.advantage.motion-reveal-section .advantage-head {
-  opacity: 1;
-  transform: none;
-  clip-path: none;
-}
-
-.advantage.motion-reveal-section .advantage-head p:last-child {
-  display: none;
-}
-
-.advantage-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 72px;
-  overflow: visible;
-}
-
-.advantage-glow-card {
-  width: 100%;
-  min-width: 0;
-  background: #131313;
-  border-color: rgba(255, 255, 255, 0.18);
-  transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 360ms ease;
-}
-
-.advantage-glow-card .border-glow-inner {
-  border-radius: inherit;
-  overflow: hidden;
-}
-
-.advantage-card {
-  position: relative;
-  display: flex;
-  min-height: 236px;
-  padding: 54px 42px 44px;
-  flex-direction: column;
-  align-items: flex-start;
-  border: 0;
-  border-radius: inherit;
-  overflow: hidden;
-  background: transparent;
-  transition:
-    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 360ms ease;
-}
-
-.advantage-glow-card:hover .advantage-card {
-  background: rgba(255, 255, 255, 0.012);
-  transform: translateY(0);
-}
-
-.advantage-glow-card:hover,
-.advantage-reveal:hover .advantage-glow-card,
-.advantage-reveal:has(.advantage-glow-card:hover) .advantage-glow-card {
-  transform: translate3d(0, -10px, 0);
-}
-
-.advantage-icon-image {
-  display: block;
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-}
-
-.advantage-card h3 {
-  margin: 30px 0 0;
-  color: #ffffff;
-  font-size: clamp(22px, 1.45vw, 30px);
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.advantage-card p {
-  margin: 18px 0 0;
-  max-width: 330px;
-  color: rgba(255, 255, 255, 0.56);
-  font-size: clamp(12px, 0.78vw, 15px);
-  line-height: 1.64;
 }
 
 .projects {
@@ -2607,10 +2429,6 @@ h2 {
   color: rgba(255, 255, 255, 0.56);
 }
 
-.advantage-reveal:focus-within .advantage-glow-card {
-  transform: translate3d(0, -10px, 0);
-}
-
 .projects.is-visible .projects-heading {
   opacity: 1;
   transform: translate3d(0, 0, 0);
@@ -2618,17 +2436,12 @@ h2 {
   clip-path: none;
 }
 
-.advantage-reveal.is-visible:hover,
-.advantage-reveal.is-visible:focus-within {
-  --card-lift: 0px;
-}
-
 .contact-page {
   min-height: 100vh;
   display: flex;
   position: relative;
   align-items: center;
-  /* Shares the .home-ground washes with the advantage and projects screens. */
+  /* Shares the .home-ground washes with the projects screen. */
   background: transparent;
   overflow: hidden;
 }
@@ -2665,7 +2478,7 @@ h2 {
 }
 
 
-/* The same ray burst, shared by the advantage and projects screens. It sits in
+/* The same ray burst, shared by the projects screen. It sits in
    its own viewport-fixed layer rather than inside either section: paging scrolls
    the sections, and a fixed layer does not move with them, so the light holds
    its position across a page turn instead of sliding away with the content.
@@ -3360,10 +3173,6 @@ body:has(.work-detail-page) .detail-hero img {
 }
 
 @media (max-width: 1100px) {
-  .advantage-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: 72px;
-  }
 
   .project-list {
     margin-top: 64px;
@@ -3560,34 +3369,6 @@ body:has(.work-detail-page) .detail-hero img {
     padding-top: 120px;
   }
 
-  .advantage {
-    padding: 120px 0 110px;
-  }
-
-  .advantage-head {
-    gap: 18px;
-  }
-
-  .advantage-head .section-kicker {
-    font-size: clamp(58px, 17vw, 100px);
-  }
-
-  .advantage-head h2 {
-    min-height: 40px;
-    padding: 0 22px;
-    font-size: 18px;
-  }
-
-  .advantage-grid {
-    grid-template-columns: 1fr;
-    gap: 18px;
-    margin-top: 48px;
-  }
-
-  .advantage-card {
-    min-height: 230px;
-    padding: 38px 30px 34px;
-  }
 
   .projects-heading {
     gap: 16px;
@@ -4090,7 +3871,6 @@ html[data-paging="on"] main {
    index.html, so the screen height is --vh * 100. */
 html[data-paging="on"] .hero-video-stage,
 html[data-paging="on"] .profile-shot,
-html[data-paging="on"] .advantage,
 html[data-paging="on"] .section.projects,
 html[data-paging="on"] .contact-page {
   scroll-snap-align: start;
@@ -4145,18 +3925,7 @@ html[data-paging="on"] .profile-words-art {
   width: min(47.55%, 102vh);
 }
 
-/* --- page 03: capabilities ----------------------------------------------- */
-
-/* The content is a little under one screen tall, so it is centred instead of
-   being pinned under a 136px pad that only made sense on a scrolling page. */
-html[data-paging="on"] .advantage {
-  height: calc(var(--vh, 1vh) * 100);
-  padding: 0;
-  display: flex;
-  align-items: center;
-}
-
-/* --- page 04: selected work ---------------------------------------------- */
+/* --- page 03: selected work ---------------------------------------------- */
 
 html[data-paging="on"] .section.projects {
   height: calc(var(--vh, 1vh) * 100);
