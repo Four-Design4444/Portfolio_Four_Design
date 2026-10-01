@@ -2281,6 +2281,59 @@ function ProfileContentPC() {
   const [hover, setHover] = useState(null);
   const activeSkill = hover?.type === 'skill' ? PC_SKILLS.find((s) => s.id === hover.id) || null : null;
   const activeStat = hover?.type === 'stat' ? PC_STATS.find((s) => s.id === hover.id) || null : null;
+
+  // 意图只由真实指针移动驱动（移植自 demo）：逻辑跑在 mousemove 里，主动切换依旧即时；
+  // 而 morph 把按钮滑到停泊光标下方时浏览器会 fire mouseenter 但不会 fire mousemove，
+  // 因此 parked 光标永远偷不到选择。移动还需距上次落点 >8px，避免停驻微抖误触。
+  // 离开侧保留 300ms 宽限，并重新核对 zone 真实 :hover 再复位。
+  const zoneRef = useRef(null);
+  useEffect(() => {
+    const zone = zoneRef.current;
+    if (!zone) return undefined;
+    const LEAVE_GRACE = 300;
+    let lastEnterAt = 0;
+    let resetTimer = 0;
+    let anchorPos = null;
+    const buttonIntent = (target) => {
+      if (!target || !target.closest) return null;
+      const skillBtn = target.closest('.pf-skill');
+      if (skillBtn) return { type: 'skill', id: skillBtn.dataset.id };
+      const statBtn = target.closest('.pf-stat');
+      if (statBtn) return { type: 'stat', id: statBtn.dataset.id };
+      return null;
+    };
+    const onMove = (e) => {
+      const intent = buttonIntent(e.target);
+      if (!intent) return;
+      if (anchorPos) {
+        const dx = e.clientX - anchorPos.x;
+        const dy = e.clientY - anchorPos.y;
+        if (dx * dx + dy * dy < 64) return;
+      }
+      anchorPos = { x: e.clientX, y: e.clientY };
+      lastEnterAt = performance.now();
+      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
+      setHover(intent);
+    };
+    const onLeave = () => {
+      anchorPos = null;
+      if (resetTimer) { clearTimeout(resetTimer); resetTimer = 0; }
+      const wait = Math.max(0, LEAVE_GRACE - (performance.now() - lastEnterAt));
+      if (wait <= 0) { setHover(null); return; }
+      resetTimer = setTimeout(() => {
+        resetTimer = 0;
+        if (!zone.matches(':hover')) setHover(null);
+      }, wait);
+    };
+    zone.addEventListener('mousemove', onMove, { passive: true });
+    zone.addEventListener('mouseleave', onLeave);
+    return () => {
+      zone.removeEventListener('mousemove', onMove);
+      zone.removeEventListener('mouseleave', onLeave);
+      if (resetTimer) clearTimeout(resetTimer);
+    };
+  }, [setHover]);
+
   return (
     <div className="pf-inner">
       <div className="pf-bg" aria-hidden="true">
@@ -2292,22 +2345,22 @@ function ProfileContentPC() {
           <span className="pf-title-cn">邱锋江</span>
         </h2>
 
-        {/* One persistent row doubles as the resting stat cards (个人信息-经验
-            图2) and the docked tab strip (图1): on stat hover the cards join
-            and dock onto the description card, so number/icon/label glide
-            into position and glide back on leave — no crossfade between
-            separate trees. The hover zone wraps card + skill strip with an
-            outer safety margin: once the hover state is armed, pointer drift
-            around the block cannot trigger the leave reset. */}
-        <div className="pf-hover-zone" onMouseLeave={() => setHover(null)}>
-          <div className="pf-swap">
+        {/* 调换后:联系方式上移到经验卡上方,带完整点击复制交互,始终可见不随 hover 隐藏。 */}
+        <div className="pf-contact">
+          <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
+          <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
+        </div>
+
+        {/* 持久 stat row 兼作静止经验卡与 dock 后的 tab 条; hover 时卡片并入并
+           dock 到描述卡上。zone 包裹 card+技能条并接管 mousemove 意图(见 effect)。 */}
+        <div className="pf-hover-zone" ref={zoneRef}>
+          <div className={`pf-swap${activeSkill ? ' has-skill' : ''}`}>
             <div className={`pf-statrow${activeStat ? ' is-docked' : ''}${activeSkill ? ' is-hidden' : ''}`}>
               {PC_STATS.map((s) => (
                 <button
                   type="button"
                   key={s.id}
                   className={`pf-stat${activeStat?.id === s.id ? ' is-active' : ''}`}
-                  onMouseEnter={() => setHover({ type: 'stat', id: s.id })}
                   onFocus={() => setHover({ type: 'stat', id: s.id })}
                 >
                   <strong>{s.value}</strong>
@@ -2317,10 +2370,6 @@ function ProfileContentPC() {
                   </span>
                 </button>
               ))}
-            </div>
-            <div className={`pf-contact${activeStat || activeSkill ? ' is-hidden' : ''}`}>
-              <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
-              <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
             </div>
             <div className={`pf-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
               {activeStat && (
@@ -2339,10 +2388,7 @@ function ProfileContentPC() {
             </div>
           </div>
 
-          <div
-            className="pf-skills-entrance"
-            onMouseEnter={() => { if (hover?.type === 'stat') setHover(null); }}
-          >
+          <div className={`pf-skills-entrance${activeSkill ? ' is-flush' : ''}`}>
             <div
               className={`pf-skills${activeSkill ? ' has-active' : ''}${activeStat ? ' is-hidden' : ''}`}
             >
@@ -2351,7 +2397,6 @@ function ProfileContentPC() {
                   type="button"
                   key={s.id}
                   className={`pf-skill${activeSkill?.id === s.id ? ' is-active' : ''}`}
-                  onMouseEnter={() => setHover({ type: 'skill', id: s.id })}
                   onFocus={() => setHover({ type: 'skill', id: s.id })}
                 >
                   <LazyImage className="pf-skill-icon" src={s.icon} alt={s.name} />

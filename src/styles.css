@@ -4269,6 +4269,14 @@ html[data-paging="on"] .contact-bottom {
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
 .profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }
 
+/* 调换后:技能条与上方经验卡之间留 dock 间距;hover skill 时收拢,卡片与条
+   在视觉上连成一体(参考图2)。 */
+.pf-skills-entrance {
+  margin-top: 10px;
+  transition: margin-top 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pf-skills-entrance.is-flush { margin-top: 0; }
+
 .pf-title {
   display: flex;
   align-items: baseline;
@@ -4293,8 +4301,13 @@ html[data-paging="on"] .contact-bottom {
 .pf-swap {
   position: relative;
   width: 100%;
-  min-height: clamp(200px, 24.5vh, 252px);
-  margin-top: clamp(22px, 4.2vh, 46px);
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
+  margin-top: clamp(36px, 7.1vh, 78px);
+  transition: min-height 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pf-swap.has-skill {
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 170px);
 }
 
 /* Hover safety zone: wraps card + skill strip. Padding extends the pointer
@@ -4307,6 +4320,9 @@ html[data-paging="on"] .contact-bottom {
   width: calc(100% + 56px);
   margin: -28px;
   padding: 28px;
+  /* 命中区需覆盖静止与展开两态:否则光标停在 rest 条底与 dock 条底之间的
+     带状空白时,Chrome 在布局变动后重算 hover 会反复 enter/leave 翻转状态。 */
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 250px);
 }
 
 .pf-skill-card {
@@ -4325,14 +4341,19 @@ html[data-paging="on"] .contact-bottom {
    leave. The row keeps a constant height (the active card's height), so
    the card docked beneath it never bounces during the morph. */
 .pf-statrow {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   align-items: flex-end;
   width: max-content;
   max-width: 100%;
   gap: clamp(14px, 1.2vw, 22px);
   min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
+  margin-left: 0;
   transition:
     gap 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 300ms ease;
 }
 
@@ -4343,6 +4364,8 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-statrow.is-docked {
   gap: 0;
+  /* dock 时整行右移 16px,与描述卡错开,露出卡片圆角左上。 */
+  margin-left: 16px;
 }
 
 .pf-stat {
@@ -4465,10 +4488,10 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-contact {
-  margin-top: clamp(18px, 3.4vh, 36px);
+  margin-top: clamp(28px, 4.6vh, 50px);
   display: flex;
   flex-direction: column;
-  gap: clamp(10px, 1.8vh, 18px);
+  gap: clamp(14px, 2vh, 24px);
   transition:
     opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -4749,10 +4772,13 @@ html[data-paging="on"] .contact-bottom {
   gap: 0;
   width: max-content;
   max-width: 100%;
+  /* dock 时整条右移 16px,与描述卡错开,露出卡片圆角。 */
+  margin-left: 16px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-top: none;
   border-radius: 0 0 14px 14px;
   overflow: hidden;
+  transition: margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pf-skills.has-active .pf-skill {
