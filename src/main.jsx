@@ -1741,27 +1741,31 @@ function MobileShowcaseDeck({ items, openWorks }) {
     return r;
   };
 
-  /* Poker-deck pose: segment-wise asymmetric, like the reference screenshot. */
+  /* Poker-deck pose: segment-wise asymmetric, like the reference screenshot.
+     SIDE_OFFSET scales with the card: the deck is sized from the stage height
+     (see .mob-stage) and the side cards keep a constant fraction of the card
+     width, so enlarging the whole component means raising both together. */
+  const SIDE_OFFSET = 72;
   const poseAt = (eff) => {
     if (eff >= 0) {
       if (eff <= 1) {                                  // right slot -> centre (covers up)
         const f = eff;
-        return { x: 64 * f, s: 1 - 0.14 * f, r: 8 * f, dim: 0.62 * f, o: 1 };
+        return { x: SIDE_OFFSET * f, s: 1 - 0.14 * f, r: 8 * f, dim: 0.62 * f, o: 1 };
       }
       const f = CL(eff - 1, 0, 1);                     // 0 (right slot) -> 1 (inside deck)
       return {
-        x: 64 * (1 - f), s: 0.86 + 0.09 * f, r: 8 * (1 - f),
+        x: SIDE_OFFSET * (1 - f), s: 0.86 + 0.09 * f, r: 8 * (1 - f),
         dim: 0.62 + 0.18 * f,
         o: 1 - CL((f - 0.5) / 0.5, 0, 1),
       };
     }
     if (eff >= -1) {                                   // centre -> left slot
       const f = -eff;
-      return { x: -64 * f, s: 1 - 0.14 * f, r: -8 * f, dim: 0.62 * f, o: 1 };
+      return { x: -SIDE_OFFSET * f, s: 1 - 0.14 * f, r: -8 * f, dim: 0.62 * f, o: 1 };
     }
     const f = CL(-eff - 1, 0, 1);                      // left slot -> back into deck (slides right)
     return {
-      x: -64 * (1 - f), s: 0.86 + 0.09 * f, r: -8 * (1 - f),
+      x: -SIDE_OFFSET * (1 - f), s: 0.86 + 0.09 * f, r: -8 * (1 - f),
       dim: 0.62 + 0.18 * f,
       o: 1 - CL((f - 0.5) / 0.5, 0, 1),
     };
@@ -2325,7 +2329,6 @@ function ProfileContentPC() {
   const hoverRef = useRef(null);
   useEffect(() => {
     const zone = zoneRef.current;
-    if (!zone) return undefined;
     const LEAVE_GRACE = 300;
     let lastEnterAt = 0;
     let resetTimer = 0;
@@ -2363,20 +2366,31 @@ function ProfileContentPC() {
       if (wait <= 0) { hoverRef.current = null; setHover(null); return; }
       resetTimer = setTimeout(() => {
         resetTimer = 0;
-        if (!zone.matches(':hover')) { hoverRef.current = null; setHover(null); }
+        if (!zone || !zone.matches(':hover')) { hoverRef.current = null; setHover(null); }
       }, wait);
     };
-    zone.addEventListener('mousemove', onMove, { passive: true });
-    zone.addEventListener('mouseleave', onLeave);
+    // 鼠标移动监听挂到 window 而非 zone:zone 级监听在某些布局/重渲染下收不到
+    // move 事件,导致 hover 完全失效(只剩点击 focus 兜底)。window 级保证一定能
+    // 收到指针移动;且停驻光标不移动就不会派发 move,同样能防「按钮滑到停泊光标下
+    // 偷选」。离场仍由 zone 的 mouseleave(+300ms 宽限 + :hover 复核)负责。
+    window.addEventListener('mousemove', onMove, { passive: true });
+    if (zone) zone.addEventListener('mouseleave', onLeave);
     return () => {
-      zone.removeEventListener('mousemove', onMove);
-      zone.removeEventListener('mouseleave', onLeave);
+      window.removeEventListener('mousemove', onMove);
+      if (zone) zone.removeEventListener('mouseleave', onLeave);
       if (resetTimer) clearTimeout(resetTimer);
     };
   }, []);
 
   return (
     <div className="pf-inner">
+      {typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('dbg') && (
+        <div
+          style={{ position: 'fixed', top: 8, left: 8, zIndex: 9999, color: '#5dff8f', font: '12px/1.4 monospace', background: 'rgba(0,0,0,.72)', padding: '6px 8px', borderRadius: 6, pointerEvents: 'none', whiteSpace: 'pre' }}
+        >
+          {`[pf-dbg] hover=${JSON.stringify(hover)}\n`}
+        </div>
+      )}
       <div className="pf-bg" aria-hidden="true">
         <LazyImage className="pf-bg-img" src={pcPortraitBg} alt="" />
       </div>
@@ -2401,6 +2415,7 @@ function ProfileContentPC() {
                 <button
                   type="button"
                   key={s.id}
+                  data-id={s.id}
                   className={`pf-stat${activeStat?.id === s.id ? ' is-active' : ''}`}
                   onFocus={() => setHover({ type: 'stat', id: s.id })}
                 >
@@ -2437,6 +2452,7 @@ function ProfileContentPC() {
                 <button
                   type="button"
                   key={s.id}
+                  data-id={s.id}
                   className={`pf-skill${activeSkill?.id === s.id ? ' is-active' : ''}`}
                   onFocus={() => setHover({ type: 'skill', id: s.id })}
                 >
