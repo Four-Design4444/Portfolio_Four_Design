@@ -4109,8 +4109,9 @@ html[data-paging="on"] .contact-bottom {
   /* 槽位高度**恒定**(不再随 has-skill 增长)。技能卡是 inset:0,高度完全由槽位
      决定:槽位若做动画,卡片就会「先被文字顶死、再往下撑开」= 两段。恒定后卡片
      尺寸永不变化,移入时只有淡入 + 技能条 dock + 名字收缩,三者同为 480ms。
-     150px = 按最长文案(Figma 3 行)收紧:卡内底部留白≈顶部内边距,不再大片空。 */
-  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 150px);
+     128px 按最长文案(Figma 3 行)+ 收紧后的内边距/行高估算,静止态预留空隙
+     =(槽位-经验卡行高)+ dock,已从 152px 压到 ~50px。 */
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 128px);
   margin-top: clamp(36px, 7.1vh, 78px);
 }
 
@@ -4468,8 +4469,11 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-skill-card-body {
-  /* 不再单独淡入:文字与卡片一次成型,避免「卡片先出来、文字第二段才淡入」的两段感。 */
-  animation: none;
+  /* 恢复文字淡入:切换不同技能时 body 因 key 变化重挂载,靠这段动画淡入。
+     之前设 none 是为了消掉「卡片在长大 + 文字另起一段淡入」的两段感;现在卡片
+     尺寸已恒定(不再长大),只剩淡入,不会再产生两段。300ms < 卡片 480ms 淡入,
+     首次出现时文字先于卡片底色显完,观感仍是一次成型。 */
+  animation: pf-card-in 300ms ease both;
 }
 
 @keyframes pf-card-in {

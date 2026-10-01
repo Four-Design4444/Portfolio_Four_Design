@@ -2324,18 +2324,20 @@ function ProfileContentPC() {
   //   不派发 mousemove,因此 parked 光标永远偷不到选择(解决「悬停 Blender 时
   //   Codex/Photoshop 滑过来被切走」)。这条是防偷选的根本保证,不靠任何阈值。
   // - 切换不同卡片:命中即生效,**无任何阈值/延迟**。
-  // - 移出判定:**不用 zone 的 mouseleave**,改成「指针真的移动到 zone 框外」。
-  //   因为布局变动会让光标瞬间落到框外并触发 mouseleave → 收起 → 又回到框内 →
-  //   再展开,形成右下角反复移入/移出的抖动;而布局变动不派发 mousemove,所以
-  //   改用移动判定即可从根上消除抖动。另加 LEAVE_LOCK(移入后 260ms 内不触发
-  //   移出)作边界兜底——它只作用于「移出」,不参与切换,不影响切换效率。
+  // - 防偷选不靠阈值,靠**坐标比对**:技能卡展开把 Codex/Photoshop 顶到停泊光标下时,
+  //   浏览器会以「与上次完全相同」的 clientX/clientY 补发 mousemove(光标其实没动)。
+  //   坐标完全未变 → 判定为布局位移补发,既不改意图(不偷选)也不判移出(不抖动);
+  //   坐标有变 → 真实指针移动,立即生效。零阈值、零延迟,两个问题一起解决。
+  // - 移出判定:**不用 zone 的 mouseleave**,改成「指针真的移动到 zone 框外」。布局
+  //   变动会让光标瞬间落到框外并触发 mouseleave → 收起 → 又回框内 → 再展开的抖动闭环,
+  //   而布局变动不派发真实移动,故从根上消除。**移出立即复位,不加任何锁定延迟。**
   const zoneRef = useRef(null);
   const hoverRef = useRef(null);
   useEffect(() => {
     const zone = zoneRef.current;
-    const LEAVE_LOCK = 260;
     const ZONE_PAD = 12;
-    let leaveLockedUntil = 0;
+    let lastX = null;
+    let lastY = null;
     const buttonIntent = (target) => {
       if (!target || !target.closest) return null;
       const skillBtn = target.closest('.pf-skill');
@@ -2345,29 +2347,34 @@ function ProfileContentPC() {
       return null;
     };
     const applyIntent = (intent) => {
-      leaveLockedUntil = performance.now() + LEAVE_LOCK;
       if (hoverRef.current && hoverRef.current.type === intent.type && hoverRef.current.id === intent.id) return;
       hoverRef.current = intent;
       setHover(intent);
     };
-    const tryReset = (force) => {
-      if (!hoverRef.current) return;
-      if (!force && performance.now() < leaveLockedUntil) return;
-      hoverRef.current = null;
-      setHover(null);
-    };
     const onMove = (e) => {
+      // 坐标完全未变 = 布局位移补发的事件(光标没动):拦掉,既不偷选也不误判移出。
+      if (lastX !== null && e.clientX === lastX && e.clientY === lastY) return;
+      lastX = e.clientX;
+      lastY = e.clientY;
       const intent = buttonIntent(e.target);
-      // 命中即生效:去掉 8px 锚点阈值,切换不同卡片零延迟。
+      // 命中即生效:零阈值,切换不同卡片无延迟。
       if (intent) { applyIntent(intent); return; }
       if (!hoverRef.current || !zone) return;
       const r = zone.getBoundingClientRect();
       const outside = e.clientX < r.left - ZONE_PAD || e.clientX > r.right + ZONE_PAD
         || e.clientY < r.top - ZONE_PAD || e.clientY > r.bottom + ZONE_PAD;
-      if (outside) tryReset(false);
+      // 移出立即复位,不加任何锁定/延迟。
+      if (outside) {
+        hoverRef.current = null;
+        setHover(null);
+      }
     };
     // 指针快速甩出整个窗口时补一次强制收起(此时可能已无后续 mousemove)。
-    const onDocLeave = () => tryReset(true);
+    const onDocLeave = () => {
+      if (!hoverRef.current) return;
+      hoverRef.current = null;
+      setHover(null);
+    };
     window.addEventListener('mousemove', onMove, { passive: true });
     document.addEventListener('mouseleave', onDocLeave);
     return () => {
