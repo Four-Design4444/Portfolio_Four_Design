@@ -2837,7 +2837,7 @@ h2 {
   width: var(--image-w);
   height: var(--image-h);
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--image-radius, 12px);
   background: #000000;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
@@ -4109,9 +4109,9 @@ html[data-paging="on"] .contact-bottom {
   /* 槽位高度**恒定**(不再随 has-skill 增长)。技能卡是 inset:0,高度完全由槽位
      决定:槽位若做动画,卡片就会「先被文字顶死、再往下撑开」= 两段。恒定后卡片
      尺寸永不变化,移入时只有淡入 + 技能条 dock + 名字收缩,三者同为 480ms。
-     128px 按最长文案(Figma 3 行)+ 收紧后的内边距/行高估算,静止态预留空隙
-     =(槽位-经验卡行高)+ dock,已从 152px 压到 ~50px。 */
-  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 128px);
+     120px 按最长文案(Figma 3 行、行高 1.7)估算;静止态预留空隙
+     =(槽位-经验卡行高)+ dock,已压到 ~40px。 */
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 120px);
   margin-top: clamp(36px, 7.1vh, 78px);
 }
 
@@ -4207,7 +4207,9 @@ html[data-paging="on"] .contact-bottom {
    alignment so the active card's number/label sit dead-center and the
    collapsed card's lone icon does too. */
 .pf-statrow.is-docked .pf-stat {
-  min-width: clamp(96px, 5.9vw, 114px);
+  /* 收起标签只露一个图标,min-width 从 96-114px 压到 48-64px:此前图标两侧
+     各留 ~45px 空白,标签条被撑得过宽。 */
+  min-width: clamp(48px, 3.2vw, 64px);
   /* 垂直内边距收紧(继承自静止卡的 28/34):dock 后的标签条整体高度压下来。 */
   padding-top: 16px;
   padding-bottom: 18px;
@@ -4238,7 +4240,8 @@ html[data-paging="on"] .contact-bottom {
   display: block;
   max-height: 44px;
   overflow: hidden;
-  margin: 0 0 10px;
+  /* 数字与下方图标行的间距收紧(10→4):静止卡与 dock 选中标签共用。 */
+  margin: 0 0 4px;
   opacity: 1;
   font-family: "Rany Display", sans-serif;
   font-weight: 500;
@@ -4489,7 +4492,7 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-skill-title {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: clamp(14px, 0.85vw, 16px);
   letter-spacing: 0.6px;
   color: #fff;
@@ -4498,7 +4501,7 @@ html[data-paging="on"] .contact-bottom {
 .pf-skill-text {
   margin: 0;
   font-size: clamp(12.5px, 0.76vw, 14px);
-  line-height: 1.8;
+  line-height: 1.7;
   color: #b9bec8;
 }
 
@@ -4506,9 +4509,9 @@ html[data-paging="on"] .contact-bottom {
    becomes an accordion — active pill expands with a border, the rest collapse
    to bare icon squares (技能展示.jpg). */
 .pf-skills {
-  /* dock 间距(原 clamp(20px,4vh,44px)→clamp(14px,2.2vh,26px)→再收):静止态
-     技能条与经验卡之间的空隙 = 槽位预留区 + 这段 dock。 */
-  --pf-dock: clamp(10px, 1.5vh, 18px);
+  /* dock 间距(一路从 clamp(20px,4vh,44px) 收到现在):静止态技能条与经验卡
+     之间的空隙 = 槽位预留区 + 这段 dock。 */
+  --pf-dock: clamp(6px, 1vh, 12px);
   display: flex;
   align-items: center;
   gap: clamp(10px, 1vw, 16px);

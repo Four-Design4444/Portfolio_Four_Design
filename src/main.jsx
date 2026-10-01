@@ -724,6 +724,9 @@ function App() {
       const ready = Boolean(hero && hero.complete && hero.naturalWidth > 0);
 
       if (rect && rect.width > 0 && rect.height > 0 && ready) {
+        // The hero figure is a full-bleed image with square corners, so the
+        // overlay has to unwind to exactly that before handing the frame over.
+        rect.radius = hero ? getComputedStyle(hero).borderRadius : '0px';
         apply(rect);
         trackedFrames += 1;
       } else if (!hasTarget && attempts >= 260) {
@@ -732,7 +735,7 @@ function App() {
         const layerImg = document.querySelector('.shared-image-transition img');
         if (layerImg && layerImg.naturalWidth > 0 && layerImg.naturalHeight > 0) {
           const width = window.innerWidth || 390;
-          apply({ x: 0, y: 0, width, height: width * (layerImg.naturalHeight / layerImg.naturalWidth) });
+          apply({ x: 0, y: 0, width, height: width * (layerImg.naturalHeight / layerImg.naturalWidth), radius: '0px' });
         } else {
           setSharedImage(null);
           return;
@@ -818,6 +821,7 @@ function App() {
       setSharedImage({
         src: transitionImage.src,
         fromRect: transitionImage.rect,
+        fromRadius: transitionImage.radius ?? '12px',
         toRect: null,
         workId
       });
@@ -959,15 +963,34 @@ function readNavRect(selector) {
   };
 }
 
+// The image itself never carries the corner: on the list it is the card shell
+// (mobile) or the image button (desktop) that clips it. Walk up to whatever is
+// actually rounding the picture so the morph starts from the visible radius.
+function readClippedRadius(element) {
+  let node = element;
+  while (node && node !== document.body) {
+    const radius = getComputedStyle(node).borderRadius;
+    if (radius && radius !== '0px' && radius !== '0%') return radius;
+    node = node.parentElement;
+  }
+  return '0px';
+}
+
 function SharedImageTransition({ transition, onDone }) {
   const [isMoving, setIsMoving] = useState(false);
   const targetRect = transition.toRect ?? transition.fromRect;
   const rect = isMoving ? targetRect : transition.fromRect;
+  // Corners travel with the box: the overlay starts with the radius that is
+  // really clipping the cover on the list (mobile 18px / desktop 12px) and
+  // unwinds to the radius the hero figure itself has, so the hand-off at the
+  // end matches instead of snapping square.
+  const radius = (isMoving ? targetRect.radius : transition.fromRadius) ?? transition.fromRadius ?? '12px';
   const style = {
     '--image-x': `${rect.x}px`,
     '--image-y': `${rect.y}px`,
     '--image-w': `${rect.width}px`,
-    '--image-h': `${rect.height}px`
+    '--image-h': `${rect.height}px`,
+    '--image-radius': radius
   };
 
   useEffect(() => {
@@ -3963,6 +3986,7 @@ function WorksPage({ activeCategory, goDetail }) {
     const rect = image ? readNavRect(`[data-work-image="${work.id}"]`) : null;
     goDetail(activeCategory.id, work.id, {
       rect,
+      radius: image ? readClippedRadius(image) : null,
       src: work.detailHero ?? work.image
     });
   };
