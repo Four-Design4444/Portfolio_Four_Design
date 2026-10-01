@@ -750,28 +750,92 @@ html[data-device="mobile"] .works-divider {
 }
 
 html[data-device="mobile"] .works-showcase-list {
-  gap: 56px;
-  margin-top: 44px;
+  gap: 32px;
+  margin-top: 36px;
+}
+
+/* Overlay entry card: one full-bleed image per work, copy pinned to the
+   bottom-left over a darkening gradient, text-link entry bottom-right. */
+html[data-device="mobile"] .showcase-item {
+  position: relative;
+  display: block;
+  aspect-ratio: 5 / 3;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #1d1d1d;
+}
+
+html[data-device="mobile"] .showcase-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 46%,
+    rgba(0, 0, 0, 0.38) 76%,
+    rgba(0, 0, 0, 0.62) 100%
+  );
+  pointer-events: none;
 }
 
 html[data-device="mobile"] .showcase-main-img {
-  aspect-ratio: 4 / 3;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  aspect-ratio: auto;
+  height: 100%;
+  border-radius: 0;
+}
+
+html[data-device="mobile"] .showcase-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px 14px;
+  padding: 0 clamp(14px, 4.4vw, 18px) clamp(13px, 4vw, 17px);
 }
 
 html[data-device="mobile"] .showcase-copy h2 {
-  font-size: 34px;
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: clamp(21px, 6.2vw, 25px);
+  line-height: 1.25;
+  font-weight: 700;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
 }
 
 html[data-device="mobile"] .showcase-copy p {
-  margin-top: 14px;
-  font-size: 15.5px;
-  line-height: 1.7;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
 html[data-device="mobile"] .showcase-copy button {
-  height: 52px;
-  margin-top: 26px;
-  font-size: 15px;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+html[data-device="mobile"] .showcase-copy button::after {
+  content: " >";
+  font-size: 12px;
 }
 
 /* --- 6. Work detail ----------------------------------------------------- */

@@ -4105,17 +4105,16 @@ html[data-paging="on"] .contact-bottom {
 .pf-swap {
   position: relative;
   width: 100%;
-  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
+  /* 槽位高度**恒定**(不再随 has-skill 增长)。技能卡是 inset:0,高度完全由槽位
+     决定:槽位若从 91px 动画涨到 200px,卡片就会「先被文字顶死(91px 装不下
+     186px 正文)、第二段再往下撑开间距」= 必然两段。恒定后卡片尺寸永不变化,
+     移入时只有淡入 + 技能条 dock + 名字收缩,三者同为 480ms 同时开始结束。 */
+  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 200px);
   margin-top: clamp(36px, 7.1vh, 78px);
-  transition: min-height 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.pf-swap.has-skill {
-  /* 200px 而非 170px:技能卡是 inset:0 被槽位限高,最长文案(Figma 那条
-     约 176px:标题 40 + 3 行正文 76 + 上下内边距 60)会溢出卡片背景。
-     槽位撑够,文字才完整落在卡片内。 */
-  min-height: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 200px);
-}
+/* .pf-swap.has-skill 不再覆写 min-height:槽位高度已恒定,任何尺寸变化都会让
+   inset:0 的技能卡跟着变,重新制造「先顶死、再撑开」的两段感。 */
 
 /* Hover safety zone: wraps card + skill strip. Padding extends the pointer
    area 28px beyond the block on every side; equal negative margins cancel it
