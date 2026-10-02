@@ -4608,6 +4608,16 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-skill:hover { transform: translateY(-2px); }
 
+.pf-skill:first-child {
+  /* 让第一个技能按钮的图标左缘与上方经验卡左缘视觉对齐(抵消按钮默认 16px 左内边距)。 */
+  padding-left: 0;
+}
+
+.pf-skills.has-active .pf-skill:first-child {
+  /* dock/展开态恢复对称内边距,避免 active 单元格比邻单元格少一块。 */
+  padding-left: 24px;
+}
+
 .pf-skill-icon {
   width: 22px;
   height: 22px;

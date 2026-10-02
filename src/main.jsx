@@ -2459,7 +2459,6 @@ function ProfileContentPC() {
   const hoverRef = useRef(null);
   useEffect(() => {
     const zone = zoneRef.current;
-    const ZONE_PAD = 12;
     let lastX = null;
     let lastY = null;
     const buttonIntent = (target) => {
@@ -2484,6 +2483,9 @@ function ProfileContentPC() {
       // 命中即生效:零阈值,切换不同卡片无延迟。
       if (intent) { applyIntent(intent); return; }
       if (!hoverRef.current || !zone) return;
+      // 经验卡展开时给下方留更大缓冲:阅读描述时轻微下移不会立刻离开 zone,
+      // 避免直接穿过层级误触到下方技能条。
+      const ZONE_PAD = hoverRef.current?.type === 'stat' ? 72 : 12;
       const r = zone.getBoundingClientRect();
       const outside = e.clientX < r.left - ZONE_PAD || e.clientX > r.right + ZONE_PAD
         || e.clientY < r.top - ZONE_PAD || e.clientY > r.bottom + ZONE_PAD;
