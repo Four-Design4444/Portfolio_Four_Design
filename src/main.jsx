@@ -2309,6 +2309,12 @@ function ProfileContent() {
   const activeStatData = activeStat ? PC_STATS.find((s) => s.id === activeStat) : null;
   const activeSkillData = activeSkill ? PC_SKILLS.find((s) => s.id === activeSkill) : null;
 
+  /* 主次关系同 PC:一次只有一个「展开中」的组。点经验卡 → 技能组整体退隐
+     (PC 是 .pf-statrow.is-hidden);点技能卡 → 经验组退隐。未选中项不是消失,
+     而是降到低透明度 —— 保留可点性,用户才知道还能换。 */
+  const statActive = !!activeStat;
+  const skillActive = !!activeSkill;
+
   return (
     <div className="profile-shot-inner">
       <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
@@ -2320,7 +2326,7 @@ function ProfileContent() {
           <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
         </div>
 
-        <div className="mob-profile-stats">
+        <div className={`mob-profile-stats${skillActive ? ' is-muted' : ''}`}>
           {PC_STATS.map((s) => (
             <button
               type="button"
@@ -2343,7 +2349,7 @@ function ProfileContent() {
           )}
         </div>
 
-        <div className="mob-profile-skills">
+        <div className={`mob-profile-skills${skillActive ? ' has-active' : ''}${statActive ? ' is-muted' : ''}`}>
           {PC_SKILLS.map((s) => (
             <button
               type="button"
