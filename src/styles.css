@@ -4229,11 +4229,14 @@ html[data-paging="on"] .contact-bottom {
 .pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
 
 .pf-statrow.is-docked .pf-stat.is-active {
-  min-width: clamp(140px, 9.2vw, 176px);
+  /* 宽度与静止卡同一配方贴内容收窄(旧 176px 右侧空一截): 最宽标签 94px +
+     左右对称 32px ≈ 158px。 */
+  min-width: clamp(120px, 8.2vw, 158px);
   /* 选中标签保持「未移入态」的左对齐版式:数字在上、图标+名称在下,一律左对齐
      (dock 态此前整体居中,数字不再对着下方的左边图标)。内边距也回到静止卡的值。 */
   align-items: flex-start;
   padding-left: clamp(20px, 1.7vw, 32px);
+  padding-right: clamp(20px, 1.7vw, 32px);
 }
 
 .pf-statrow.is-docked .pf-stat.is-active:hover { background: rgba(9, 9, 11, 0.86); }
