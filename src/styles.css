@@ -4557,8 +4557,13 @@ html[data-paging="on"] .contact-bottom {
      card; the resting gap is produced by translating it down --pf-dock,
      with margin-bottom reserving that space in layout. No entrance delay on
      this element — dock/undock must start immediately, both directions. */
+  /* margin-bottom 与透明占位边框必须**恒定**:dock 只改 transform。
+     若 margin/边框随 dock 增删,zone 布局高度会变化,垂直居中的整列内容
+     (标题/联系方式)就会随之整体位移 —— 修复「移入技能卡上方元素下坠」。 */
   margin-top: 0;
-  margin-bottom: var(--pf-dock);
+  margin-bottom: clamp(6px, 1vh, 12px);
+  border: 1px solid transparent;
+  border-top: none;
   transform: translateY(var(--pf-dock));
   will-change: transform;
   transition:
@@ -4627,15 +4632,15 @@ html[data-paging="on"] .contact-bottom {
    unit (reference 技能展示.jpg) — flush against the card's bottom border,
    cells separated by hairlines, rounded only at the outer bottom corners. */
 .pf-skills.has-active {
-  /* Dock: transform returns to 0 (GPU). No margin/gap layout animation. */
+  /* Dock: transform returns to 0 (GPU). margin-bottom 与占位边框保持恒定,
+     布局高度不变 → 上方内容零位移(位移只属于 transform)。 */
   --pf-dock: 0px;
   gap: 0;
   width: max-content;
   max-width: 100%;
   /* dock 时整条右移 16px,与描述卡错开,露出卡片圆角。 */
   margin-left: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-top: none;
+  border-color: rgba(255, 255, 255, 0.15);
   border-radius: 0 0 14px 14px;
   overflow: hidden;
   /* 必须把基础规则里的 transform/gap 一并写回:只写 margin-left 会整体覆盖
@@ -4649,13 +4654,18 @@ html[data-paging="on"] .contact-bottom {
 
 .pf-skills.has-active .pf-skill {
   border-radius: 0;
-  border: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  /* 边框保持 1px 占位(border:none 会让单元格矮 2px → 布局跳动),
+     只把右侧染成分隔发丝线;其余方向维持透明。 */
+  border-right-color: rgba(255, 255, 255, 0.12);
   /* No backdrop-filter here: blur re-renders every frame during the strip's
      transform animation. A more opaque solid bg reads the same. */
   background: rgba(9, 9, 11, 0.86);
   padding: 13px 24px;
   transform: none;
+}
+
+.pf-skills.has-active .pf-skill:last-child {
+  border-right-color: transparent;
 }
 
 .pf-skills.has-active .pf-skill:hover { transform: none; }
@@ -4665,10 +4675,6 @@ html[data-paging="on"] .contact-bottom {
   /* Collapsed cell: the name is width 0, so the icon|name flex gap would
      still push the icon 5px off-center. Zero the gap while collapsed. */
   gap: 0;
-}
-
-.pf-skills.has-active .pf-skill:last-child {
-  border-right: none;
 }
 
 .pf-skills.has-active .pf-skill:not(.is-active) .pf-skill-name {

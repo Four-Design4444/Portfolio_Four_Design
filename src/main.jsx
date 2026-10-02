@@ -2400,7 +2400,7 @@ function WaveHeading() {
       const cx = r.left + r.width * 0.5;
       const cy = r.top + r.height * 0.5;
       const dist = Math.hypot(clientX - cx, clientY - cy);
-      const lift = MAX * Math.exp(-(dist / R) ** 2);
+      const lift = MAX * Math.exp(-(dist * dist) / (R * R));
       el.style.transform = `translateY(${-lift.toFixed(2)}px)`;
     });
   };
