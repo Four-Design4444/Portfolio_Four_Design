@@ -2292,9 +2292,53 @@ function MobileWaveHeading() {
   );
 }
 
+/* 测量一组卡片在静止态的实际像素宽度，写成 --mob-w-N。
+   为什么必须用 JS 测量而不能靠 `width: auto`：CSS 里从 `auto` 过渡到
+   `44px` 在 Chrome 里**不产生补间**（实测 rAF 采样 uniqW=2，只有起点和终点，
+   图标一路跳）。给出一个确定的起始像素宽度后，width 才有可插值的两端。
+   静止态宽度依赖字体与文字长度（"Figma" / "Photoshop" / "Comfyui" 宽窄不同），
+   所以只能在运行时量，不能写死常量。
+
+   变化时（字号 clamp 随 vw 变、字体加载完、窗口 resize）重新测量，
+   但**跳过过渡进行中**的时段，避免把动画中途的值又写回 CSS 造成抖动。 */
+function useMeasuredWidths(selector, count, deps) {
+  const [widths, setWidths] = useState(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const nodes = [...document.querySelectorAll(selector)];
+      if (nodes.length !== count) return;
+      /* 正在 dock 形变中就别量：此刻的宽度是动画中间值，写回 CSS 会自激。 */
+      const row = nodes[0].parentElement;
+      if (row && row.classList.contains('is-docked')) return;
+      const next = nodes.map((n) => {
+        const prev = parseFloat(n.style.getPropertyValue('--mob-w'));
+        const cur = n.getBoundingClientRect().width;
+        /* 已经一致就别 setState，避免无限重渲染。 */
+        return Math.abs((prev || 0) - cur) < 0.5 ? prev : Math.round(cur * 100) / 100;
+      });
+      setWidths((old) => {
+        if (old && old.length === next.length && old.every((v, i) => Math.abs(v - next[i]) < 0.5)) return old;
+        return next;
+      });
+    };
+    measure();
+    /* 字体加载完 / 容器宽度变化都会改静止态宽度，各等一次。 */
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+    window.addEventListener('resize', measure);
+    const t = setTimeout(measure, 400);
+    return () => { window.removeEventListener('resize', measure); clearTimeout(t); };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [selector, count, ...(deps || [])]);
+
+  return widths;
+}
+
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
+  const statWidths = useMeasuredWidths('.mob-profile-stat', PC_STATS.length);
+  const skillWidths = useMeasuredWidths('.mob-profile-skill', PC_SKILLS.length);
 
   const toggleStat = (id) => {
     setActiveStat((prev) => (prev === id ? null : id));
@@ -2326,17 +2370,24 @@ function ProfileContent() {
           <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
         </div>
 
-        {/* dock 编排:点中某张经验卡后整行进入 PC 同款 dock —— 选中的那张保留
-           「数字 + 图标名称」宽标签,另外两张收拢成只剩图标的小方块,描述卡
-           贴在标签条下沿。is-docked 只挂在容器上,收起哪几张由 :not(.is-active)
-           判定,所以切换选中项时不会整行闪一下。 */}
-        <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}${skillActive ? ' is-muted' : ''}`}>
-          {PC_STATS.map((s) => (
+        {/* 经验 dock(2026-10-02 重构)。
+            两层结构,职责必须分开:
+            ① 外层 `.mob-profile-shell` 用 grid-template-rows 1fr↔0fr 把**整组
+               高度真正归零** —— 只给行加 opacity:0 会留下等高空白,视觉上仍是
+               「两组都在,只是暗了」,这正是设计稿否掉的形态。
+            ② 内层 `.mob-profile-stats` 静止态与 dock 态**共用同一套盒模型**
+               (始终 display:flex,宽度靠 width 连续变化)。上一版靠
+               `display:grid → flex` 切换实现 dock,那是**离散的 layout 跳变**,
+               图标根本没有移动过程;再往后试 `flex-grow` 也一样不可靠补间。*/}
+        <div className={`mob-profile-shell mob-profile-shell-stats${skillActive ? ' is-collapsed' : ''}`}>
+        <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}`}>
+          {PC_STATS.map((s, i) => (
             <button
               type="button"
               key={s.id}
               data-id={s.id}
               className={`mob-profile-stat${activeStat === s.id ? ' is-active' : ''}`}
+              style={statWidths ? { '--mob-w': statWidths[i] + 'px' } : undefined}
               onClick={() => toggleStat(s.id)}
               aria-pressed={activeStat === s.id}
             >
@@ -2348,6 +2399,7 @@ function ProfileContent() {
             </button>
           ))}
         </div>
+        </div>
 
         <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
           {activeStatData && (
@@ -2357,9 +2409,10 @@ function ProfileContent() {
           )}
         </div>
 
-        {/* 技能 dock 与经验 dock 同理(设计稿 移动端技能卡.jpg):选中项保留
-           「图标 + 名称」宽标签,其余收成图标小方块。设计稿里描述卡在 dock
-           **上方**、dock 贴着描述卡底边,所以技能组的展开卡排在技能行之前。 */}
+        {/* 技能 dock:设计稿里描述卡在 dock **上方**、dock 贴着描述卡底边,
+           所以技能组的展开卡排在技能行之前。两组互斥——点经验卡技能组整组收起,
+           点技能卡经验组整组收起(外层 .mob-profile-shell 高度归零,不是变暗)。*/}
+        <div className={`mob-profile-shell mob-profile-shell-skills${statActive ? ' is-collapsed' : ''}`}>
         <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite">
           {activeSkillData && (
             <div className="mob-profile-card-body" key={activeSkillData.id}>
@@ -2369,19 +2422,18 @@ function ProfileContent() {
           )}
         </div>
 
-        <div className={`mob-profile-skills${skillActive ? ' has-active is-docked' : ''}${statActive ? ' is-muted' : ''}`}>
-          {/* DOM order stays == data order on purpose. Reordering the array (or
-              using CSS `order`) to force the selected tab to the front would
-              MOVE the node, and a moved node re-layouts instantly instead of
-              transitioning — the width morph would jump rather than slide, which
-              is exactly the "two-stage" feel the slower curve exists to remove.
-              PC makes the same trade-off: the active tab morphs in place. */}
-          {PC_SKILLS.map((s) => (
+        <div className={`mob-profile-skills${skillActive ? ' is-docked' : ''}`}>
+          {/* DOM 顺序 == 数据顺序:用 sort / order 把选中项顶到行首会让节点被移动,
+              移动即 re-layout,宽度形变变成跳变而非滑动,正是慢曲线要消除的两段感。
+              PC端同样让选中标签原地 morph。技能 dock 的收起项靠 width 收窄,
+              选中项保持原位,DOM 顺序无需变动。*/}
+          {PC_SKILLS.map((s, i) => (
             <button
               type="button"
               key={s.id}
               data-id={s.id}
               className={`mob-profile-skill${activeSkill === s.id ? ' is-active' : ''}`}
+              style={skillWidths ? { '--mob-w': skillWidths[i] + 'px' } : undefined}
               onClick={() => toggleSkill(s.id)}
               aria-pressed={activeSkill === s.id}
             >
@@ -2389,6 +2441,7 @@ function ProfileContent() {
               <span className="mob-profile-skill-name">{s.name}</span>
             </button>
           ))}
+        </div>
         </div>
       </div>
     </div>
