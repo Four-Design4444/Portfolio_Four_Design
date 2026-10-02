@@ -2384,6 +2384,54 @@ function CopyContactLine({ icon: Icon, label, value }) {
   );
 }
 
+function WaveHeading() {
+  const titleRef = useRef(null);
+  const rafRef = useRef(0);
+
+  const applyWave = (e) => {
+    const root = titleRef.current;
+    if (!root) return;
+    const chars = root.querySelectorAll('.wave-char');
+    const { clientX, clientY } = e;
+    const R = 180;
+    const MAX = 22;
+    chars.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width * 0.5;
+      const cy = r.top + r.height * 0.5;
+      const dist = Math.hypot(clientX - cx, clientY - cy);
+      const lift = MAX * Math.exp(-(dist / R) ** 2);
+      el.style.transform = `translateY(${-lift.toFixed(2)}px)`;
+    });
+  };
+
+  const handleMove = (e) => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => applyWave(e));
+  };
+
+  const handleLeave = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const chars = titleRef.current?.querySelectorAll('.wave-char');
+    chars?.forEach((el) => { el.style.transform = ''; });
+  };
+
+  return (
+    <h2 className="pf-title" ref={titleRef} onMouseMove={handleMove} onMouseLeave={handleLeave}>
+      <span className="pf-title-en rany-display-heading">
+        {'Hi , I Am Four'.split('').map((ch, i) => (
+          <span key={i} className="wave-char">{ch}</span>
+        ))}
+      </span>
+      <span className="pf-title-cn">
+        {'邱锋江'.split('').map((ch, i) => (
+          <span key={i} className="wave-char">{ch}</span>
+        ))}
+      </span>
+    </h2>
+  );
+}
+
 /* PC-only personal-info screen. Full-bleed portrait background + all-code
    layout per the 2026-09-30 mock (个人信息.jpg / 技能展示.jpg). Mobile keeps
    the legacy ProfileContent above. */
@@ -2472,10 +2520,7 @@ function ProfileContentPC() {
         <LazyImage className="pf-bg-img" src={pcPortraitBg} alt="" />
       </div>
       <div className="pf-content">
-        <h2 className="pf-title">
-          <span className="pf-title-en rany-display-heading">Hi , I Am Four</span>
-          <span className="pf-title-cn">邱锋江</span>
-        </h2>
+        <WaveHeading />
 
         {/* 调换后:联系方式上移到经验卡上方,带完整点击复制交互,始终可见不随 hover 隐藏。 */}
         <div className="pf-contact">

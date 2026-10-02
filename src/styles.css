@@ -4103,6 +4103,13 @@ html[data-paging="on"] .contact-bottom {
   color: #a4a4a4;
 }
 
+.pf-title .wave-char {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform;
+  transition: transform 0.12s ease-out;
+}
+
 .pf-swap {
   position: relative;
   width: 100%;
@@ -4147,14 +4154,16 @@ html[data-paging="on"] .contact-bottom {
 /* ---- Stat row = tab strip (个人信息-经验 图1/图2). One persistent row:
    the resting cards join and dock onto the description card on hover, so
    number/icon/label glide between the two positions and glide back on
-   leave. The row keeps a constant height (the active card's height), so
-   the card docked beneath it never bounces during the morph. */
+   leave. Cards are TOP-aligned: the resting strip and the docked tab strip
+   share the same top edge, so hovering never drops the row downward — the
+   morph reads as a horizontal slide while the description card unfolds
+   beneath the active card. */
 .pf-statrow {
   position: absolute;
   top: 0;
   left: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   width: max-content;
   max-width: 100%;
   gap: clamp(14px, 1.2vw, 22px);
@@ -4197,6 +4206,7 @@ html[data-paging="on"] .contact-bottom {
     min-width 480ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 480ms cubic-bezier(0.22, 1, 0.36, 1),
     margin-left 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 480ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 420ms ease,
     border-radius 480ms cubic-bezier(0.22, 1, 0.36, 1),
     background 420ms ease;
@@ -4225,6 +4235,13 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-statrow.is-docked .pf-stat:first-child { margin-left: 0; }
+
+/* 选中卡顶对齐静止顶线,收起标签则相反:底边贴住下方描述卡顶边(与选中卡
+   同一底线)。下坠量 = 描述卡 top(clamp*1.15+48) − 收起卡高度(12+17+14+2=45,
+   label 行高固定 17) = clamp*1.15+3,随 480ms 曲线滑落,无对齐跳变。 */
+.pf-statrow.is-docked .pf-stat:not(.is-active) {
+  margin-top: calc(clamp(19px, 1.25vw, 24px) * 1.15 + 3px);
+}
 
 .pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
 
@@ -4266,11 +4283,14 @@ html[data-paging="on"] .contact-bottom {
 }
 
 /* Docked non-active cards shed the number and label, leaving only the
-   icon — the same content that glides back in on leave. */
+   icon — the same content that glides back in on leave. width:0 stops the
+   invisible number from propping the card open (~77px), so the card
+   collapses to min-width and the lone icon sits dead-center. */
 .pf-statrow.is-docked .pf-stat:not(.is-active) strong {
   max-height: 0;
   margin-bottom: 0;
   opacity: 0;
+  width: 0;
 }
 
 /* Icon + English label row. Fixed height so card geometry stays stable
@@ -4293,10 +4313,15 @@ html[data-paging="on"] .contact-bottom {
     height 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Collapsed cards ride the full glyph; dock 态图标同步等比缩小(17→15)。 */
+/* Collapsed cards ride the full glyph; dock 态图标同步等比缩小(17→15)。
+   gap:0 抵消 label 里已收起的英文名残留的 7px 列间距,图标才能水平居中。 */
 .pf-statrow.is-docked .pf-stat:not(.is-active) .pf-stat-icon {
   width: 15px;
   height: 15px;
+}
+
+.pf-statrow.is-docked .pf-stat:not(.is-active) .pf-stat-label {
+  gap: 0;
 }
 
 .pf-stat-name {
@@ -4658,10 +4683,14 @@ html[data-paging="on"] .contact-bottom {
 /* ---- Experience description card: expands downward from under the stat
    row — its top border doubles as the docked cards' bottom edge, so strip
    and card read as one connected unit — and folds back on leave. Height
-   drives the morph; text swaps fade without moving. */
+   drives the morph; text swaps fade without moving. Top tracks the docked
+   ACTIVE card's bottom edge (12 pad-top + number line + 3 gap + 17 label
+   + 14 pad-bottom + 2 borders = 48px + number line height), so with the
+   top-aligned strip the card sits flush under the active tab while the
+   collapsed tabs hang above it. */
 .pf-exp-card {
   position: absolute;
-  top: calc(clamp(24px, 1.56vw, 30px) * 1.15 + 91px);
+  top: calc(clamp(19px, 1.25vw, 24px) * 1.15 + 48px);
   left: 0;
   box-sizing: border-box;
   width: clamp(430px, 30.8vw, 592px);
