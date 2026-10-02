@@ -4186,9 +4186,9 @@ html[data-paging="on"] .contact-bottom {
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  /* 宽度贴内容收窄(旧 min-width 183px 右侧空 55-69px): 最宽标签 94px + 左右
-     对称 32px 内边距 ≈ 158px,配合居中对齐让三张卡内容都视觉居中。 */
-  min-width: clamp(120px, 8.2vw, 158px);
+  /* 宽度贴内容收窄(旧 min-width 183px 右侧空 55-69px): 标签英文缩小后最宽
+     行 ~80px + 左右对称 32px ≈ 142px,配合居中对齐让三张卡内容都视觉居中。 */
+  min-width: clamp(104px, 7.4vw, 142px);
   padding: 28px clamp(20px, 1.7vw, 32px) 34px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
@@ -4229,9 +4229,8 @@ html[data-paging="on"] .contact-bottom {
 .pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
 
 .pf-statrow.is-docked .pf-stat.is-active {
-  /* 宽度与静止卡同一配方贴内容收窄(旧 176px 右侧空一截): 最宽标签 94px +
-     左右对称 32px ≈ 158px。 */
-  min-width: clamp(120px, 8.2vw, 158px);
+  /* 宽度与静止卡同一配方贴内容收窄(随标签英文缩小同步再收)。 */
+  min-width: clamp(104px, 7.4vw, 142px);
   /* 选中标签保持「未移入态」的左对齐版式:数字在上、图标+名称在下,一律左对齐
      (dock 态此前整体居中,数字不再对着下方的左边图标)。内边距也回到静止卡的值。 */
   align-items: flex-start;
@@ -4294,12 +4293,12 @@ html[data-paging="on"] .contact-bottom {
 }
 
 .pf-stat-name {
-  max-width: 110px;
+  max-width: 96px;
   opacity: 1;
   overflow: hidden;
   white-space: nowrap;
-  font-size: clamp(11px, 0.62vw, 12px);
-  letter-spacing: 0.4px;
+  font-size: clamp(9px, 0.5vw, 10px);
+  letter-spacing: 0.3px;
   color: #9aa0ab;
   transition:
     max-width 480ms cubic-bezier(0.22, 1, 0.36, 1),
