@@ -1206,11 +1206,20 @@ html[data-device="mobile"] .mob-profile-title-cn {
    标题 160ms / 联系方式 280ms / 经验卡 380ms / 技能条 620ms 逐级延迟。
    PC 端 900ms 是鼠标划入,移动端整屏一次进场,慢一点才读得出「分层浮现」。
 
-   ⚠ 用 `@keyframes ... both` 而不是「基础态 opacity:0 + transition」。
+   ⚠ 用 `@keyframes` 而不是「基础态 opacity:0 + transition」。
    两者视觉等价,但失败模式相反:基础态写 opacity:0 时,只要 .is-visible 因任何
    原因没到位(observer 未触发 / 跳转直接落在本页 / 未来改动),整屏个人信息
    就是**空白且不会自愈**。keyframes 只在 .is-visible 存在时挂载,拿不到就
-   干脆不动画 → 内容永远可见。`both` 让延迟期间保持 from 态,进场不跳。 */
+   干脆不动画 → 内容永远可见。
+
+   ⚠⚠ fill-mode 必须是 `backwards`,**不能用 `both`**(2026-10-02 实测踩坑):
+   `both` = backwards + forwards,forwards 段会在动画**结束后继续生效**,于是
+   `to { opacity: 1 }` 永久压在同一元素的后续类规则上 —— `.mob-profile-stats.is-muted
+   { opacity: .34 }` 被彻底盖住,经验卡整行永远不暗(而技能条因为作用在子元素上
+   没有动画,暗得正常 → 表现为「技能条暗了、经验卡没暗」的诡异不一致)。
+   `backwards` 只在**延迟期间**保留 from 态,动画一结束就把控制权交回规则,
+   正是这里需要的语义。通用铁律:**同一元素上既有 keyframes 又有状态类时,
+   fill-mode 用 backwards,别用 both。** */
 @keyframes mob-profile-rise {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: none; }
