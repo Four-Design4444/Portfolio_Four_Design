@@ -4209,14 +4209,14 @@ html[data-paging="on"] .contact-bottom {
    alignment so the active card's number/label sit dead-center and the
    collapsed card's lone icon does too. */
 .pf-statrow.is-docked .pf-stat {
-  /* 收起标签只露一个图标,min-width 从 96-114px 压到 48-64px:此前图标两侧
-     各留 ~45px 空白,标签条被撑得过宽。 */
-  min-width: clamp(48px, 3.2vw, 64px);
+  /* 收起标签只露一个图标,min-width 压到 40-54px(旧 48-64):dock 态整体
+     等比缩小,与下方描述卡比例协调。 */
+  min-width: clamp(40px, 2.7vw, 54px);
   /* 垂直内边距收紧(继承自静止卡的 28/34):dock 后的标签条整体高度压下来。 */
-  padding-top: 16px;
-  padding-bottom: 18px;
-  padding-left: 12px;
-  padding-right: 12px;
+  padding-top: 12px;
+  padding-bottom: 14px;
+  padding-left: 10px;
+  padding-right: 10px;
   align-items: center;
   margin-left: -1px;
   border-bottom-color: transparent;
@@ -4229,13 +4229,20 @@ html[data-paging="on"] .contact-bottom {
 .pf-statrow.is-docked .pf-stat:hover { background: rgba(255, 255, 255, 0.045); }
 
 .pf-statrow.is-docked .pf-stat.is-active {
-  /* 宽度与静止卡同一配方贴内容收窄(随标签英文缩小同步再收)。 */
-  min-width: clamp(104px, 7.4vw, 142px);
+  /* dock 态选中标签等比缩小(旧 104-142):与收起标签、描述卡比例协调。 */
+  min-width: clamp(88px, 6.3vw, 120px);
   /* 选中标签保持「未移入态」的左对齐版式:数字在上、图标+名称在下,一律左对齐
-     (dock 态此前整体居中,数字不再对着下方的左边图标)。内边距也回到静止卡的值。 */
+     (dock 态此前整体居中,数字不再对着下方的左边图标)。 */
   align-items: flex-start;
-  padding-left: clamp(20px, 1.7vw, 32px);
-  padding-right: clamp(20px, 1.7vw, 32px);
+  padding-left: clamp(16px, 1.3vw, 24px);
+  padding-right: clamp(16px, 1.3vw, 24px);
+}
+
+/* dock 选中标签的数字同步等比缩小(静止卡保持 30px 不变)。 */
+.pf-statrow.is-docked .pf-stat.is-active strong {
+  max-height: 36px;
+  margin-bottom: 3px;
+  font-size: clamp(19px, 1.25vw, 24px);
 }
 
 .pf-statrow.is-docked .pf-stat.is-active:hover { background: rgba(9, 9, 11, 0.86); }
@@ -4286,10 +4293,10 @@ html[data-paging="on"] .contact-bottom {
     height 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Collapsed cards ride the full 17px glyph; resting + active share 9px. */
+/* Collapsed cards ride the full glyph; dock 态图标同步等比缩小(17→15)。 */
 .pf-statrow.is-docked .pf-stat:not(.is-active) .pf-stat-icon {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
 }
 
 .pf-stat-name {
