@@ -322,8 +322,10 @@ html[data-device="mobile"] .detail-pager button {
   min-width: 34px;
   height: 34px;
   /* 恢复 PC 端同款「Last/Next」英文(此前 font-size:0 只留三角形),字号与
-     移动端页码统一 9px(PC 13px),三角形-文字间距按比例收窄(PC 9px)。 */
+     移动端页码统一 9px(PC 13px),三角形-文字间距按比例收窄(PC 9px)。
+     字重与 Back 同步下调一档(400→300)。 */
   font-size: 9px;
+  font-weight: 300;
   gap: 5px;
 }
 
