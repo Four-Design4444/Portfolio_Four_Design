@@ -2475,27 +2475,50 @@ function ProfileContentPC() {
       setHover(intent);
     };
     const onMove = (e) => {
-      // 亚阈值位移免疫(零阈值精确相等不够稳):经验卡 dock 时兄弟卡横向滑动数十
-      // 像素,光标若有 1~5px 真实抖动,事件坐标就不再是「精确相等」,会被误判为真实
-      // 移动、把滑到光标下的卡偷选走(技能卡 dock 兄弟卡几乎不横移所以没这问题)。
-      // 改为「已有意图时,与上一次真实移动点距离 ≤6px = 视作没动」:既不偷选也不误判
-      // 移出。这是空间死区不是时间延迟——跨卡导航要移动数十像素,6px 内判定为静止
-      // 对真实切换无感,仅吃掉抖动与布局滑动补发;无意图时不抑制,保证首次进入即时触发。
-      if (lastX !== null && hoverRef.current && Math.abs(e.clientX - lastX) <= 6 && Math.abs(e.clientY - lastY) <= 6) return;
+      const intent = buttonIntent(e.target);
+      // 死区只作用于**意图切换**(防偷选),**不作用移出判定**。
+      // 此前死区写在开头直接 return,把移出判定一起短路了:慢速移动时浏览器
+      // 每帧只派发几像素,每个事件都落在 6px 内→ 被吞 → 卡片永远不放手。
+      // 移出必须无条件按当前真实坐标判定,否则"慢慢移开"会粘住。
+      if (intent) {
+        // 亚阈值位移免疫:经验卡 dock 时兄弟卡横向滑动数十像素,光标有 1~5px
+        // 真实抖动时坐标不再「精确相等」,会被误判为真实移动、把滑到光标下的卡
+        // 偷选走(技能卡 dock 兄弟卡几乎不横移所以没这问题)。已有意图时,距上一
+        // 次真实移动点 ≤6px 视作没动 → 直接返回,既不偷选也不判移出。空间死区
+        // 不是时间延迟,跨卡导航要移动数十像素,6px 内判定静止对切换无感。
+        if (lastX !== null && hoverRef.current
+          && Math.abs(e.clientX - lastX) <= 6 && Math.abs(e.clientY - lastY) <= 6) return;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        // 命中即生效:零阈值,切换不同卡片无延迟。
+        applyIntent(intent);
+        return;
+      }
       lastX = e.clientX;
       lastY = e.clientY;
-      const intent = buttonIntent(e.target);
-      // 命中即生效:零阈值,切换不同卡片无延迟。
-      if (intent) { applyIntent(intent); return; }
       if (!hoverRef.current || !zone) return;
-      // 经验卡展开时给下方留更大缓冲:阅读描述时轻微下移不会立刻离开 zone,
-      // 避免直接穿过层级误触到下方技能条。
-      const ZONE_PAD = hoverRef.current?.type === 'stat' ? 72 : 12;
-      const r = zone.getBoundingClientRect();
-      const outside = e.clientX < r.left - ZONE_PAD || e.clientX > r.right + ZONE_PAD
-        || e.clientY < r.top - ZONE_PAD || e.clientY > r.bottom + ZONE_PAD;
+      // 移出边界必须贴合**实际可见内容**,而不是外层 zone 矩形。zone 含 28px
+      // padding 且 min-height 同时覆盖静止/展开两态(实测 y=423~745),而经验卡
+      // 只有 y=577~717;若拿 zone 当边界再叠 72px 缓冲,指针要移动近 100px 才能
+      // 判定移出,卡片像"粘住"了。改为取当前可见交互元素(选中态=经验卡条+经验
+      // 描述卡,技能态=技能条+技能描述卡)的矩形并集,只留 8px 容差。
+      const PAD = 8;
+      const sel = hoverRef.current.type === 'stat'
+        ? ['.pf-statrow', '.pf-exp-card.is-visible']
+        : ['.pf-skills', '.pf-skill-card.is-visible'];
+      let left = Infinity; let right = -Infinity; let top = Infinity; let bottom = -Infinity;
+      for (const s of sel) {
+        const el = zone.querySelector(s);
+        if (!el) continue;
+        const b = el.getBoundingClientRect();
+        if (b.width <= 0 || b.height <= 0) continue;
+        left = Math.min(left, b.left); right = Math.max(right, b.right);
+        top = Math.min(top, b.top); bottom = Math.max(bottom, b.bottom);
+      }
+      if (left === Infinity) return;
       // 移出立即复位,不加任何锁定/延迟。
-      if (outside) {
+      if (e.clientX < left - PAD || e.clientX > right + PAD
+        || e.clientY < top - PAD || e.clientY > bottom + PAD) {
         hoverRef.current = null;
         setHover(null);
       }
