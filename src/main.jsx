@@ -2475,8 +2475,13 @@ function ProfileContentPC() {
       setHover(intent);
     };
     const onMove = (e) => {
-      // 坐标完全未变 = 布局位移补发的事件(光标没动):拦掉,既不偷选也不误判移出。
-      if (lastX !== null && e.clientX === lastX && e.clientY === lastY) return;
+      // 亚阈值位移免疫(零阈值精确相等不够稳):经验卡 dock 时兄弟卡横向滑动数十
+      // 像素,光标若有 1~5px 真实抖动,事件坐标就不再是「精确相等」,会被误判为真实
+      // 移动、把滑到光标下的卡偷选走(技能卡 dock 兄弟卡几乎不横移所以没这问题)。
+      // 改为「已有意图时,与上一次真实移动点距离 ≤6px = 视作没动」:既不偷选也不误判
+      // 移出。这是空间死区不是时间延迟——跨卡导航要移动数十像素,6px 内判定为静止
+      // 对真实切换无感,仅吃掉抖动与布局滑动补发;无意图时不抑制,保证首次进入即时触发。
+      if (lastX !== null && hoverRef.current && Math.abs(e.clientX - lastX) <= 6 && Math.abs(e.clientY - lastY) <= 6) return;
       lastX = e.clientX;
       lastY = e.clientY;
       const intent = buttonIntent(e.target);
