@@ -1187,10 +1187,60 @@ html[data-device="mobile"] .mob-profile-title-en {
   color: #ffffff;
 }
 
+/* 逐字包裹后必须 inline-block,否则 transform 对行内盒无效(字符不会抬起)。
+   white-space:pre 保住 "Hi， I Am Four" 里的逗号与空格不被折叠。 */
+html[data-device="mobile"] .mob-wave-char {
+  display: inline-block;
+  white-space: pre;
+  will-change: transform;
+  transition: transform 0.12s ease-out;
+}
+
 html[data-device="mobile"] .mob-profile-title-cn {
   font-size: clamp(13px, 3.9vw, 18px);
   color: #a4a4a4;
   font-weight: 500;
+}
+
+/* ---- 进场编排:对齐 PC 端(900ms cubic-bezier(.22,1,.36,1),标题 120ms /
+   联系方式 200ms / 经验卡 260ms / 技能条 420ms 逐级延迟)。PC 端 .pf-* 有这
+   段进场,移动端原先是「一帧到位」—— 这是两侧观感最明显的一处落差。
+
+   ⚠ 用 `@keyframes ... both` 而不是「基础态 opacity:0 + transition」。
+   两者视觉等价,但失败模式相反:基础态写 opacity:0 时,只要 .is-visible 因任何
+   原因没到位(observer 未触发 / 跳转直接落在本页 / 未来改动),整屏个人信息
+   就是**空白且不会自愈**。keyframes 只在 .is-visible 存在时挂载,拿不到就
+   干脆不动画 → 内容永远可见。`both` 让延迟期间保持 from 态,进场不跳。 */
+@keyframes mob-profile-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+
+html[data-device="mobile"] .profile-shot.is-visible .mob-profile-title {
+  animation: mob-profile-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+html[data-device="mobile"] .profile-shot.is-visible .mob-profile-contact {
+  animation: mob-profile-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
+}
+
+html[data-device="mobile"] .profile-shot.is-visible .mob-profile-stats {
+  animation: mob-profile-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 260ms both;
+}
+
+html[data-device="mobile"] .profile-shot.is-visible .mob-profile-skills {
+  animation: mob-profile-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 420ms both;
+}
+
+/* 背景照缓慢推近(1.6s,同 PC .pf-bg-img)。keyframe 而非 transition,理由同上:
+   没有 .is-visible 时不做缩放,不留一个偏窄的构图。 */
+@keyframes mob-profile-kenburns {
+  from { transform: scale(1.05); }
+  to { transform: scale(1); }
+}
+
+html[data-device="mobile"] .profile-shot.is-visible .mob-profile-bg {
+  animation: mob-profile-kenburns 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Contact rows: plain icon + value lines, no pill chrome (per the mock). */
@@ -1239,6 +1289,24 @@ html[data-device="mobile"] .mob-profile-contact .pf-copy.is-copied .pf-copy-hint
   display: none;
 }
 
+/* 点击复制的反馈:PC 端靠 hover 预告,移动端没有 hover,靠 160ms 按压回弹
+   顶上;点中后图标切换 + 文本卷起由 .is-copied 驱动(复用 PC 的
+   .pf-copy.is-copied 规则,无需另写)。 */
+html[data-device="mobile"] .mob-profile-contact .pf-copy {
+  transition:
+    transform 160ms ease,
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy:active {
+  transform: scale(0.97);
+}
+
+html[data-device="mobile"] .mob-profile-contact .pf-copy.is-copied {
+  transform: none;
+}
+
 /* Stat cards: three outlined equal columns, no icons (per the mock). */
 html[data-device="mobile"] .mob-profile-stats {
   display: grid;
@@ -1258,52 +1326,90 @@ html[data-device="mobile"] .mob-profile-stat {
   color: #ffffff;
   text-align: left;
   cursor: pointer;
+  will-change: transform;
+  /* 三档时长与 PC 端一致:按压 160ms、形变 480ms cubic-bezier(.22,1,.36,1)、
+     淡入淡出 360ms。原来只有 240ms 变色 + 160ms 按压,且 transform 写了
+     !important(下面 is-active 的 transform 永远盖不过它,选中卡无法浮起)。 */
   transition:
-    background-color 240ms ease,
-    border-color 240ms ease,
-    transform 160ms ease !important;
+    background-color 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 按压是 160ms 的即时回弹,形变是 480ms —— 分开写,按压才不会被拖成慢动作。 */
 html[data-device="mobile"] .mob-profile-stat:active {
   transform: scale(0.97);
+  transition-duration: 160ms;
+  transition-timing-function: ease;
 }
 
 html[data-device="mobile"] .mob-profile-stat.is-active {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.55);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.95);
+}
+
+html[data-device="mobile"] .mob-profile-stat.is-active:active {
+  transform: translateY(-1px) scale(0.985);
 }
 
 html[data-device="mobile"] .mob-profile-stat strong {
   font-size: clamp(19px, 5.9vw, 28px);
   font-weight: 600;
   line-height: 1;
+  transition:
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-device="mobile"] .mob-profile-stat.is-active strong {
+  transform: scale(1.05);
 }
 
 html[data-device="mobile"] .mob-profile-stat-label {
   font-size: clamp(9px, 2.55vw, 11.5px);
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.55);
+  transition: color 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-device="mobile"] .mob-profile-stat.is-active .mob-profile-stat-label {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 /* Expandable experience / skill cards. Grid-template-rows 0fr → 1fr gives
-   a smooth height animation without hard-coding content height. */
+   a smooth height animation without hard-coding content height.时长/曲线与 PC
+   端统一(480ms cubic-bezier(.22,1,.36,1)),收起方向不加延迟。 */
 html[data-device="mobile"] .mob-profile-exp-card,
 html[data-device="mobile"] .mob-profile-skill-card {
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(10px) scaleY(0.94);
+  /* transform-origin 顶对齐:卡片从被点的那张卡下沿「长出来」,不是从中心炸开。 */
+  transform-origin: top center;
+  will-change: transform, opacity;
   transition:
-    grid-template-rows 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 360ms ease,
-    transform 360ms ease !important;
+    grid-template-rows 480ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html[data-device="mobile"] .mob-profile-exp-card.is-visible,
 html[data-device="mobile"] .mob-profile-skill-card.is-visible {
   grid-template-rows: 1fr;
   opacity: 1;
-  transform: translateY(0);
+  transform: translateY(0) scaleY(1);
+}
+
+/* 展开中的卡片不允许被下层内容穿透(经验卡与技能卡在窄屏上会挨得很近)。 */
+html[data-device="mobile"] .mob-profile-exp-card.is-visible,
+html[data-device="mobile"] .mob-profile-skill-card.is-visible {
+  position: relative;
+  z-index: 2;
 }
 
 html[data-device="mobile"] .mob-profile-card-body {
@@ -1313,6 +1419,28 @@ html[data-device="mobile"] .mob-profile-card-body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   background: rgba(10, 10, 12, 0.66);
+  box-shadow: 0 18px 34px -24px rgba(0, 0, 0, 0.9);
+  /* 内容随高度一起长出来。挂载时 is-visible 已在,transition 不会触发,
+     所以进场交给下面的 keyframes(切换卡片时 key 变化会重挂载 → 重播一次)。 */
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
+html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-body {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 切换到另一张卡时 body 因 key 变化重挂载 → 文字重新淡入一次(同 PC pf-card-in)。 */
+@keyframes mob-profile-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
+html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-body {
+  animation: mob-profile-card-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 html[data-device="mobile"] .mob-profile-card-body p {
@@ -1356,9 +1484,10 @@ html[data-device="mobile"] .mob-profile-skill {
   color: rgba(255, 255, 255, 0.85);
   font-size: clamp(10px, 2.55vw, 13px);
   cursor: pointer;
+  will-change: transform;
   transition:
-    color 200ms ease,
-    transform 160ms ease !important;
+    color 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms ease;
 }
 
 html[data-device="mobile"] .mob-profile-skill:active {
@@ -1369,12 +1498,25 @@ html[data-device="mobile"] .mob-profile-skill.is-active {
   color: #ffffff;
 }
 
+/* 选中:图标放大(同 PC .pf-skill.is-active .pf-skill-icon scale 1.12),
+   名称同步微上移 —— 与经验卡的「上移 + 数字放大」成一套语言。 */
 html[data-device="mobile"] .mob-profile-skill-icon {
   width: clamp(13px, 3.5vw, 16px);
   height: clamp(13px, 3.5vw, 16px);
   object-fit: contain;
+  flex: none;
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-device="mobile"] .mob-profile-skill.is-active .mob-profile-skill-icon {
+  transform: scale(1.16);
 }
 
 html[data-device="mobile"] .mob-profile-skill-name {
   white-space: nowrap;
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-device="mobile"] .mob-profile-skill.is-active .mob-profile-skill-name {
+  transform: translateY(-1px);
 }

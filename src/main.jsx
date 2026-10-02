@@ -2226,6 +2226,72 @@ const HIDDEN_HERO_FOUR_LOGO_ARCHIVE = {
    the lower half. Mirrors the PC data (PC_STATS / PC_SKILLS) with tap-to-
    expand cards; tapping an already-active card closes it and switching
    between stat and skill closes the other panel. */
+/* Mobile title ripple. Same maths as the PC WaveHeading (gaussian falloff
+   around the pointer), but driven by pointer events instead of mousemove so a
+   finger drag across the title works on touch devices — mobile has no hover,
+   and without this the one piece of motion on the screen was missing.
+   Pointer-driven on purpose: `mousemove` never fires for touch, and a
+   click/tap has no coordinates to ripple around. rAF-throttled like PC so a
+   fast drag doesn't run one layout read per event. */
+function MobileWaveHeading() {
+  const titleRef = useRef(null);
+  const rafRef = useRef(0);
+
+  const applyWave = (x, y) => {
+    const root = titleRef.current;
+    if (!root) return;
+    // 窄屏标题更小,半径按视口收一点,免得整行都被抬起、失去指向性。
+    const R = Math.max(96, Math.min(180, window.innerWidth * 0.42));
+    const MAX = 18;
+    root.querySelectorAll('.mob-wave-char').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const dist = Math.hypot(x - (r.left + r.width * 0.5), y - (r.top + r.height * 0.5));
+      const lift = MAX * Math.exp(-(dist * dist) / (R * R));
+      el.style.transform = lift > 0.15 ? `translateY(${-lift.toFixed(2)}px)` : '';
+    });
+  };
+
+  const handleMove = (e) => {
+    const { clientX, clientY } = e;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      applyWave(clientX, clientY);
+    });
+  };
+
+  const handleLeave = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+    titleRef.current?.querySelectorAll('.mob-wave-char').forEach((el) => { el.style.transform = ''; });
+  };
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return (
+    <h2
+      className="mob-profile-title"
+      ref={titleRef}
+      onPointerMove={handleMove}
+      onPointerUp={handleLeave}
+      onPointerCancel={handleLeave}
+      onPointerLeave={handleLeave}
+    >
+      <span className="mob-profile-title-en rany-display-heading">
+        {'Hi， I Am Four'.split('').map((ch, i) => (
+          <span key={i} className="mob-wave-char">{ch}</span>
+        ))}
+      </span>
+      <span className="mob-profile-title-cn">
+        {'邱锋江'.split('').map((ch, i) => (
+          <span key={i} className="mob-wave-char">{ch}</span>
+        ))}
+      </span>
+    </h2>
+  );
+}
+
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
@@ -2247,10 +2313,7 @@ function ProfileContent() {
     <div className="profile-shot-inner">
       <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
       <div className="mob-profile-info">
-        <h2 className="mob-profile-title">
-          <span className="mob-profile-title-en rany-display-heading">Hi， I Am Four</span>
-          <span className="mob-profile-title-cn">邱锋江</span>
-        </h2>
+        <MobileWaveHeading />
 
         <div className="mob-profile-contact">
           <CopyContactLine icon={Phone} label="手机号" value="18219315597" />
