@@ -2334,6 +2334,28 @@ function useMeasuredWidths(selector, count, deps) {
   return widths;
 }
 
+/* 描述卡高度必须「可过渡」。原来用 grid-template-rows 0fr↔1fr 做展开/收回，
+   但**切换不同项**时轨道值始终是 1fr(没变)、变的是内容 —— 轨道不产生补间，
+   实测切换瞬间卡高一帧跳 19.6px，整组底对齐布局里上方的 dock 行跟着瞬移。
+   改为 JS 实测内容高度写进 --mob-card-h，CSS 用 height: 0 ↔ var() 过渡，
+   展开 / 收回 / 切换三种高度变化全部走同一条 height 过渡。
+   contentId(=当前项 id)变化时重测；box 的 offsetHeight 是布局高度，
+   不受卡片 scaleY/位移 keyframes 影响。 */
+function useMeasuredCardHeight(cardRef, contentId) {
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const measure = () => {
+      const box = card.querySelector('.mob-profile-card-box');
+      card.style.setProperty('--mob-card-h', box ? `${box.offsetHeight}px` : '0px');
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+    return () => window.removeEventListener('resize', measure);
+  }, [contentId]);
+}
+
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
@@ -2364,6 +2386,12 @@ function ProfileContent() {
   const lastSkillRef = useRef(null);
   if (activeSkillData) lastSkillRef.current = activeSkillData;
   const shownSkillData = activeSkillData ?? lastSkillRef.current;
+
+  /* 描述卡高度实测(见 hook 注释)：展开/收回/切换都走 height 过渡。 */
+  const expCardRef = useRef(null);
+  const skillCardRef = useRef(null);
+  useMeasuredCardHeight(expCardRef, shownStatData?.id);
+  useMeasuredCardHeight(skillCardRef, shownSkillData?.id);
 
   /* 主次关系同 PC:一次只有一个「展开中」的组。点经验卡 → 技能组整体退隐
      (PC 是 .pf-statrow.is-hidden);点技能卡 → 经验组退隐。未选中项不是消失,
@@ -2419,7 +2447,7 @@ function ProfileContent() {
         </div>
 
         {/* 描述卡内容收起后继续挂载（shownStatData），文字随卡片一起过渡归零。 */}
-        <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
+        <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite" ref={expCardRef}>
           {shownStatData && (
             <div className="mob-profile-card-body" key={shownStatData.id}>
               <div className="mob-profile-card-box">
@@ -2434,7 +2462,7 @@ function ProfileContent() {
            点技能卡经验组整组收起(外层 .mob-profile-shell 高度归零,不是变暗)。*/}
         <div className={`mob-profile-shell mob-profile-shell-skills${statActive ? ' is-collapsed' : ''}`}>
         <div className="mob-shell-inner">
-        <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite">
+        <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite" ref={skillCardRef}>
           {shownSkillData && (
             <div className="mob-profile-card-body" key={shownSkillData.id}>
               <div className="mob-profile-card-box">
