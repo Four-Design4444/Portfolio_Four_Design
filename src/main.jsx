@@ -2326,17 +2326,25 @@ function ProfileContent() {
           <CopyContactLine icon={Mail} label="邮箱" value="Four4444.Design@gmail.com" />
         </div>
 
-        <div className={`mob-profile-stats${skillActive ? ' is-muted' : ''}`}>
+        {/* dock 编排:点中某张经验卡后整行进入 PC 同款 dock —— 选中的那张保留
+           「数字 + 图标名称」宽标签,另外两张收拢成只剩图标的小方块,描述卡
+           贴在标签条下沿。is-docked 只挂在容器上,收起哪几张由 :not(.is-active)
+           判定,所以切换选中项时不会整行闪一下。 */}
+        <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}${skillActive ? ' is-muted' : ''}`}>
           {PC_STATS.map((s) => (
             <button
               type="button"
               key={s.id}
+              data-id={s.id}
               className={`mob-profile-stat${activeStat === s.id ? ' is-active' : ''}`}
               onClick={() => toggleStat(s.id)}
               aria-pressed={activeStat === s.id}
             >
               <strong>{s.value}</strong>
-              <span className="mob-profile-stat-label">{s.label}</span>
+              <span className="mob-profile-stat-label">
+                <LazyImage className="mob-profile-stat-icon" src={s.icon} alt="" />
+                <span className="mob-profile-stat-name">{s.label}</span>
+              </span>
             </button>
           ))}
         </div>
@@ -2349,11 +2357,30 @@ function ProfileContent() {
           )}
         </div>
 
-        <div className={`mob-profile-skills${skillActive ? ' has-active' : ''}${statActive ? ' is-muted' : ''}`}>
+        {/* 技能 dock 与经验 dock 同理(设计稿 移动端技能卡.jpg):选中项保留
+           「图标 + 名称」宽标签,其余收成图标小方块。设计稿里描述卡在 dock
+           **上方**、dock 贴着描述卡底边,所以技能组的展开卡排在技能行之前。 */}
+        <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite">
+          {activeSkillData && (
+            <div className="mob-profile-card-body" key={activeSkillData.id}>
+              <p className="mob-profile-card-title">{activeSkillData.title}</p>
+              <p>{activeSkillData.text}</p>
+            </div>
+          )}
+        </div>
+
+        <div className={`mob-profile-skills${skillActive ? ' has-active is-docked' : ''}${statActive ? ' is-muted' : ''}`}>
+          {/* DOM order stays == data order on purpose. Reordering the array (or
+              using CSS `order`) to force the selected tab to the front would
+              MOVE the node, and a moved node re-layouts instantly instead of
+              transitioning — the width morph would jump rather than slide, which
+              is exactly the "two-stage" feel the slower curve exists to remove.
+              PC makes the same trade-off: the active tab morphs in place. */}
           {PC_SKILLS.map((s) => (
             <button
               type="button"
               key={s.id}
+              data-id={s.id}
               className={`mob-profile-skill${activeSkill === s.id ? ' is-active' : ''}`}
               onClick={() => toggleSkill(s.id)}
               aria-pressed={activeSkill === s.id}
@@ -2362,15 +2389,6 @@ function ProfileContent() {
               <span className="mob-profile-skill-name">{s.name}</span>
             </button>
           ))}
-        </div>
-
-        <div className={`mob-profile-skill-card${activeSkill ? ' is-visible' : ''}`} aria-live="polite">
-          {activeSkillData && (
-            <div className="mob-profile-card-body" key={activeSkillData.id}>
-              <p className="mob-profile-card-title">{activeSkillData.title}</p>
-              <p>{activeSkillData.text}</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
