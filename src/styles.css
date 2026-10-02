@@ -4186,8 +4186,10 @@ html[data-paging="on"] .contact-bottom {
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  min-width: clamp(140px, 9.5vw, 183px);
-  padding: 28px 12px 34px clamp(20px, 1.7vw, 32px);
+  /* 宽度贴内容收窄(旧 min-width 183px 右侧空 55-69px): 最宽标签 94px + 左右
+     对称 32px 内边距 ≈ 158px,配合居中对齐让三张卡内容都视觉居中。 */
+  min-width: clamp(120px, 8.2vw, 158px);
+  padding: 28px clamp(20px, 1.7vw, 32px) 34px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
   background: rgba(8, 8, 10, 0.55);
