@@ -2352,6 +2352,18 @@ function ProfileContent() {
 
   const activeStatData = activeStat ? PC_STATS.find((s) => s.id === activeStat) : null;
   const activeSkillData = activeSkill ? PC_SKILLS.find((s) => s.id === activeSkill) : null;
+  /* 收回时内容必须**继续挂载**，否则收起动画的第一帧就没了：
+     - grid 的 0fr 轨道高度 = 内容的 min 贡献，内容一卸载自由空间直接变 0，
+       1fr→0fr 的过渡瞬间跳到终值（实测收回第一帧高度就是 0）；
+     - 文字节点被移除，opacity 再怎么过渡也没有载体。
+     所以把最近一次的数据留在 ref 里，收起过程中继续渲染它，等高度归零后
+     它只是不可见（body 自身 opacity 过渡到 0）。 */
+  const lastStatRef = useRef(null);
+  if (activeStatData) lastStatRef.current = activeStatData;
+  const shownStatData = activeStatData ?? lastStatRef.current;
+  const lastSkillRef = useRef(null);
+  if (activeSkillData) lastSkillRef.current = activeSkillData;
+  const shownSkillData = activeSkillData ?? lastSkillRef.current;
 
   /* 主次关系同 PC:一次只有一个「展开中」的组。点经验卡 → 技能组整体退隐
      (PC 是 .pf-statrow.is-hidden);点技能卡 → 经验组退隐。未选中项不是消失,
@@ -2380,6 +2392,10 @@ function ProfileContent() {
                `display:grid → flex` 切换实现 dock,那是**离散的 layout 跳变**,
                图标根本没有移动过程;再往后试 `flex-grow` 也一样不可靠补间。*/}
         <div className={`mob-profile-shell mob-profile-shell-stats${skillActive ? ' is-collapsed' : ''}`}>
+        {/* shell 只允许**一个** grid 子项（.mob-shell-inner），所有内容都装进它。
+            直接把多个子项塞进 shell 会各占一行，行高得用 auto auto 描述，
+            而 auto↔0fr 不可插值 → 互斥收起瞬间跳变；单子项 1fr↔0fr 才有平滑过渡。 */}
+        <div className="mob-shell-inner">
         <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}`}>
           {PC_STATS.map((s, i) => (
             <button
@@ -2400,11 +2416,15 @@ function ProfileContent() {
           ))}
         </div>
         </div>
+        </div>
 
+        {/* 描述卡内容收起后继续挂载（shownStatData），文字随卡片一起过渡归零。 */}
         <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite">
-          {activeStatData && (
-            <div className="mob-profile-card-body" key={activeStatData.id}>
-              <p>{activeStatData.text}</p>
+          {shownStatData && (
+            <div className="mob-profile-card-body" key={shownStatData.id}>
+              <div className="mob-profile-card-box">
+                <p>{shownStatData.text}</p>
+              </div>
             </div>
           )}
         </div>
@@ -2413,11 +2433,14 @@ function ProfileContent() {
            所以技能组的展开卡排在技能行之前。两组互斥——点经验卡技能组整组收起,
            点技能卡经验组整组收起(外层 .mob-profile-shell 高度归零,不是变暗)。*/}
         <div className={`mob-profile-shell mob-profile-shell-skills${statActive ? ' is-collapsed' : ''}`}>
+        <div className="mob-shell-inner">
         <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite">
-          {activeSkillData && (
-            <div className="mob-profile-card-body" key={activeSkillData.id}>
-              <p className="mob-profile-card-title">{activeSkillData.title}</p>
-              <p>{activeSkillData.text}</p>
+          {shownSkillData && (
+            <div className="mob-profile-card-body" key={shownSkillData.id}>
+              <div className="mob-profile-card-box">
+                <p className="mob-profile-card-title">{shownSkillData.title}</p>
+                <p>{shownSkillData.text}</p>
+              </div>
             </div>
           )}
         </div>
@@ -2441,6 +2464,7 @@ function ProfileContent() {
               <span className="mob-profile-skill-name">{s.name}</span>
             </button>
           ))}
+        </div>
         </div>
         </div>
       </div>

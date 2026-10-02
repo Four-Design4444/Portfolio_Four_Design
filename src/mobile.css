@@ -1188,7 +1188,7 @@ html[data-device="mobile"] .mob-profile-info {
      手指操作必须看得清「三卡收拢 → 选中卡展开 → 描述卡长出」每一步。 */
   --mob-dock-dur: 1000ms;
   --mob-dock-ease: cubic-bezier(0.32, 0.86, 0.28, 1);
-  --mob-stat-gap: clamp(9px, 2.6vw, 12px);
+  --mob-stat-gap: clamp(8px, 2.4vw, 12px);
   padding: 0 clamp(20px, 6vw, 30px) clamp(30px, 6.5vh, 56px);
   color: #ffffff;
 }
@@ -1351,8 +1351,10 @@ html[data-device="mobile"] .mob-profile-stats {
   display: flex;
   align-items: stretch;
   gap: var(--mob-stat-gap);
+  /* gap 也要过渡：dock 态归零、收回态还原，漏了它收回复原时缝隙瞬跳 */
   transition:
     opacity var(--mob-dock-dur) var(--mob-dock-ease),
+    gap var(--mob-dock-dur) var(--mob-dock-ease),
     margin var(--mob-dock-dur) var(--mob-dock-ease),
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
@@ -1385,6 +1387,8 @@ html[data-device="mobile"] .mob-profile-stat {
     width var(--mob-dock-dur) var(--mob-dock-ease),
     padding var(--mob-dock-dur) var(--mob-dock-ease),
     gap var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
+    border-radius var(--mob-dock-dur) var(--mob-dock-ease),
     background-color 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
     border-color 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
     box-shadow 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
@@ -1449,14 +1453,15 @@ html[data-device="mobile"] .mob-profile-stat-name {
 }
 
 /* ---- dock 态:宽度形变(唯一驱动量)----
-   ① 整行 gap 归零,选中卡 width 吃掉剩余空间,邻居 width 收到 44px。
+   设计稿(iPhone 17 - 个人信息.jpg):选中卡**保持原宽**(不拉伸吃满剩余空间),
+   其余收成小图标方块紧贴右侧,整条 dock 明显窄于描述卡。
+   ① 行 gap 归零,邻居 width 收到 36px,选中卡 width 回到实测自然宽 --mob-w。
    ② 邻居把数字收掉(max-height:0 + 透明度),名称收掉(max-width:0),gap 归零 ——
       只剩一枚图标,它顺着卡片收窄**滑向中心**(这才是用户要的「图标移动」)。
-   ③ 整行右移 14px 与 PC 同几何(exp-card left:0 / statrow margin-left:16px),
-      描述卡不做反向补偿,靠 -1px 贴合。 */
+   ③ dock 与下方描述卡左缘对齐(设计稿如此),不再右移 14px。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked {
   gap: 0;
-  margin-left: 14px;
+  margin-left: 0;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat {
@@ -1471,24 +1476,23 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:first-
   margin-left: 0;
 }
 
-/* 收起项:固定 44px。⚠ 四处硬约束(每一条都实测踩过):
-   ① 必须写 `width`,不能写 `flex: 0 0 44px` —— flex 简写会把 width 置为 auto,
-      密过上面的 width 过渡 → 图标瞬移。
+/* 收起项:36px 小方块(设计稿 ~34px,取 36 保触控面积)。
+   ⚠ 四处硬约束(每一条都实测踩过):
+   ① 必须写 `width`,不能写 `flex: 0 0 36px` —— flex 简写会把 width 置为 auto,
+      盖过上面的 width 过渡 → 图标瞬移。
    ② **不能用 `align-items: center` 让图标居中**。本卡是 flex-direction:column,
       水平方向由 align-items 控制,而 align-items 是**离散的**(不可过渡):
       静止态 flex-start、收起态 center,图标相对卡片左缘的定位会**整体跳一次**。
-      实测 rAF 路径 36 → 81 → 缓慢滑到 52,第一帧就跳 45px,看起来仍是瞬移。
       改成全程 flex-start + padding-left 定位,图标相对左缘偏移恒定,
       唯一驱动量是 width → 纯连续滑动。
    ③ 因此收起态**不写 align-items**,让它继承基础态的 flex-start。
    ④ padding-left 必须落在基础态 transition 覆盖的属性里(见 .mob-profile-stat)。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) {
-  width: 44px;
+  width: 36px;
   justify-content: center;
   gap: 0;
-  /* 15px 图标在 44px 卡里居中 → 左边距 (44-15)/2 = 14.5px,取 14px
-     (差 0.5px 肉眼不可见,换来一个整数过渡起点)。 */
-  padding-left: 14px;
+  /* 15px 图标在 36px 方块里居中 → 左边距 (36-15)/2 = 10.5px,取 10px。 */
+  padding-left: 10px;
   padding-right: 0;
 }
 
@@ -1514,18 +1518,16 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
   height: 15px;
 }
 
-/* 选中标签:吃掉剩余宽度(两枚方块 44px + 两条叠合边 -1px 已在容器 margin 里
-   抵消),继续左对齐版式(数字在上、图标名称在下),与静止态一致。
-   calc 用容器宽度而非 100vw:行有 margin-left:14px,100vw 会多算 14px 导致溢出。 */
+/* 选中标签:**保持自然宽度**(--mob-w 由 useMeasuredWidths 实测),不拉伸。
+   padding 也不覆写 —— 收起/展开全程在静止 padding 与静止 padding 之间过渡,
+   没有任何一步需要「先跳到 dock 态 padding」。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active {
-  width: calc(100% - 88px);
-  padding: 11px 15px 12px;
+  width: var(--mob-w);
   border-color: rgba(255, 255, 255, 0.7);
   transform: none;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active strong {
-  font-size: clamp(19px, 5.2vw, 24px);
   transform: none;
 }
 
@@ -1544,16 +1546,11 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
    收起与 dock 形变同走 --mob-dock-dur，慢到能看清「这一组被收走了」。*/
 html[data-device="mobile"] .mob-profile-shell {
   display: grid;
-  /* ⚠⚠ 必须是 `auto auto`，**不能是 `1fr 1fr`**。
-     1fr 会让两行**均分**壳高:卡片行归 0 后,技能行那一条 1fr 立刻长大
-     把它填满,实测收起后 skill-card 仍占 36px(= 壳高一半),永远收不平。
-     auto 让每行只占自己的内容高度,0fr 才真的把那一行压到 0。
-     ⚠⚠ grid 行数必须等于子元素个数:经验壳只包一行(.mob-profile-stats),
-     1fr↔0fr 就够;但技能壳包了**两个**子元素(描述卡 + 技能行),只写 0fr
-     会让第二个子元素落进**隐式行**、隐式行按 auto 算高度 → 技能行永远收不起来
-     (实测技能壳该归零时 skillsShellH 仍是 36px)。所以技能壳显式写两行,
-     收起时 0fr 0fr 一起归零。**增删子元素必须同步改这里。* */
-  grid-template-rows: auto auto;
+  /* ⚠⚠ shell 只允许**一个**子项（.mob-shell-inner，JSX 里所有内容都装进它）。
+     曾经直接把 2 个子项塞进 shell：各占一行，展开态得写 auto auto，
+     而 auto↔0fr 不可插值 → 互斥收起瞬间跳变（实测逐帧只有 1 个高度值）。
+     单子项 1fr↔0fr 是 fr↔fr，可插值，收起才是连续的。**增删子项前先看这。 */
+  grid-template-rows: 1fr;
   /* grid 行默认 min-height:auto 会拒绝收缩到内容以下，必须显式归零 */
   min-height: 0;
   transition:
@@ -1561,26 +1558,23 @@ html[data-device="mobile"] .mob-profile-shell {
     margin var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
-/* 经验壳只包一行 */
+html[data-device="mobile"] .mob-profile-shell > .mob-shell-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 技能组的段间距挂在 shell 的 margin 上，收起时一起归零 */
 html[data-device="mobile"] .mob-profile-shell-stats {
-  grid-template-rows: auto;
   margin-top: 0;
   margin-bottom: 0;
 }
 
 html[data-device="mobile"] .mob-profile-shell-skills {
-  grid-template-rows: auto auto;
   margin-top: clamp(18px, 3.8vh, 30px);
 }
 
-/* grid 行默认 min-height:auto 会拒绝收缩到内容以下，子元素必须显式归零 */
-html[data-device="mobile"] .mob-profile-shell > * {
-  min-height: 0;
-  overflow: hidden;
-}
-
 html[data-device="mobile"] .mob-profile-shell.is-collapsed {
-  grid-template-rows: 0fr 0fr;
+  grid-template-rows: 0fr;
   /* 高度归零后仍留 margin 会凭空多出一段空白，同样要一起收掉 */
   margin-top: 0;
   margin-bottom: 0;
@@ -1659,11 +1653,10 @@ html[data-device="mobile"] .mob-profile-skill-card:not(.is-visible) {
    —— 与 PC 端同一几何(exp-card left:0 / statrow margin-left:16px),描述卡左缘
    仍与上方标题、联系方式左缘对齐,标签条从它右侧起排,左上角那半个圆角露在标签
    条左侧,提示「下面是另一张卡」。 */
-/* ⚠ 不能用 `.mob-profile-stats.is-docked + .mob-profile-exp-card`：
-   外层加了 .mob-profile-shell 之后，描述卡和 dock **不再是兄弟节点**，
-   `+` 直接失效 → dock 与描述卡之间裂开一条缝(截图可见)。
-   改成从壳内两个子元素各自定位：给 exp-card 一个上边距负值。 */
-html[data-device="mobile"] .mob-profile-shell-stats.is-docked .mob-profile-exp-card {
+/* 描述卡与 dock 标签条「接」上：卡片可见时上移 1px 压住 dock 底边，
+   视觉上是一条连贯 dock。（不能用 `+` 相邻选择器——外层有 shell/inner 包裹，
+   描述卡和 dock 行早已不是兄弟节点，`+` 会静默失效裂出一条缝。） */
+html[data-device="mobile"] .mob-profile-exp-card.is-visible {
   margin-top: -1px;
 }
 
@@ -1674,18 +1667,29 @@ html[data-device="mobile"] .mob-profile-skill-card.is-visible {
   z-index: 2;
 }
 
+/* body 是 0fr 轨道的 grid 项：**只做裁剪，不带任何 padding/border**。
+   ⚠ 实测 0fr 轨道的最小贡献 = 项的 padding+border（min-content 部分能被
+   min-height:0+overflow:hidden 压掉，盒模型压不掉）——body 带着 13px padding
+   时收起永远残留 28px 的不可见空盒。所以视觉盒拆到内层 .mob-profile-card-box。 */
 html[data-device="mobile"] .mob-profile-card-body {
   overflow: hidden;
   min-height: 0;
-  padding: 13px 15px;
+  /* 文字随卡片一起淡出：展开态的进场由 keyframes 负责（动画优先级高于
+     过渡），收回时 keyframes 摘掉、这条 transition 接管 1→0 的淡出。
+     没有这条，收回第一帧文字就直接消失（实测 opacity 首帧即 0.00）。 */
+  transition:
+    opacity 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
+    transform 720ms cubic-bezier(0.34, 1.2, 0.44, 1);
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+html[data-device="mobile"] .mob-profile-card-box {
+  padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   background: rgba(10, 10, 12, 0.66);
   box-shadow: 0 18px 34px -24px rgba(0, 0, 0, 0.9);
-  /* 内容随高度一起长出来。挂载时 is-visible 已在,transition 不会触发,
-     所以进场交给下面的 keyframes(切换卡片时 key 变化会重挂载 → 重播一次)。 */
-  opacity: 0;
-  transform: translateY(-4px);
 }
 
 html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
@@ -1696,28 +1700,31 @@ html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-
 
 /* 切换到另一张卡时 body 因 key 变化重挂载 → 文字重新淡入一次(同 PC pf-card-in)。
    640ms(PC 300ms),慢到能看清文字本身在浮现,而不是「啪一下出现」。
-   仍用 both:这里元素没有后续状态类要压,mob-profile-card-in 的 to 只是终点,
-   动画结束后停在to(等价于 opacity:1)就是想要的结果。 */
+   ⚠ 进场 keyframes 必须挂在 .mob-profile-card-box(内层)而不是 body:
+   keyframes 摘除时 Chrome **不触发** body 上的 opacity 过渡(实测收回第一帧
+   opacity 就是 0.00,过渡被动画移除短路)——收起时的淡出必须由 body 上那条
+   纯 transition 完成,所以动画只能放在别的元素、别的属性通道上。 */
 @keyframes mob-profile-card-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
-html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-body {
+html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-box,
+html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-box {
   animation: mob-profile-card-in 640ms cubic-bezier(0.34, 1.2, 0.44, 1) both;
 }
 
 html[data-device="mobile"] .mob-profile-card-body p {
   margin: 0;
-  font-size: clamp(12px, 3.3vw, 14px);
+  /* 用户要求信息卡文字整体缩小一档 */
+  font-size: clamp(11px, 2.95vw, 13px);
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.75);
 }
 
 html[data-device="mobile"] .mob-profile-card-title {
   margin: 0 0 6px;
-  font-size: clamp(14px, 3.9vw, 17px);
+  font-size: clamp(13px, 3.5vw, 15.5px);
   font-weight: 700;
   color: #ffffff;
 }
@@ -1728,13 +1735,18 @@ html[data-device="mobile"] .mob-profile-card-title {
 html[data-device="mobile"] .mob-profile-skills {
   display: flex;
   align-items: stretch;
-  gap: clamp(10px, 2.9vw, 14px);
+  /* ⚠ 390px 视口上 5 枚技能芯片(含 Photoshop)总宽 446px,容器只有 343px ——
+     之前的字号/间距直接把最后一枚挤出容器被裁掉(用户截图:Ps 只剩半枚)。
+     整体收一档:字号 2.25vw、内边距 6px、图标 14、内距 3、行 gap 1.4vw。
+     别再放大任何一项,先跑 probe-mobile-fit 复核 5 枚全部可见。 */
+  gap: clamp(5px, 1.4vw, 9px);
   /* 与 exp-card 的贴合偏移写在 is-docked 规则里；静止态的段间距由外层
      .mob-profile-shell-skills 的 margin-top 提供，这样收起时能一起归零。 */
   transition:
     opacity 620ms cubic-bezier(0.34, 1.2, 0.44, 1),
-    transform var(--mob-dock-dur) var(--mob-dock-ease),
-    margin var(--mob-dock-dur) var(--mob-dock-ease);
+    gap var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
+    transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
 html[data-device="mobile"] .mob-profile-skills::-webkit-scrollbar {
@@ -1748,26 +1760,30 @@ html[data-device="mobile"] .mob-profile-skill {
   display: flex;
   align-items: center;
   /* 静止宽度由 JS 实测后写进 --mob-w（见 main.jsx 的 useMeasuredWidths）。
-     ⚠ **不能用 `width: auto`**：从 auto 过渡到 44px 在 Chrome 里不产生补间
+     ⚠ **不能用 `width: auto`**：从 auto 过渡到 36px 在 Chrome 里不产生补间
      （rAF 采样 uniqW=2，只有起点终点，图标一路跳）。文字宽窄随技能名变化，
      也不可能写死常量。变量未就绪时回落到 auto，测量完成后会自动补上。
      收起态同样**不写 justify-content**（离散、不可过渡），图标位置全靠
-     padding-left 定位 → 唯一驱动量是 width，纯连续滑动。 */
-  flex: 0 0 auto;
+     padding-left 定位 → 唯一驱动量是 width，纯连续滑动。
+     flex-shrink:1 是兜底：极端窄屏上芯片按比例微缩而不是把最后一枚挤出容器。 */
+  flex: 0 1 auto;
+  min-width: 0;
   width: var(--mob-w, auto);
-  gap: 6px;
-  padding: 9px 10px;
+  gap: 3px;
+  padding: 8px 6px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   color: rgba(255, 255, 255, 0.85);
-  font-size: clamp(10px, 2.55vw, 13px);
+  font-size: clamp(9px, 2.25vw, 11px);
   cursor: pointer;
   will-change: width, padding;
   transition:
     width var(--mob-dock-dur) var(--mob-dock-ease),
     padding var(--mob-dock-dur) var(--mob-dock-ease),
     gap var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
+    border-radius var(--mob-dock-dur) var(--mob-dock-ease),
     color 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
     background-color 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
     border-color 560ms cubic-bezier(0.34, 1.2, 0.44, 1),
@@ -1782,8 +1798,8 @@ html[data-device="mobile"] .mob-profile-skill:active {
 }
 
 html[data-device="mobile"] .mob-profile-skill-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
   flex: none;
   transition:
@@ -1796,6 +1812,10 @@ html[data-device="mobile"] .mob-profile-skill-icon {
 html[data-device="mobile"] .mob-profile-skill-name {
   overflow: hidden;
   white-space: nowrap;
+  /* 窄屏兜底：整体尺寸已按 390px 校准，极端机型再按比例微缩时省略号收尾，
+     而不是把最后一枚芯片挤出容器裁掉（用户截图的 Ps 半枚就是这么来的）。 */
+  min-width: 0;
+  text-overflow: ellipsis;
   transition:
     max-width var(--mob-dock-dur) var(--mob-dock-ease),
     opacity 420ms ease,
@@ -1803,31 +1823,33 @@ html[data-device="mobile"] .mob-profile-skill-name {
 }
 
 /* ---- 技能 dock 态 ----
-   设计稿里描述卡在 dock **上方**、dock 贴着描述卡底边,所以收 top 圆角、留
-   border-top。选中项占余下宽度(保留名称),其余固定 44px 只剩图标。
-   未选中项**不降透明度**:层级已由形状表达,降透明会让图标发灰、看起来像禁用。 */
+   设计稿(移动端技能卡.jpg):描述卡在**上方**、dock 贴着描述卡**底边**——
+   所以 dock 芯片的**顶边与卡片相连(方角、隐藏上边框)、底边才是外露的圆角**。
+   之前写成 `10px 10px 0 0`(上圆角)正好装反,和描述卡的底圆角撞在一起,
+   用户明确指出:「应该是下半圆角而不是上半圆角」。
+   同时 dock 整体左缩进 14px,给描述卡的左下圆角让位(用户要求「左边应该
+   预留边距,避免跟上面文字信息卡的圆角撞一块」)。
+   选中项**保持自然宽度**(--mob-w),其余收成 36px 图标方块,dock 不拉伸满行,
+   总宽明显短于描述卡(设计稿形态)。未选中项**不降透明度**:层级已由形状表达。 */
 html[data-device="mobile"] .mob-profile-skills.is-docked {
   gap: 0;
-  margin-left: 0;
-  /* 收起项总宽 = 44px × (技能数 - 1)。⚠ 必须与 PC_SKILLS.length - 1 一致,
-     改数据忘了改这里会让选中标签溢出或留缝。5 个技能 → 4 × 44 = 176px。
-     选中标签用 calc(100% - 这个值) 吃掉余下宽度。 */
-  --mob-skill-collapsed: 176px;
+  margin-left: 14px;
 }
 
 /* 收起项同样**不用 justify-content: center**(离散、不可过渡,会让图标相对
    卡片左缘整体跳一次)。技能静止态本来就是 flex-start,所以这里写 flex-start +
-   padding-left 定位,唯一驱动量是 width → 图标纯连续滑动。16px 图标在
-   44px 卡里居中 → 左边距 (44-16)/2 = 14px,正好整数。 */
+   padding-left 定位,唯一驱动量是 width → 图标纯连续滑动。14px 图标在
+   36px 方块里居中 → 左边距 (36-14)/2 = 11px,正好整数。 */
 html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill {
-  width: 44px;
+  width: 36px;
   justify-content: flex-start;
   gap: 0;
-  padding-left: 14px;
+  padding-left: 11px;
   padding-right: 0;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px 10px 0 0;
-  border-bottom-color: transparent;
+  /* 顶边与描述卡相连:方角 + 上边框隐藏,底边外露圆角 */
+  border-top-color: transparent;
+  border-radius: 0 0 10px 10px;
   background: rgba(9, 9, 11, 0.86);
 }
 
@@ -1849,12 +1871,12 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill:not(
 }
 
 html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-active {
-  width: calc(100% - var(--mob-skill-collapsed));
+  width: var(--mob-w);
   justify-content: flex-start;
-  padding-left: 14px;
-  padding-right: 14px;
   color: #ffffff;
   border-color: rgba(255, 255, 255, 0.55);
+  border-top-color: transparent;
+  border-radius: 0 0 10px 10px;
 }
 
 /* 描述卡(dock 上方)底边与 dock 上沿贴合:这 -1px 让两者之间不出现双边。
