@@ -259,22 +259,30 @@ html[data-device="mobile"] .nav-works .works-nav-items {
 }
 
 /* Shrunken Home pill: 24px white circle, black 11px house glyph.
-   The approach offset is halved (28px -> 12px) so the slide-in reads right
-   at this size; the lit transform must be re-pinned below because this
-   mobile base rule out-specifies / out-orders the PC lit rule. */
+   ABSOLUTELY anchored to the nav's right padding — it must NOT take a grid
+   track: the works row's own centering baseline is off-center on mobile
+   (measured live: category row sits 27.5px right of nav center, cols
+   55px/283px/0px) and a grid pill would shift that row by ~12px. Absolute
+   keeps every existing element pixel-identical to the old version.
+   Approach offset halved (28px -> 12px) for this size; the lit transform is
+   re-pinned with translateY(-50%) because the mobile base rule out-specifies
+   / out-orders the PC lit rule. */
 html[data-device="mobile"] .morph-home-pill {
-  transform: translateX(12px) scale(0.9);
+  transform: translateY(-50%) translateX(12px) scale(0.9);
 }
 
 html[data-device="mobile"] .nav-works .morph-home-pill {
   display: inline-flex;
+  position: absolute;
+  top: 50%;
+  right: 10px;
   min-width: 0;
   width: 24px;
   height: 24px;
   padding: 0;
   gap: 0;
   font-size: 0;
-  transform: translateX(0) scale(1);
+  transform: translateY(-50%);
 }
 
 html[data-device="mobile"] .nav-works .morph-home-pill svg {
@@ -285,11 +293,11 @@ html[data-device="mobile"] .nav-works .morph-home-pill svg {
 /* Touch keeps :hover stuck after a tap — pin the lit transform and give the
    press its own spring-back instead of the PC hover lift. */
 html[data-device="mobile"] .nav-works .morph-home-pill:hover {
-  transform: translateX(0) scale(1);
+  transform: translateY(-50%);
 }
 
 html[data-device="mobile"] .nav-works .morph-home-pill:active {
-  transform: translateX(0) scale(0.92);
+  transform: translateY(-50%) scale(0.92);
 }
 
 /* The second-level category capsule is visually lighter when it is a little
@@ -335,8 +343,9 @@ html[data-device="mobile"] .detail-nav-back {
 }
 
 html[data-device="mobile"] .detail-nav-back-icon {
-  width: 6px;
-  height: 10px;
+  width: 5px;
+  height: 9px;
+  /* 5x9 与图标 viewBox 10:18 等比(6x10 那档业主嫌大)。 */
   /* 实测 flex 居中后图标中心比文字中心低 0.5px(文字字形盒略高于行盒),
      上移 0.5px 做到精确同轴(PC 用 -1px,此处字号小减半)。 */
   transform: translateY(-0.5px);
@@ -1254,6 +1263,10 @@ html[data-device="mobile"] .mob-profile-info {
      一小截,用户就会读到「Blen…」这类缩略中间态(2026-10-03 用户明确否掉)。
      两个方向的取值分别写在选择器里:dock 内切换=短、整组复位=长。 */
   --mob-name-delay: 0s;
+  /* 文字**淡入时长**(2026-10-03):旧版硬编码 200ms,实测复位时只有 4 个中间帧,
+     用户反馈「收回初始状态时文字突然出现,很不自然」。现在两组各按场景取:
+     整组复位 420ms(慢浮现)、dock 内切换 300ms(快但要看得见过程)。 */
+  --mob-name-in-dur: 200ms;
   --mob-stat-gap: clamp(8px, 2.4vw, 12px);
   padding: 0 clamp(20px, 6vw, 30px) clamp(30px, 6.5vh, 56px);
   color: #ffffff;
@@ -1506,7 +1519,7 @@ html[data-device="mobile"] .mob-profile-stat strong {
      不会出现 max-height:0↔none 那种离散跳变(实测切换一帧跳 10px)。
      淡入延迟与英文名同一变量:卡还窄时不浮现,避免看到半个数字。 */
   transition:
-    opacity 200ms ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
@@ -1555,7 +1568,7 @@ html[data-device="mobile"] .mob-profile-stat-name {
      淡入延迟 --mob-name-delay:卡宽快到位时才浮现,杜绝缩略中间态。 */
   flex: none;
   transition:
-    opacity 200ms ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
 
@@ -1574,9 +1587,12 @@ html[data-device="mobile"] .mob-profile-stats.is-docked {
 }
 
 /* 整组**复位**(dock → 静止)是「慢编排」:三张卡一起回到自然宽,
-   名称/数字等卡宽快到位(460/620 ≈ 74%,该曲线此处已走到 ~98%)才浮现。 */
+   名称/数字等卡宽快到位(380/620 ≈ 61%,该曲线此处已走到 ~92%)开始
+   **缓缓浮现**(420ms)—— 旧版 200ms 只有 4 个中间帧,看着就是「啪一下出现」。
+   同时带 3px 上浮:纯 translateY,不改布局、不挤压文字,所以不会出现缩略态。 */
 html[data-device="mobile"] .mob-profile-stats:not(.is-docked) {
-  --mob-name-delay: 460ms;
+  --mob-name-delay: 380ms;
+  --mob-name-in-dur: 420ms;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat {
@@ -1626,10 +1642,11 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat strong
 
 /* 收起项数字淡出 + 盒高随字号归零：过渡写在 docked 规则里(dock 方向的
    补间取目的地样式)。font-size 与卡片 margin-top/gap 同曲线同时长,
-   收缩过程中内容盒与内容始终等高。 */
+   收缩过程中内容盒与内容始终等高。3px 下沉同上(复位时浮起)。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) strong {
   opacity: 0;
   font-size: 0;
+  transform: translateY(3px);
   transition:
     opacity 180ms ease 0s,
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
@@ -1641,9 +1658,11 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
   font-size: clamp(8px, 2.2vw, 10px);
 }
 
-/* 收起项英文名：只淡出，可用宽度由 36px 卡宽连续挤压(flex)，无离散量 */
+/* 收起项英文名:淡出 + 3px 下沉(复位时反向 = 文字从下方缓缓浮起,比纯淡入自然)。
+   ⚠ 只走 transform/opacity:可用宽度仍由 36px 卡宽连续驱动(flex),无离散量。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) .mob-profile-stat-name {
   opacity: 0;
+  transform: translateY(3px);
   transition:
     opacity 180ms ease 0s,
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
@@ -1667,6 +1686,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
      240ms 按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
   --mob-name-delay: 250ms;
+  --mob-name-in-dur: 300ms;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active .mob-profile-stat-icon {
@@ -2052,7 +2072,7 @@ html[data-device="mobile"] .mob-profile-skill-name {
   text-overflow: ellipsis;
   flex: none;
   transition:
-    opacity 200ms ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
 
@@ -2073,7 +2093,8 @@ html[data-device="mobile"] .mob-profile-skills.is-docked {
 /* 整组**复位**(dock → 静止)：五枚芯片一起回到自然宽，名称/图标等卡宽快到位
    (460/620 ≈ 74%，该曲线此处已走到 ~98%)才浮现 —— 看到的永远是全称。 */
 html[data-device="mobile"] .mob-profile-skills:not(.is-docked) {
-  --mob-name-delay: 460ms;
+  --mob-name-delay: 380ms;
+  --mob-name-in-dur: 420ms;
 }
 
 /* 收起项同样**不用 justify-content: center**(离散、不可过渡,会让图标相对
@@ -2103,6 +2124,8 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill:not(
 
 html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill:not(.is-active) .mob-profile-skill-name {
   opacity: 0;
+  /* 3px 下沉:复位时反向浮起,让文字「浮」出来而不是「闪」出来 */
+  transform: translateY(3px);
   transition:
     opacity 180ms ease 0s,
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
@@ -2133,6 +2156,9 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
      按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
   --mob-name-delay: 250ms;
+  /* dock 内切换仍要快(用户要求「切换不流畅」已修),但淡入从 200ms 拉到
+     300ms —— 切换宽度 340ms,名称 250ms 后浮现、300ms 完成,约 550ms。 */
+  --mob-name-in-dur: 300ms;
 }
 
 /* 描述卡(dock 上方)底边与 dock 上沿贴合:这 -1px 让两者之间不出现双边。
