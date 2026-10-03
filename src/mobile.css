@@ -145,6 +145,13 @@ html[data-device="mobile"] .mobile-menu-toggle .hm-line {
   stroke-width: 1.7;
   stroke-linecap: round;
   transform-origin: 16px 16px;
+  /* 620ms 与整条栏的形变同拍(home→works 时"栏收缩 + 线条拼成房子"同步
+     收束)。菜单开合的 X 形变另在 .is-open 里压回 380ms —— 那是本地动作,
+     不需要跟栏同拍。 */
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity .3s ease;
+}
+
+html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-line {
   transition: transform .38s cubic-bezier(.4, 0, .2, 1), opacity .3s ease;
 }
 
@@ -168,6 +175,12 @@ html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-mid {
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-bot {
+  transform: rotate(45deg) translateY(-5.5px);
+}
+
+/* hm-wall 与 hm-bot 始终同形:汉堡态同坐标(重叠),X 态同 transform(重叠),
+   所以在任何时刻房子那道"多余的线"都不会露出来。 */
+html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-wall {
   transform: rotate(45deg) translateY(-5.5px);
 }
 
@@ -309,41 +322,124 @@ html[data-device="mobile"] .nav-works .works-nav-items button {
   pointer-events: auto;
 }
 
-/* --- 汉堡 ⇄ 房子 icon 交叉过渡 (2026-10-04) ---
-   两个 icon 现在在所有层级**常驻挂载**(JSX 不再按 page 卸载/挂载)。
-   此前 home→works 是硬切:React 卸载的元素没有 exit 动画,汉堡瞬间消失、
-   房子瞬间出现。现在两端都在场,靠 opacity + scale 交叉淡入淡出。 */
+/* --- 汉堡 ⇄ 房子：同一条 SVG 内的线条形变 (2026-10-04 v2) ---
+   v1 是"两个 icon 交叉淡入淡出"(汉堡按钮淡出、独立的小房子胶囊淡入),
+   业主反馈太生硬。v2 换成真正的形变:汉堡那 4 条 <line> 就地旋转/平移/
+   缩放拼成房子轮廓 —— 和"汉堡→X"是同一套手法,只是终点换成房子。
 
-/* 汉堡:首页态是「自然态」(不写任何东西),离开首页时缩小淡出。
-   时长跟整条栏的形变一致(620ms),两个 icon 的收放与栏的收缩同拍。 */
+   几何(32×32 用户坐标,transform-origin: 16px 16px):
+     屋顶左斜 (8,14)→(16,5.5)      ← hm-top
+     屋顶右斜 (16,5.5)→(24,14)     ← hm-mid
+     左墙   (10.5,11.34)→(10.5,24) ← hm-bot
+     右墙   (21.5,11.34)→(21.5,24) ← hm-wall
+   墙顶 y=11.34 正好落在屋顶斜边上(不悬空),四笔首尾相接成一座房子。
+
+   每条线的 transform = translate(t) rotate(θ) scaleX(s)(CSS 从右往左作用:
+   先沿线压缩长度、再绕图形中心旋转、最后平移到位),三个量由
+   「线段中心 = C + R(θ)·(0,v) + t」反解(v 是该线中心到 C 的初始偏移),
+   端点误差 < 0.01 用户单位。 */
+
+/* 汉堡 / 房子共用这同一枚按钮:首页态是汉堡(不写 transform,四条线各就各位),
+   works 态就地缩到 24px、与白圆同心,线条同时形变成房子。 */
 html[data-device="mobile"] .mobile-menu-toggle {
+  /* 建一个 stacking context:白圆(::before, z-index:-1)与 SVG 线条的上下
+     关系都锚在这里,也让这枚按钮整体压住分类行。 */
+  position: relative;
+  z-index: 3;
+  /* 线条白⇄黑之间必然经过一个与背景同灰度的瞬间 —— 若与白圆的出现/消失
+     同拍, 那一刻线条会整个"溶解"掉。让**圆先走、线条慢半拍**:
+     圆 200ms 快速铺白/缩退, 线条 100ms 后才开始变色(同样 200ms)。
+     两条 ease-out 曲线的亮度差全程 ≥ 25(实测逐帧), 中间不再有隐形窗口;
+     且行程短(200ms), 整体读作"眨眼间换了配色", 不拖泥带水。 */
   transition:
     opacity 360ms ease,
+    color 200ms ease-out 100ms,
     transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 房子的"装裱底"——那枚 24px 白圆 —— 直接长在汉堡按钮上(::before)。
+   为什么不继续用 .morph-home-pill 的白底:两者是**两个盒子**,home→works
+   时各自沿不同轨迹移动(汉堡跟 padding-top/height,固定圆跟 height),中途
+   差最多 10px —— 线条会明显飞出圆外(逐帧截图实锤)。长在同一个 transform
+   上就永远同心:按钮 scale(0.55) 时 43.6px 正好渲染成 24px。
+   点击性仍由透明的 .morph-home-pill 提供(它 pointer-events 可切)。 */
+html[data-device="mobile"] .mobile-menu-toggle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 43.6px;
+  height: 43.6px;
+  margin: -21.8px 0 0 -21.8px;
+  border-radius: 50%;
+  background: #ffffff;
+  /* 绝对定位元素默认画在 flow 内容(SVG 线条)**之上** —— 白圆会把线条盖掉
+     (逐帧截图里 t≈320ms 只剩一枚纯白圆)。负 z-index 让它退到线条之下,
+     但仍在本按钮的 stacking context(z-index:3)内,不会掉到 nav 背景后面。 */
+  z-index: -1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle::before {
+  opacity: 1;
 }
 
 html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle,
 html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle {
-  opacity: 0;
+  /* 它不再是"淡出的汉堡",而是房子本体:保持渲染,颜色转深(落在白圆上),
+     整体缩到 24px 与白圆同心。汉堡 44px、胶囊 24px,两者各贴右内边距 →
+     静止时中心天然差 10px,这 10px 位移把它们收到同一个中心。 */
+  color: #000000;
   pointer-events: none;
-  /* 汉堡 44px、胶囊 24px,两者都贴右内边距 → 静止时中心天然差 10px。
-     退场时这 10px 位移把它们**收到同一个中心**,交叉淡入淡出才读作
-     「同一个 icon 在变形」,而不是两个 icon 各自漂移着换班。 */
   transform: translateX(10px) scale(0.55);
 }
 
-/* Shrunken Home pill: 24px white circle, black 11px house glyph.
+/* works 态线条就是可见的房子;detail 态右侧是分类下拉、没有 icon 位,整枚
+   按钮隐藏(形变规则照常挂在 detail 下,于是 detail→works 时线条已经是房子
+   形态,只需淡入,不用再飞一次)。 */
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle {
+  opacity: 1;
+}
+
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle {
+  opacity: 0;
+}
+
+/* 房子形态(works / detail 共用;detail 下不可见,但形态先就位) */
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-top,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-top {
+  transform: translate(0, -2.481px) rotate(-46.74deg) scaleX(0.5837);
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-mid,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-mid {
+  opacity: 1;
+  transform: translate(4px, -6.25px) rotate(46.74deg) scaleX(0.5837);
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-bot,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-bot {
+  transform: translate(0, 1.67px) rotate(90deg) scaleX(0.633);
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-wall,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-wall {
+  transform: translate(11px, 1.67px) rotate(90deg) scaleX(0.633);
+}
+
+/* Shrunken Home pill —— 2026-10-04 起它只剩"点击热区 + 无障碍标签":
+   视觉上的那枚白圆已搬到 .mobile-menu-toggle::before(与形变的线条共用同一个
+   transform,中途才不会各飞各的)。这里保持 24px / right:10px 的命中区,
+   位置逐像素不变(见下方注释),背景改透明。
    ABSOLUTELY anchored to the nav's right padding — it must NOT take a grid
    track: the works row's own centering baseline is off-center on mobile
    (measured live: category row sits 27.5px right of nav center, cols
    55px/283px/0px) and a grid pill would shift that row by ~12px. Absolute
    keeps every existing element pixel-identical to the old version.
-   2026-10-04: 尺寸提到**全态**基础规则(原来只在 .nav-works 下定义)。
-   否则 works→home 时胶囊会在淡出途中瞬间撑回桌面那枚 114×36 白胶囊 ——
-   width/height/font-size 不在过渡列表里,是硬切。全态统一为 24px 小圆,
-   首页态只是透明+缩小(scale 0.55),看不见也影响不到布局。
-   胶囊自身位置**逐像素保持原样**(绝对定位 right:10,跨态恒定 —— 若让 right
-   随态变化,可见时会瞬移;恒定则位移发生在不可见瞬间)。 */
+   尺寸必须**全态**持有(不能只在 .nav-works 下):否则 works→home 时胶囊会在
+   淡出途中瞬间撑回桌面那枚 114×36 白胶囊,width/height 不在过渡列表里,是硬切。 */
 html[data-device="mobile"] .morph-nav .morph-home-pill {
   /* 绝对定位 + right:10 —— 与改版前**逐像素一致**(胶囊右缘距栏右缘 10px),
      也不占网格轨道(分类行横跨 1/-1 居中不受影响)。 */
@@ -357,6 +453,7 @@ html[data-device="mobile"] .morph-nav .morph-home-pill {
   padding: 0;
   gap: 0;
   font-size: 0;
+  background: transparent;
   opacity: 0;
   pointer-events: none;
   transform: translateY(-50%) scale(0.55);
@@ -376,19 +473,24 @@ html[data-device="mobile"] .nav-works .morph-home-pill {
   transform: translateY(-50%) scale(1);
 }
 
+/* 房子 glyph 不再由这枚胶囊自带的 lucide <House> 提供 —— 它由汉堡按钮里那
+   4 条 line 形变而来(见上方 "汉堡 ⇄ 房子")。这条规则只在 mobile 作用域内,
+   桌面端那枚 114×36 的白胶囊(house + "Home" 文字)完全不受影响。 */
 html[data-device="mobile"] .morph-nav .morph-home-pill svg {
-  width: 11px;
-  height: 11px;
+  display: none;
+}
+
+/* 按压回弹:白圆和线条都在汉堡按钮上,所以把"按下"反馈也交给它 ——
+   pill 只是透明热区,按到它就等于按住那枚圆。 */
+html[data-device="mobile"] .morph-nav.nav-works:has(.morph-home-pill:active) .mobile-menu-toggle {
+  transform: translateX(10px) scale(0.5);
+  transition: transform 120ms ease-out;
 }
 
 /* Touch keeps :hover stuck after a tap — pin the lit transform and give the
    press its own spring-back instead of the PC hover lift. */
 html[data-device="mobile"] .nav-works .morph-home-pill:hover {
   transform: translateY(-50%);
-}
-
-html[data-device="mobile"] .nav-works .morph-home-pill:active {
-  transform: translateY(-50%) scale(0.92);
 }
 
 /* The second-level category capsule is visually lighter when it is a little

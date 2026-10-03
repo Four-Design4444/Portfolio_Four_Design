@@ -1626,6 +1626,11 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
               <line className="hm-line hm-top" x1="6" y1="10.5" x2="26" y2="10.5" />
               <line className="hm-line hm-mid" x1="6" y1="16" x2="26" y2="16" />
               <line className="hm-line hm-bot" x1="6" y1="21.5" x2="26" y2="21.5" />
+              {/* 2026-10-04: 第 4 条线,坐标与 hm-bot **完全相同** —— 汉堡态
+                  两条线重叠成一条(像素零变化),works 态它们一起"劈开"成
+                  房子的左右两道竖墙。房子需要 4 笔(2 屋顶斜边 + 2 墙),汉堡
+                  只有 3 条,这条冗余线就是补上的那一笔。 */}
+              <line className="hm-line hm-wall" x1="6" y1="21.5" x2="26" y2="21.5" />
             </svg>
           </button>
           {/* The panel portals to <body>: .morph-nav has transform + contain:paint,
