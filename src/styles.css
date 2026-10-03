@@ -2695,6 +2695,23 @@ h2 {
   cursor: pointer;
 }
 
+/* 标题+副标题的可点包裹按钮(见 WorksPage):中和上方 .showcase-copy button
+   的胶囊外观,桌面端排版保持与裸 h2/p 完全一致。 */
+.showcase-copy .showcase-copy-text {
+  display: block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .work-detail-page {
   min-height: 2400px;
   background: #000000;

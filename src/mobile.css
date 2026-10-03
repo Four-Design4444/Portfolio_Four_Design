@@ -15,10 +15,16 @@ html[data-device="mobile"] {
   text-size-adjust: 100%;
   scrollbar-gutter: auto;
   overflow-y: auto;
+  /* 三级详情是 window 长滚动。在顶部快速下拉会冲过 scrollY=0 触发 overscroll
+     bounce(橡皮筋),把最上面的 hero 大图整块拖下来再回弹 —— 首页五屏已由
+     html[data-paging="on"] 的 overscroll-behavior-y 兜住,二级/三级页没有,
+     这里给移动端根滚动容器补上。只禁越界弹动与滚动链,不影响页面内正常滚动。 */
+  overscroll-behavior-y: none;
 }
 
 html[data-device="mobile"] body {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
 }
 
 html[data-device="mobile"] button,
@@ -228,6 +234,13 @@ html[data-device="mobile"] .morph-logo .four-logo {
 /* Leave a little more breathing room between the capsule edge and the mark. */
 html[data-device="mobile"] .morph-logo {
   margin-left: 15px;
+  /* 钉死在第1行第1列:.nav-works 下 works-nav-items 被改成 grid-column:1/-1
+     且带桌面样式的 grid-row:1,独占首行全部列。仅钉行(row=1)时 logo 会被
+     auto-placement 甩进右侧隐式第4列;必须行列都定死,与横跨的 pill 行
+     明确重叠(pill 行 pointer-events:none,不挡 logo 点击)。纯网格定位,
+     不参与 morph 的 transform/rect 过渡,动效不受影响。 */
+  grid-column: 1;
+  grid-row: 1;
 }
 
 /* Works / detail floating capsule, same top position as home. */
@@ -898,14 +911,29 @@ html[data-device="mobile"] .showcase-copy button {
   border: 0;
   background: transparent;
   color: #ffffff;
-  font-size: 12.5px;
+  /* 12.5 → 11(2026-10-03 用户要求右下角入口文字小一档) */
+  font-size: 11px;
   line-height: 1.5;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
-html[data-device="mobile"] .showcase-copy button::after {
+/* 左下两行文字的可点包裹按钮(进入三级详情,见 WorksPage):占行内左侧,
+   h2/p 在其中自然堆叠,视觉与原排版一致。 */
+html[data-device="mobile"] .showcase-copy .showcase-copy-text {
+  flex: 0 1 auto;
+  display: block;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 「查看设计详情」保持右下角:换行独占一行时靠 margin-left:auto 顶到右侧。 */
+html[data-device="mobile"] .showcase-copy .showcase-more {
+  margin-left: auto;
+}
+
+html[data-device="mobile"] .showcase-copy button.showcase-more::after {
   content: " >";
-  font-size: 12px;
+  font-size: 10.5px;
 }
 
 /* --- 6. Work detail ----------------------------------------------------- */
@@ -1466,6 +1494,18 @@ html[data-device="mobile"] .mob-profile-stats {
   display: flex;
   align-items: stretch;
   gap: var(--mob-stat-gap);
+  /* dock 态专用常量，单一来源（JS 量宽也读这三个，见 measureStatDockWidth）：
+     --mob-dock-name-font 选中卡英文 dock 字号（比静止态小一档，静止态不碰）
+     --mob-dock-pad-x     选中卡 dock 水平 padding（收边距）
+     --mob-chip-w         收起芯片目标宽 = 芯片实际 stretch 高 → 正方形。
+        推导：芯片高 = 选中卡高 − margin-top
+             = 2×纵向padding + 数字(dock字号,行高1) + 列gap + label 17
+               − [数字dock字号 + clamp(4,1.1vh,6)]
+             = 2×clamp(9,1.9vh,13) + 17 + clamp(5,1.3vh,7) − clamp(4,1.1vh,6)。
+        ⚠ 若改动纵向 padding / 列 gap / margin-top 的任一 clamp，此式必须同步。 */
+  --mob-dock-name-font: clamp(8px, 2.25vw, 10px);
+  --mob-dock-pad-x: clamp(8px, 2.2vw, 11px);
+  --mob-chip-w: calc(2 * clamp(9px, 1.9vh, 13px) + 17px + clamp(5px, 1.3vh, 7px) - clamp(4px, 1.1vh, 6px));
   /* gap 也要过渡：dock 态归零、收回态还原，漏了它收回复原时缝隙瞬跳 */
   transition:
     opacity var(--mob-dock-dur) var(--mob-dock-ease),
@@ -1589,6 +1629,7 @@ html[data-device="mobile"] .mob-profile-stat-name {
   flex: none;
   transition:
     opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
+    font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
 
@@ -1627,7 +1668,8 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:first-
   margin-left: 0;
 }
 
-/* 收起项:36px 小方块(设计稿 ~34px,取 36 保触控面积)。
+/* 收起项:目标宽 = --mob-chip-w(= 芯片实际 stretch 高 → 正方形,2026-10-03
+   用户要求;旧 36px 窄条偏瘦长)。
    ⚠ 四处硬约束(每一条都实测踩过):
    ① 必须写 `width`,不能写 `flex: 0 0 36px` —— flex 简写会把 width 置为 auto,
       盖过上面的 width 过渡 → 图标瞬移。
@@ -1639,7 +1681,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:first-
    ③ 因此收起态**不写 align-items**,让它继承基础态的 flex-start。
    ④ padding-left 必须落在基础态 transition 覆盖的属性里(见 .mob-profile-stat)。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) {
-  width: 36px;
+  width: var(--mob-chip-w);
   /* 下收(2026-10-03,对齐 PC 版):收起芯片不再是整行高的空盒,而是**贴底
      小方块** —— margin-top = 选中项数字盒高(dock 态 clamp(16,4.9vw,23)) +
      列 gap(clamp(5,1.3vh,7),2026-10-03 随卡高收窄从 10 同步降到 7),
@@ -1651,7 +1693,8 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
      每一帧 内容高 == 内容盒高,零裁切;图标由基础态 justify-content:center
      居中于小方块。 */
   gap: 0;
-  padding-left: 11px;
+  /* 图标居中：padding-left = (芯片宽 − 14px 图标) / 2，随 --mob-chip-w 联动。 */
+  padding-left: calc((var(--mob-chip-w) - 14px) / 2);
   padding-right: 0;
 }
 
@@ -1694,13 +1737,15 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
   height: 14px;
 }
 
-/* 选中标签:**保持自然宽度**(--mob-w 由 useMeasuredWidths 实测),不拉伸。
-   padding 也不覆写 —— 收起/展开全程在静止 padding 与静止 padding 之间过渡,
-   没有任何一步需要「先跳到 dock 态 padding」。描边不再加白(用户要求):
-   选中态靠宽度与内容表达,边框与收起项保持同一档。 */
+/* 选中标签:宽度 = 内容自然宽 + dock 水平 padding(--mob-w 由
+   measureStatDockWidth 实测,2026-10-03 从「沿用静止三等分宽」改为贴内容,
+   收掉内容右侧的空边距)。padding 收一档(--mob-dock-pad-x,原静止 11-15px)。
+   描边不再加白(用户要求):选中态靠宽度与内容表达,边框与收起项保持同一档。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active {
   width: var(--mob-w);
   transform: none;
+  padding-left: var(--mob-dock-pad-x);
+  padding-right: var(--mob-dock-pad-x);
   /* dock 内**换选中项**:手指已经在这条 dock 上,等的是「换一个看」,
      340ms 到位 + 250ms 后名称浮现 → 整条切换约 390ms 走完(旧版要 1s+)。
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档
@@ -1708,6 +1753,13 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
   --mob-w-dur: var(--mob-switch-dur);
   --mob-name-delay: 170ms;
   --mob-name-in-dur: 300ms;
+}
+
+/* 选中卡英文 dock 态缩一档(2026-10-03 用户要求),静止态字号不动。
+   字号落在 name 上(继承自 label 的静止字号不受影响),font-size 已在
+   基础态 transition 里,收放全程连续。 */
+html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active .mob-profile-stat-name {
+  font-size: var(--mob-dock-name-font);
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active .mob-profile-stat-icon {

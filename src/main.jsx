@@ -2302,7 +2302,7 @@ function MobileWaveHeading() {
 
    变化时（字号 clamp 随 vw 变、字体加载完、窗口 resize）重新测量，
    但**跳过过渡进行中**的时段，避免把动画中途的值又写回 CSS 造成抖动。 */
-function useMeasuredWidths(selector, count, deps) {
+function useMeasuredWidths(selector, count, deps, measureWidth) {
   const [widths, setWidths] = useState(null);
 
   useEffect(() => {
@@ -2314,7 +2314,7 @@ function useMeasuredWidths(selector, count, deps) {
       if (row && row.classList.contains('is-docked')) return;
       const next = nodes.map((n) => {
         const prev = parseFloat(n.style.getPropertyValue('--mob-w'));
-        const cur = n.getBoundingClientRect().width;
+        const cur = measureWidth ? measureWidth(n) : n.getBoundingClientRect().width;
         /* 已经一致就别 setState，避免无限重渲染。 */
         return Math.abs((prev || 0) - cur) < 0.5 ? prev : Math.round(cur * 100) / 100;
       });
@@ -2333,6 +2333,49 @@ function useMeasuredWidths(selector, count, deps) {
   }, [selector, count, ...(deps || [])]);
 
   return widths;
+}
+
+/* 经验 dock 选中卡的目标宽度 = 内容自然宽 + dock 水平 padding + 描边。
+   旧版沿用静止三等分宽，内容右侧空出一截（2026-10-03 用户要求收掉的边距）。
+   内容用静止字号 scrollWidth 量出（静止态即使被 max-width 裁过也能量到全宽）；
+   dock 态英文字号/水平 padding 比静止态小一档，常量在 .mob-profile-stats 的
+   --mob-dock-name-font / --mob-dock-pad-x（与 CSS 单一来源），这里用探针元素
+   把 clamp 解析成 px 后按字号比例折算文本宽。技能卡不传本函数，维持静止宽。 */
+function measureStatDockWidth(node) {
+  const label = node.querySelector('.mob-profile-stat-label');
+  const strong = node.querySelector('strong');
+  const name = node.querySelector('.mob-profile-stat-name');
+  if (!label || !strong || !name) return node.getBoundingClientRect().width;
+  const cs = getComputedStyle(node);
+  let chrome = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+  const row = node.parentElement;
+  const rowStyle = row ? getComputedStyle(row) : null;
+  const dockNameFont = rowStyle ? rowStyle.getPropertyValue('--mob-dock-name-font').trim() : '';
+  const dockPadX = rowStyle ? rowStyle.getPropertyValue('--mob-dock-pad-x').trim() : '';
+  let inner = Math.max(strong.scrollWidth, label.scrollWidth);
+  if (dockNameFont && dockPadX) {
+    const probe = measureStatDockWidth._probe || (measureStatDockWidth._probe = document.createElement('span'));
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;';
+    document.body.append(probe);
+    probe.style.fontSize = dockNameFont;
+    const dockFontPx = parseFloat(getComputedStyle(probe).fontSize);
+    probe.style.fontSize = '';
+    probe.style.paddingLeft = dockPadX;
+    const dockPadPx = parseFloat(getComputedStyle(probe).paddingLeft);
+    probe.remove();
+    if (dockFontPx > 0 && dockPadPx > 0) {
+      const restLabelFont = parseFloat(getComputedStyle(label).fontSize);
+      const ratio = dockFontPx / restLabelFont;
+      const iconPart = label.scrollWidth - name.scrollWidth; /* 图标 + 列间距（静止值，与 dock 值差 ~2px） */
+      inner = Math.max(strong.scrollWidth, iconPart + name.scrollWidth * ratio);
+      chrome += dockPadPx * 2;
+      /* +2px 圆整余量：字体的子像素度量在量测与渲染之间存在 ~1px 漂移，
+         不留余量末字符会被 overflow:hidden 裁掉一条边。 */
+      return inner + chrome + 2;
+    }
+  }
+  chrome += parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  return inner + chrome;
 }
 
 /* 描述卡高度必须「可过渡」。原来用 grid-template-rows 0fr↔1fr 做展开/收回，
@@ -2455,7 +2498,7 @@ const MOB_FOLD_ICON = (
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
-  const statWidths = useMeasuredWidths('.mob-profile-stat', PC_STATS.length);
+  const statWidths = useMeasuredWidths('.mob-profile-stat', PC_STATS.length, undefined, measureStatDockWidth);
   const skillWidths = useMeasuredWidths('.mob-profile-skill', PC_SKILLS.length);
 
   const toggleStat = (id) => {
@@ -4445,9 +4488,18 @@ function WorksPage({ activeCategory, goDetail }) {
                 <LazyImage data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
               </button>
               <div className="showcase-copy">
-                <h2>{work.title}</h2>
-                <p>{work.subtitle}</p>
-                <button type="button" onClick={() => openDetail(work)}>查看设计详情</button>
+                {/* 左下两行文字(标题+副标题)整体可点,同样进入三级详情页
+                    (2026-10-03 用户要求)。包裹按钮在桌面/移动两端都有中和样式,
+                    不改变原排版。 */}
+                <button
+                  type="button"
+                  className="showcase-copy-text"
+                  onClick={() => openDetail(work)}
+                >
+                  <h2>{work.title}</h2>
+                  <p>{work.subtitle}</p>
+                </button>
+                <button type="button" className="showcase-more" onClick={() => openDetail(work)}>查看设计详情</button>
               </div>
             </article>
           ))}
