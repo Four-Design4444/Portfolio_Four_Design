@@ -252,10 +252,22 @@ html[data-device="mobile"] .nav-works .morph-logo {
   display: block;
 }
 
+/* 2026-10-03: the category row must center on the BAR itself, not on the
+   space right of the logo. grid-column: 2 centered it inside the 1fr middle
+   track, which sat ~27.5px right of bar center (half the logo track). Spanning
+   1 / -1 re-centers it on the whole bar without moving the logo / toggle
+   tracks; the pill-morph and slide indicator stay correct because they measure
+   the live button rects. The row lets pointers pass through so the logo and
+   the absolutely-anchored home pill underneath stay clickable. */
 html[data-device="mobile"] .nav-works .works-nav-items {
-  grid-column: 2;
+  grid-column: 1 / -1;
   justify-self: center;
   width: auto;
+  pointer-events: none;
+}
+
+html[data-device="mobile"] .nav-works .works-nav-items button {
+  pointer-events: auto;
 }
 
 /* Shrunken Home pill: 24px white circle, black 11px house glyph.
@@ -791,7 +803,10 @@ html[data-device="mobile"] .works-eyebrow {
 }
 
 html[data-device="mobile"] .works-title-row h1 {
-  font-size: clamp(44px, 13.5vw, 68px);
+  /* 旧 clamp(44px,13.5vw,68px) 业主要求大幅缩小 —— 降到约一半,
+     仍明显高于 14.5px 的 works-intro,保住"页标题 vs 正文"的层级。 */
+  font-size: clamp(26px, 7.5vw, 36px);
+  line-height: 1.1;
 }
 
 html[data-device="mobile"] .works-intro {
