@@ -1601,15 +1601,25 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             }}>Contact</a>
             <span className="home-nav-indicator" aria-hidden="true" ref={indicatorRef} />
           </nav>
-          {/* Mobile: the four text links are folded away entirely; this burger
+        </>
+      )}
+      {/* 汉堡常驻在所有层级(详见下方按钮注释):只有放在 isHome 之外,
+          home→works 时它才能**带着退场动画**淡出,而不是被 React 直接卸载。 */}
+      {/* Mobile: the four text links are folded away entirely; this burger
               is the only nav affordance. The lines morph into an X while the
-              fullscreen panel fades in underneath the bar. */}
+              fullscreen panel fades in underneath the bar.
+              2026-10-04: 常驻挂载(不再随 isHome 卸载)。汉堡 ⇄ 房子 icon 的
+              交叉淡入淡出需要**两个元素都在场**——卸载式渲染没有 exit 动画,
+              home→works 时汉堡会瞬间消失、房子瞬间出现(业主反馈"没有过渡")。
+              非首页态由 CSS 置 opacity:0 + pointer-events:none,不可点不可见。 */}
           <button
             type="button"
             className={`mobile-menu-toggle${mobileMenuOpen ? ' is-open' : ''}`}
             aria-label={mobileMenuOpen ? '关闭菜单' : '打开菜单'}
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu-panel"
+            aria-hidden={!isHome}
+            tabIndex={isHome ? 0 : -1}
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
             <svg viewBox="0 0 32 32" aria-hidden="true">
@@ -1619,8 +1629,10 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             </svg>
           </button>
           {/* The panel portals to <body>: .morph-nav has transform + contain:paint,
-              which would trap a fixed-position child inside the 78px bar. */}
-          {createPortal(
+              which would trap a fixed-position child inside the 78px bar.
+              面板仍只在首页挂载:离开首页时菜单必然已关闭(点链接会关),
+              不存在「面板在别的层级残留」的情况。 */}
+          {isHome && createPortal(
             <nav
               id="mobile-menu-panel"
               className={`mobile-menu${mobileMenuOpen ? ' is-open' : ''}`}
@@ -1637,8 +1649,6 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             </nav>,
             document.body
           )}
-        </>
-      )}
       {isDetail && (
         <button type="button" className="detail-nav-back" onClick={goWorksBack}>
           <svg className="detail-nav-back-icon" viewBox="0 0 10 18" aria-hidden="true">
@@ -1675,7 +1685,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
           </button>
         </div>
       )}
-      {isHome ? null : isDetail ? (
+      {isDetail ? (
         <div className={`detail-category-select${categoryOpen ? ' is-open' : ''}`} onMouseLeave={() => setCategoryOpen(false)}>
           <button
             type="button"
@@ -1703,7 +1713,9 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
           </div>
         </div>
       ) : (
-        <button type="button" className="morph-home-pill" onClick={goHome} aria-label="Home"><House size={15} strokeWidth={2} />Home</button>
+        // 2026-10-04: 房子 icon 在首页也常驻挂载(此前 isHome → null)。
+        // 汉堡 ⇄ 房子的交叉过渡需要两端都在场;首页态由 CSS 置透明+缩小。
+        <button type="button" className="morph-home-pill" onClick={goHome} aria-label="Home" aria-hidden={isHome} tabIndex={isHome ? -1 : 0}><House size={15} strokeWidth={2} />Home</button>
       )}
     </header>
   );

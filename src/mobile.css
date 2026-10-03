@@ -309,20 +309,44 @@ html[data-device="mobile"] .nav-works .works-nav-items button {
   pointer-events: auto;
 }
 
+/* --- 汉堡 ⇄ 房子 icon 交叉过渡 (2026-10-04) ---
+   两个 icon 现在在所有层级**常驻挂载**(JSX 不再按 page 卸载/挂载)。
+   此前 home→works 是硬切:React 卸载的元素没有 exit 动画,汉堡瞬间消失、
+   房子瞬间出现。现在两端都在场,靠 opacity + scale 交叉淡入淡出。 */
+
+/* 汉堡:首页态是「自然态」(不写任何东西),离开首页时缩小淡出。
+   时长跟整条栏的形变一致(620ms),两个 icon 的收放与栏的收缩同拍。 */
+html[data-device="mobile"] .mobile-menu-toggle {
+  transition:
+    opacity 360ms ease,
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle {
+  opacity: 0;
+  pointer-events: none;
+  /* 汉堡 44px、胶囊 24px,两者都贴右内边距 → 静止时中心天然差 10px。
+     退场时这 10px 位移把它们**收到同一个中心**,交叉淡入淡出才读作
+     「同一个 icon 在变形」,而不是两个 icon 各自漂移着换班。 */
+  transform: translateX(10px) scale(0.55);
+}
+
 /* Shrunken Home pill: 24px white circle, black 11px house glyph.
    ABSOLUTELY anchored to the nav's right padding — it must NOT take a grid
    track: the works row's own centering baseline is off-center on mobile
    (measured live: category row sits 27.5px right of nav center, cols
    55px/283px/0px) and a grid pill would shift that row by ~12px. Absolute
    keeps every existing element pixel-identical to the old version.
-   Approach offset halved (28px -> 12px) for this size; the lit transform is
-   re-pinned with translateY(-50%) because the mobile base rule out-specifies
-   / out-orders the PC lit rule. */
-html[data-device="mobile"] .morph-home-pill {
-  transform: translateY(-50%) translateX(12px) scale(0.9);
-}
-
-html[data-device="mobile"] .nav-works .morph-home-pill {
+   2026-10-04: 尺寸提到**全态**基础规则(原来只在 .nav-works 下定义)。
+   否则 works→home 时胶囊会在淡出途中瞬间撑回桌面那枚 114×36 白胶囊 ——
+   width/height/font-size 不在过渡列表里,是硬切。全态统一为 24px 小圆,
+   首页态只是透明+缩小(scale 0.55),看不见也影响不到布局。
+   胶囊自身位置**逐像素保持原样**(绝对定位 right:10,跨态恒定 —— 若让 right
+   随态变化,可见时会瞬移;恒定则位移发生在不可见瞬间)。 */
+html[data-device="mobile"] .morph-nav .morph-home-pill {
+  /* 绝对定位 + right:10 —— 与改版前**逐像素一致**(胶囊右缘距栏右缘 10px),
+     也不占网格轨道(分类行横跨 1/-1 居中不受影响)。 */
   display: inline-flex;
   position: absolute;
   top: 50%;
@@ -333,10 +357,26 @@ html[data-device="mobile"] .nav-works .morph-home-pill {
   padding: 0;
   gap: 0;
   font-size: 0;
-  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.55);
+  transition:
+    opacity 360ms ease,
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html[data-device="mobile"] .nav-works .morph-home-pill svg {
+/* 详情页右侧是分类下拉,没有房子 icon 的位置 → 直接不显示(与旧行为一致)。 */
+html[data-device="mobile"] .morph-nav.nav-detail .morph-home-pill {
+  display: none;
+}
+
+html[data-device="mobile"] .nav-works .morph-home-pill {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+html[data-device="mobile"] .morph-nav .morph-home-pill svg {
   width: 11px;
   height: 11px;
 }

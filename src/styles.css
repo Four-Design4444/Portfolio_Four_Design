@@ -641,6 +641,13 @@ img {
   will-change: opacity;
 }
 
+/* 2026-10-04: 房子 icon 现在首页也渲染(为移动端汉堡⇄房子的交叉过渡保留两端)。
+   PC 首页的第三列本来就属于 home-primary-items,若让这枚 114px 胶囊占位会把
+   文字链整体推左 —— 桌面端直接不显示,移动端由 mobile.css 单独接管。 */
+.morph-nav.nav-home .morph-home-pill {
+  display: none;
+}
+
 .morph-nav.nav-home-shared .morph-logo {
   pointer-events: auto;
 }
