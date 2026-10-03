@@ -58,6 +58,13 @@ html[data-device="mobile"] .morph-nav {
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 4px;
+  /* pill 行轨道变量必须全态持有:works→home 淡出瞬间 nav-works 类已摘掉,
+     若首页没有这两个变量会回落到桌面 128px/14px 轨道,正在淡出的 pill
+     文字被撑满整条首页栏 —— 业主截到的"选项文字残影"。56/4 与 works 态
+     一致,淡出全程 pill 原位收净,不产生任何位移。 */
+  --nav-item-width: 56px;
+  --nav-item-gap: 4px;
+  --works-nav-height: 34px;
   transition:
     top 620ms cubic-bezier(0.22, 1, 0.36, 1),
     width 620ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -90,7 +97,11 @@ html[data-device="mobile"] .morph-nav.nav-home .morph-logo {
 
 html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
   width: 50px;
-  height: auto;
+  /* 高度必须用显式长度,不能用 auto:works 态是 12px,auto↔长度在 CSS
+     过渡里不可插值,形变到中点高度瞬跳 —— 就是 home↔works 时 FOUR 的
+     跳帧。50 × 200/701(svg 真实比例)= 14.27px,与 auto 的解析值一致,
+     首页静止观感零变化,过渡两端变为可插值长度。 */
+  height: 14.27px;
 }
 
 /* Mobile home nav: the four text links fold away completely. Only the logo
@@ -240,7 +251,8 @@ html[data-device="mobile"] .morph-logo {
   grid-row: 1;
 }
 
-/* Works / detail floating capsule, same top position as home. */
+/* Works / detail floating capsule, same top position as home.
+   (pill 行变量已在上方 .morph-nav 基础规则全态定义,这里不再重复。) */
 html[data-device="mobile"] .morph-nav.nav-works,
 html[data-device="mobile"] .morph-nav.nav-detail {
   top: max(12px, env(safe-area-inset-top));
@@ -248,9 +260,6 @@ html[data-device="mobile"] .morph-nav.nav-detail {
   width: min(calc(100% - 24px), 560px);
   height: 48px;
   padding: 0 10px;
-  --nav-item-width: 56px;
-  --nav-item-gap: 4px;
-  --works-nav-height: 34px;
 }
 
 /* Logo is kept on the left of the top capsule on every level and doubles
@@ -268,12 +277,27 @@ html[data-device="mobile"] .nav-works .morph-logo {
    1 / -1 re-centers it on the whole bar without moving the logo / toggle
    tracks; the pill-morph and slide indicator stay correct because they measure
    the live button rects. The row lets pointers pass through so the logo and
-   the absolutely-anchored home pill underneath stay clickable. */
-html[data-device="mobile"] .nav-works .works-nav-items {
+   the absolutely-anchored home pill underneath stay clickable.
+   2026-10-04: scoped to ALL mobile nav states, not just .nav-works. The row
+   also renders (opacity 0) on home/detail, and works→home / works→detail fade
+   it out over 360ms — if the span only existed on .nav-works, the fading
+   pills re-centred into the middle track the instant the class flipped
+   (off bar centre by half the col-1 track) and the dying texts visibly
+   jumped sideways: the "选项文字残影 + 跳帧" bug. With the span on every
+   state the fade is strictly in place; at rest the row is opacity 0 and
+   pointer-events none everywhere, so nothing else changes. */
+html[data-device="mobile"] .works-nav-items {
   grid-column: 1 / -1;
   justify-self: center;
   width: auto;
   pointer-events: none;
+}
+
+/* works→detail 淡出时,选中项的文字必须立刻消失(detail 右侧本就有
+   "UI Design ▾" 下拉,旧文字再淡一次就是重复)。visibility 不在任何
+   transition 列表里,类名翻转当帧即隐,其余三个 pill 照常原地淡出。 */
+html[data-device="mobile"] .nav-detail .works-nav-items button.active {
+  visibility: hidden;
 }
 
 html[data-device="mobile"] .nav-works .works-nav-items button {
@@ -1015,8 +1039,7 @@ html[data-device="mobile"] .detail-image-stack {
 /* --- 8. Narrow phones --------------------------------------------------- */
 
 @media (max-width: 360px) {
-  html[data-device="mobile"] .morph-nav.nav-works,
-  html[data-device="mobile"] .morph-nav.nav-detail {
+  html[data-device="mobile"] .morph-nav {
     --nav-item-width: 56px;
     --nav-item-gap: 3px;
   }
@@ -1312,6 +1335,11 @@ html[data-device="mobile"] .mob-profile-info {
      用户反馈「收回初始状态时文字突然出现,很不自然」。现在两组各按场景取:
      整组复位 420ms(慢浮现)、dock 内切换 300ms(快但要看得见过程)。 */
   --mob-name-in-dur: 200ms;
+  /* 淡入**曲线**。复位档用前段极缓的 ease-in(见 :not(.is-docked)):
+     用户要求「文字要更早开始出现」,但又要「可读时是全称」—— 两者靠曲线
+     调和:110ms 就开始极缓慢地起浮(用户看到「提前了」),真正爬到可读
+     (op≥0.5)时已 ~370ms,卡宽走完 99%,读到的就是全称。 */
+  --mob-name-ease: ease;
   --mob-stat-gap: clamp(8px, 2.4vw, 12px);
   padding: 0 clamp(20px, 6vw, 30px) clamp(30px, 6.5vh, 56px);
   color: #ffffff;
@@ -1577,7 +1605,7 @@ html[data-device="mobile"] .mob-profile-stat strong {
      不会出现 max-height:0↔none 那种离散跳变(实测切换一帧跳 10px)。
      淡入延迟与英文名同一变量:卡还窄时不浮现,避免看到半个数字。 */
   transition:
-    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) var(--mob-name-ease, ease) var(--mob-name-delay),
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
@@ -1626,7 +1654,7 @@ html[data-device="mobile"] .mob-profile-stat-name {
      淡入延迟 --mob-name-delay:卡宽快到位时才浮现,杜绝缩略中间态。 */
   flex: none;
   transition:
-    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) var(--mob-name-ease, ease) var(--mob-name-delay),
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
@@ -1652,6 +1680,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked {
 html[data-device="mobile"] .mob-profile-stats:not(.is-docked) {
   --mob-name-delay: 110ms;
   --mob-name-in-dur: 520ms;
+  --mob-name-ease: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat {
@@ -2151,7 +2180,7 @@ html[data-device="mobile"] .mob-profile-skill-name {
   text-overflow: ellipsis;
   flex: none;
   transition:
-    opacity var(--mob-name-in-dur, 200ms) ease var(--mob-name-delay),
+    opacity var(--mob-name-in-dur, 200ms) var(--mob-name-ease, ease) var(--mob-name-delay),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
 
@@ -2174,6 +2203,7 @@ html[data-device="mobile"] .mob-profile-skills.is-docked {
 html[data-device="mobile"] .mob-profile-skills:not(.is-docked) {
   --mob-name-delay: 110ms;
   --mob-name-in-dur: 520ms;
+  --mob-name-ease: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /* 收起项同样**不用 justify-content: center**(离散、不可过渡,会让图标相对
