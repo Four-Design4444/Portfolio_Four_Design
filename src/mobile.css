@@ -1871,8 +1871,8 @@ html[data-device="mobile"] .mob-profile-skill {
   /* ⚠ 名称改成「不压缩」后,芯片收窄到 36px 时名字会**溢出**,必须由芯片裁掉,
      否则会画到邻居芯片上(2026-10-03)。静止态内容正好装得下,裁切无损。 */
   overflow: hidden;
-  gap: 3px;
-  padding: 8px 6px;
+  gap: 7px;
+  padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -1996,6 +1996,9 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
   color: #ffffff;
   border-top-color: transparent;
   border-radius: 0 0 10px 10px;
+  /* 恢复选中项的舒展内边距与图标文字间距；未选中项保持 36px 方块内图标居中。 */
+  gap: 7px;
+  padding: 8px 10px;
   /* dock 内**换选中项**(用户反馈「切换不流畅」的根因):旧版新选中项要走满
      1000ms 宽度 + 700ms 名称延迟 ≈ 1.1s 才看得见名字。现在宽度单独走
      --mob-switch-dur(340ms)、名称 250ms 后浮现 → 约 390ms 完成。
