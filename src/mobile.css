@@ -1187,6 +1187,21 @@ html[data-device="mobile"] .mob-profile-bg {
   object-position: 85% 50%;
 }
 
+/* ---- 隐形测量条(main.jsx 里 .mob-card-measure)----
+   把每组全部描述文案按真实 body/box 盒模型渲染一遍:不可见、零占位,
+   JS 取最大 offsetHeight 写 --mob-exp-max / --mob-skill-max(见
+   useMeasuredMaxCardHeight)。作为 flex 子项 height:0 不参与排版;
+   子元素 overflow:visible 自然向下溢出但 visibility:hidden 不绘制。
+   box 的 height: var(--mob-card-h) 在这里取不到变量 → 回落 auto,
+   量到的正是自然内容高。 */
+html[data-device="mobile"] .mob-card-measure {
+  height: 0;
+  overflow: visible;
+  visibility: hidden;
+  pointer-events: none;
+  flex: 0 0 auto;
+}
+
 /* Legibility wash: keeps the photo moody where the text docks. */
 html[data-device="mobile"] .profile-shot-inner::after {
   content: "";
@@ -1426,8 +1441,11 @@ html[data-device="mobile"] .mob-profile-stat {
      盒宽恒为文本自然宽,卡收窄到 36px 时内容会**溢出**而不是被压扁。
      没有这条 overflow 就会看到数字/名字画在邻居卡上面。 */
   overflow: hidden;
-  gap: clamp(7px, 1.8vh, 10px);
-  padding: clamp(11px, 2.4vh, 16px) clamp(11px, 3vw, 15px);
+  gap: clamp(5px, 1.3vh, 7px);
+  /* 卡高收窄一档(2026-10-03 用户要求):纵向 padding 16→13、列 gap 10→7。
+     ⚠ 收起项的 margin-top 公式(见 is-docked 规则)引用同一组 clamp,
+     两处必须同步改,底边对齐才不会裂。 */
+  padding: clamp(9px, 1.9vh, 13px) clamp(11px, 3vw, 15px);
   border: 1px solid rgba(255, 255, 255, 0.26);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.02);
@@ -1569,9 +1587,10 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
   width: 36px;
   /* 下收(2026-10-03,对齐 PC 版):收起芯片不再是整行高的空盒,而是**贴底
      小方块** —— margin-top = 选中项数字盒高(dock 态 clamp(16,4.9vw,23)) +
-     列 gap(clamp(7,1.8vh,10)),stretch 行内卡片高度随之收缩,底边仍与选中
-     卡/描述卡同线。margin 在基础态 transition 里,全程可插值无跳变。 */
-  margin-top: calc(clamp(16px, 4.9vw, 23px) + clamp(7px, 1.8vh, 10px));
+     列 gap(clamp(5,1.3vh,7),2026-10-03 随卡高收窄从 10 同步降到 7),
+     stretch 行内卡片高度随之收缩,底边仍与选中卡/描述卡同线。
+     margin 在基础态 transition 里,全程可插值无跳变。 */
+  margin-top: calc(clamp(16px, 4.9vw, 23px) + clamp(5px, 1.3vh, 7px));
   /* 数字盒随字号**连续**归零(font-size 可插值,非 max-height 那种离散跳变),
      列 gap 同步归零 → 内容只剩 label 一行,恰好填满收缩后的内容盒:
      每一帧 内容高 == 内容盒高,零裁切;图标由基础态 justify-content:center
@@ -1714,6 +1733,17 @@ html[data-device="mobile"] .mob-profile-skills {
    时长比 PC 再慢一档:1000ms 展开 / 内容淡入 640ms,曲线带回弹,
    慢到能看清「卡从下面长出来」。
 
+   ⚠⚠ 2026-10-03 重构(用户否掉「切换选中项时整卡上下平移、拖动上方
+   电话邮箱」的行为):容器与内容盒**拆成两个高度变量**——
+   ① 容器(exp/skill card)高度挂 --mob-exp-max / --mob-skill-max =
+      该组**最长文案**的实测高(隐形测量条量出,见 useMeasuredMaxCardHeight)。
+      切换选中项时容器高度**恒定** → 底对齐布局里上方标题/联系方式/dock 行
+      零位移;只有首次展开/收回时容器在 0 ↔ max 之间过渡。
+   ② 内容盒(.mob-profile-card-box)高度挂 --mob-card-h = 当前内容实测高,
+      切换时盒高平滑过渡 —— 视觉上「以 dock 行为锚伸缩」:
+      经验描述卡从 dock 行下沿**向下**延伸/收缩;
+      技能描述卡锚在技能行顶(触控锚点不动)**向上**延伸/收缩。
+
    ⚠ overflow:hidden 必须挂在卡片上(height:0 时裁掉内容)；代价是
    .mob-profile-card-box 的投影被裁掉 —— 深色底上本就不可见,可接受。 */
 html[data-device="mobile"] .mob-profile-exp-card > *,
@@ -1740,9 +1770,18 @@ html[data-device="mobile"] .mob-profile-skill-card {
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
+/* 容器高度挂「该组最长文案」(max),不再是当前内容高 —— 切换选中项时
+   容器恒定,上方零位移。max 未量出时回落到 --mob-card-h(旧模型)。 */
+html[data-device="mobile"] .mob-profile-exp-card.is-visible {
+  height: var(--mob-exp-max, var(--mob-card-h, 0px));
+}
+
+html[data-device="mobile"] .mob-profile-skill-card.is-visible {
+  height: var(--mob-skill-max, var(--mob-card-h, 0px));
+}
+
 html[data-device="mobile"] .mob-profile-exp-card.is-visible,
 html[data-device="mobile"] .mob-profile-skill-card.is-visible {
-  height: var(--mob-card-h, 0px);
   opacity: 1;
   transform: translateY(0) scaleY(1);
 }
@@ -1788,17 +1827,36 @@ html[data-device="mobile"] .mob-profile-card-body {
      没有这条，收回第一帧文字就直接消失（实测 opacity 首帧即 0.00）。 */
   transition:
     opacity 360ms cubic-bezier(0.34, 1.2, 0.44, 1),
-    transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
+    transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1),
+    /* 技能描述卡向上/向下伸缩时,body 的 margin-top = max−当前高 同步过渡,
+       盒底才能全程钉在技能行顶(见 .mob-profile-skill-card.is-visible 规则)。 */
+    margin var(--mob-dock-dur) var(--mob-dock-ease);
   opacity: 0;
   transform: translateY(-4px);
 }
 
+/* 视觉盒:高度由 --mob-card-h(当前内容实测高)驱动并过渡 —— 切换选中项时
+   只有这一层在伸缩,容器(max)与上方内容全部不动。经验卡盒顶贴 dock 行、
+   向下伸缩;技能卡的盒底贴技能行(见下方 body margin 规则)、向上伸缩。
+   ⚠ 量高时 JS 会把 height 瞬时放回 auto 读自然高再还原
+   (见 useMeasuredCardHeight),所以这里的约束不会造成「量到自己」。 */
 html[data-device="mobile"] .mob-profile-card-box {
+  height: var(--mob-card-h, auto);
+  min-height: 0;
+  overflow: hidden;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   background: rgba(10, 10, 12, 0.66);
   box-shadow: 0 18px 34px -24px rgba(0, 0, 0, 0.9);
+  transition: height var(--mob-dock-dur) var(--mob-dock-ease);
+}
+
+/* 技能描述卡「从 dock 行向上长」:body 顶边 = 容器高(max) − 当前内容高,
+   盒底永远钉在容器底(=技能行顶),切换时只变盒高 —— 技能行与上方内容
+   全程不动,手指的触控锚点不漂移。经验卡不写这条(默认顶对齐,向下长)。 */
+html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-body {
+  margin-top: calc(var(--mob-skill-max, 0px) - var(--mob-card-h, 0px));
 }
 
 html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
@@ -1825,8 +1883,9 @@ html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-
 
 html[data-device="mobile"] .mob-profile-card-body p {
   margin: 0;
-  /* 用户要求信息卡文字整体缩小一档 */
-  font-size: clamp(11px, 2.95vw, 13px);
+  /* 用户要求信息卡文字整体再缩小一档、再细一个字重(标题不动)。 */
+  font-size: clamp(10px, 2.6vw, 12px);
+  font-weight: 300;
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.75);
 }

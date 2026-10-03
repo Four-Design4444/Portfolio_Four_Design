@@ -2340,20 +2340,92 @@ function useMeasuredWidths(selector, count, deps) {
    改为 JS 实测内容高度写进 --mob-card-h，CSS 用 height: 0 ↔ var() 过渡，
    展开 / 收回 / 切换三种高度变化全部走同一条 height 过渡。
    contentId(=当前项 id)变化时重测；box 的 offsetHeight 是布局高度，
-   不受卡片 scaleY/位移 keyframes 影响。 */
+   不受卡片 scaleY/位移 keyframes 影响。
+
+   2026-10-03 两处升级(配合 CSS 的 --mob-exp-max/--mob-skill-max 预留):
+   ① box 高度本身也被 --mob-card-h 约束了(切换时盒高要过渡),直接量
+      offsetHeight 会读到**旧约束值**而不是新内容的自然高 —— 先瞬时放回
+      auto 量完再还原(useLayoutEffect 在绘制前跑,无闪烁)。
+   ② 变量写在**组容器**上(技能组=shell,经验组=卡片自身):技能行贴合与
+      盒高过渡要读同一个值,必须同源。
+   ③ ⚠ 盒高过渡成立的前提是 **body/box 跨切换持久存在**(JSX 里不能加
+      key 重挂载):实测 Chrome 对「本次 commit 新插入的元素」不启动任何
+      过渡,连「设旧值→强制回流→翻转变量」的 FLIP 都救不回来(埋点证实
+      startH/h 全对、过渡就是不跑);而持久元素上变量翻转是正常补间的。
+      切换时的文字淡入由 useRestartCardAnimation 重启 @keyframes 补上。 */
 function useMeasuredCardHeight(cardRef, contentId) {
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card) return;
+    const host = card.closest('.mob-profile-shell') || card;
     const measure = () => {
       const box = card.querySelector('.mob-profile-card-box');
-      card.style.setProperty('--mob-card-h', box ? `${box.offsetHeight}px` : '0px');
+      if (!box) {
+        host.style.setProperty('--mob-card-h', '0px');
+        return;
+      }
+      /* 量自然高:height 被变量约束,先放回 auto 再读。
+         ⚠⚠ auto 回流会把「上一帧计算值」毒化成离散的 auto —— 之后再翻转
+         变量就是 auto↔px 离散变化,过渡直接失效(实测盒高一帧瞬跳)。
+         所以量完必须把旧 px 值重新钉回去,重建连续的 before-change,
+         变量翻转才能从旧值平滑补间到新值。 */
+      const prevH = parseFloat(getComputedStyle(box).height) || 0;
+      box.style.height = 'auto';
+      const h = box.offsetHeight;
+      box.style.height = `${prevH}px`;
+      box.offsetHeight; /* 让「钉回旧值」落成上一帧计算值 */
+      box.style.height = '';
+      host.style.setProperty('--mob-card-h', `${h}px`);
     };
     measure();
     window.addEventListener('resize', measure);
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
     return () => window.removeEventListener('resize', measure);
   }, [contentId]);
+}
+
+/* 切换选中项时重启盒上的进场动画(@keyframes mob-profile-card-in)。
+   body 不再带 key 重挂载(见 useMeasuredCardHeight ③),CSS 动画不会因
+   选择器重新匹配而自动重放 —— 用「先摘后还」的经典手法手动重启。 */
+function useRestartCardAnimation(cardRef, contentId) {
+  useLayoutEffect(() => {
+    if (!contentId) return;
+    const box = cardRef.current?.querySelector('.mob-profile-card-box');
+    if (!box) return;
+    box.style.animation = 'none';
+    box.offsetHeight;
+    box.style.animation = '';
+  }, [contentId]);
+}
+
+/* 量出每组描述卡的**最大**内容高度,写 --mob-exp-max / --mob-skill-max。
+   为什么要 max:描述卡容器(展开层)高度若挂「当前内容高」,切换选中项时
+   容器高度跟着变,底对齐布局就会拖着上方标题/联系方式一起移 —— 正是用户
+   否掉的行为。挂 max 后容器高度在切换全程**恒定**,上方零位移;内容盒自身
+   高度(=当前内容)另由 --mob-card-h 驱动并过渡,视觉上就是「以 dock 行为锚,
+   向下(经验)/向上(技能)伸缩」。
+   文案必须按真实盒模型渲染(.mob-card-measure 里复刻 body/box 结构),
+   否则 <p> 拿不到字号/行高样式,量出来偏大;字体加载完与 resize 各重量一次。 */
+function useMeasuredMaxCardHeight(infoRef) {
+  useLayoutEffect(() => {
+    const root = infoRef.current;
+    if (!root) return;
+    const measure = () => {
+      ['stat', 'skill'].forEach((group) => {
+        const nodes = root.querySelectorAll(
+          `.mob-card-measure[data-group="${group}"] .mob-profile-card-box`
+        );
+        if (!nodes.length) return;
+        let max = 0;
+        nodes.forEach((n) => { if (n.offsetHeight > max) max = n.offsetHeight; });
+        root.style.setProperty(group === 'stat' ? '--mob-exp-max' : '--mob-skill-max', `${max}px`);
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 }
 
 function ProfileContent() {
@@ -2392,6 +2464,15 @@ function ProfileContent() {
   const skillCardRef = useRef(null);
   useMeasuredCardHeight(expCardRef, shownStatData?.id);
   useMeasuredCardHeight(skillCardRef, shownSkillData?.id);
+  /* body 不带 key(持久元素才有盒高过渡,见 useMeasuredCardHeight ③),
+     切换时的文字淡入靠手动重启盒上的 @keyframes。 */
+  useRestartCardAnimation(expCardRef, shownStatData?.id);
+  useRestartCardAnimation(skillCardRef, shownSkillData?.id);
+
+  /* 每组最长文案的高度(写 --mob-exp-max / --mob-skill-max):
+     描述卡容器高度挂 max,切换选中项时容器恒定,上方标题/联系方式零位移。 */
+  const profileInfoRef = useRef(null);
+  useMeasuredMaxCardHeight(profileInfoRef);
 
   /* 主次关系同 PC:一次只有一个「展开中」的组。点经验卡 → 技能组整体退隐
      (PC 是 .pf-statrow.is-hidden);点技能卡 → 经验组退隐。未选中项不是消失,
@@ -2402,7 +2483,7 @@ function ProfileContent() {
   return (
     <div className="profile-shot-inner">
       <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
-      <div className="mob-profile-info">
+      <div className="mob-profile-info" ref={profileInfoRef}>
         <MobileWaveHeading />
 
         <div className="mob-profile-contact">
@@ -2446,10 +2527,12 @@ function ProfileContent() {
         </div>
         </div>
 
-        {/* 描述卡内容收起后继续挂载（shownStatData），文字随卡片一起过渡归零。 */}
+        {/* ⚠ body 故意不带 key:重挂载的新元素在 Chrome 里不启动任何过渡,
+               盒高切换会瞬跳(见 useMeasuredCardHeight ③)。文字淡入由
+               useRestartCardAnimation 重启 @keyframes 补偿。 */}
         <div className={`mob-profile-exp-card${activeStat ? ' is-visible' : ''}`} aria-live="polite" ref={expCardRef}>
           {shownStatData && (
-            <div className="mob-profile-card-body" key={shownStatData.id}>
+            <div className="mob-profile-card-body">
               <div className="mob-profile-card-box">
                 <p>{shownStatData.text}</p>
               </div>
@@ -2464,7 +2547,7 @@ function ProfileContent() {
         <div className="mob-shell-inner">
         <div className={`mob-profile-skill-card${skillActive ? ' is-visible' : ''}`} aria-live="polite" ref={skillCardRef}>
           {shownSkillData && (
-            <div className="mob-profile-card-body" key={shownSkillData.id}>
+            <div className="mob-profile-card-body">
               <div className="mob-profile-card-box">
                 <p className="mob-profile-card-title">{shownSkillData.title}</p>
                 <p>{shownSkillData.text}</p>
@@ -2494,6 +2577,28 @@ function ProfileContent() {
           ))}
         </div>
         </div>
+        </div>
+
+        {/* 隐形测量条(见 useMeasuredMaxCardHeight):每组全部描述文案按真实
+            盒模型渲染一遍(不可见、零占位),量出最大 offsetHeight 写进
+            --mob-exp-max / --mob-skill-max。必须复刻 body/box 结构,
+            否则 <p> 拿不到字号/行高,量出来偏大。 */}
+        <div className="mob-card-measure" data-group="stat" aria-hidden="true">
+          {PC_STATS.map((s) => (
+            <div className="mob-profile-card-body" key={s.id}>
+              <div className="mob-profile-card-box"><p>{s.text}</p></div>
+            </div>
+          ))}
+        </div>
+        <div className="mob-card-measure" data-group="skill" aria-hidden="true">
+          {PC_SKILLS.map((s) => (
+            <div className="mob-profile-card-body" key={s.id}>
+              <div className="mob-profile-card-box">
+                <p className="mob-profile-card-title">{s.title}</p>
+                <p>{s.text}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
