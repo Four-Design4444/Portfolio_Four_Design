@@ -3859,6 +3859,48 @@ html[data-paging="on"] .contact-page {
     transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* ---- PC 个人信息:整段入场(2026-10-03 新增) ----
+   此前 PC 只有 .pf-title 靠「opacity:0 + is-visible」淡入,而 .pf-swap /
+   .pf-skills-entrance 用的是 @starting-style —— 它只在元素**首次样式计算**
+   时生效,滑到第 2 屏才加 .is-visible 时元素早已挂载,所以这两个块完全没有
+   入场(用户反馈「PC 端个人信息完全没有入场动画」)。
+   改为与移动端同一套做法:@keyframes + .profile-shot.is-visible 挂载,
+   fill-mode **backwards**(动画结束把控制权交回规则)。
+   ⚠ 必须用 keyframes 而不是给这两个块加 transition-delay:
+   .pf-skills-entrance 上的任何 transition-delay 都会漏进 hover 收拢动画
+   (见下方 .pf-skills-entrance 注释:技能条会先等 420ms 才上移)。
+   keyframes 的 delay 只影响动画本身,不会污染 transition。 */
+@keyframes pf-profile-rise {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+.profile-shot.is-visible .pf-title {
+  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 60ms backwards;
+}
+
+.profile-shot.is-visible .pf-contact {
+  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 150ms backwards;
+}
+
+.profile-shot.is-visible .pf-swap {
+  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 240ms backwards;
+}
+
+.profile-shot.is-visible .pf-skills-entrance {
+  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 330ms backwards;
+}
+
+/* 背景推近(PC 1.6s → 1.2s,与移动端入场一起加快) */
+@keyframes pf-profile-kenburns {
+  from { transform: scale(1.05); }
+  to { transform: scale(1); }
+}
+
+.profile-shot.is-visible .pf-bg-img {
+  animation: pf-profile-kenburns 1.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
 .profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
 .profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }

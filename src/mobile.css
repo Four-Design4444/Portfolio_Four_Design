@@ -15,16 +15,13 @@ html[data-device="mobile"] {
   text-size-adjust: 100%;
   scrollbar-gutter: auto;
   overflow-y: auto;
-  /* 三级详情是 window 长滚动。在顶部快速下拉会冲过 scrollY=0 触发 overscroll
-     bounce(橡皮筋),把最上面的 hero 大图整块拖下来再回弹 —— 首页五屏已由
-     html[data-paging="on"] 的 overscroll-behavior-y 兜住,二级/三级页没有,
-     这里给移动端根滚动容器补上。只禁越界弹动与滚动链,不影响页面内正常滚动。 */
-  overscroll-behavior-y: none;
+  /* ⚠ 不要在这里加 overscroll-behavior-y: none(2026-10-03 实测踩坑):
+     移动端模式下 html+body 一起设 none 会让**滚轮完全失效**(works 页滚不动,
+     同一页面把属性改回 auto 立刻恢复 0->487)。橡皮筋另想办法。 */
 }
 
 html[data-device="mobile"] body {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: none;
 }
 
 html[data-device="mobile"] button,
@@ -1374,22 +1371,23 @@ html[data-device="mobile"] .mob-profile-title-cn {
 }
 
 html[data-device="mobile"] .profile-shot.is-visible .mob-profile-title {
-  animation: mob-profile-rise 1200ms cubic-bezier(0.34, 1.2, 0.44, 1) 160ms backwards;
+  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 60ms backwards;
 }
 
 html[data-device="mobile"] .profile-shot.is-visible .mob-profile-contact {
-  animation: mob-profile-rise 1200ms cubic-bezier(0.34, 1.2, 0.44, 1) 280ms backwards;
+  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 140ms backwards;
 }
 
 html[data-device="mobile"] .profile-shot.is-visible .mob-profile-stats {
-  animation: mob-profile-rise 1200ms cubic-bezier(0.34, 1.2, 0.44, 1) 380ms backwards;
+  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 210ms backwards;
 }
 
 html[data-device="mobile"] .profile-shot.is-visible .mob-profile-skills {
-  animation: mob-profile-rise 1200ms cubic-bezier(0.34, 1.2, 0.44, 1) 620ms backwards;
+  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 280ms backwards;
 }
 
-/* 背景照缓慢推近 2s(PC 1.6s)。keyframe 而非 transition,理由同上:
+/* 背景照缓慢推近(2026-10-03 从 2s 收到 1.2s:整屏入场从 1.82s 压到 ~0.98s,
+   用户反馈「移动端个人信息入场有点慢」)。keyframe 而非 transition,理由同上:
    没有 .is-visible 时不做缩放,不留一个偏窄的构图。 */
 @keyframes mob-profile-kenburns {
   from { transform: scale(1.06); }
@@ -1397,7 +1395,7 @@ html[data-device="mobile"] .profile-shot.is-visible .mob-profile-skills {
 }
 
 html[data-device="mobile"] .profile-shot.is-visible .mob-profile-bg {
-  animation: mob-profile-kenburns 2s cubic-bezier(0.34, 1.2, 0.44, 1) backwards;
+  animation: mob-profile-kenburns 1.2s cubic-bezier(0.34, 1.2, 0.44, 1) backwards;
 }
 
 /* Contact rows: plain icon + value lines, no pill chrome (per the mock). */
@@ -1652,7 +1650,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked {
    200ms 时宽度曲线(0.32,0.86,0.28,1)已走 ~80%,名字从此刻开始 520ms
    缓缓浮现 —— 早期透明度极低,被卡边裁掉的部分肉眼无感,不会读出缩略态。 */
 html[data-device="mobile"] .mob-profile-stats:not(.is-docked) {
-  --mob-name-delay: 200ms;
+  --mob-name-delay: 110ms;
   --mob-name-in-dur: 520ms;
 }
 
@@ -1746,13 +1744,21 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
   transform: none;
   padding-left: var(--mob-dock-pad-x);
   padding-right: var(--mob-dock-pad-x);
-  /* dock 内**换选中项**:手指已经在这条 dock 上,等的是「换一个看」,
-     340ms 到位 + 250ms 后名称浮现 → 整条切换约 390ms 走完(旧版要 1s+)。
+  /* dock 内**换选中项**:手指已经在这条 dock 上,等的是「换一个看」。
+     ⚠⚠ 这档快时长只能由 .is-switching 触发(见下),**不能**直接写在
+     .is-active 上 —— 否则首次展开时被点的那枚就走 340ms、其余收起项走
+     620ms,被点的卡提前到位(实测 9 帧 vs 20 帧),用户看到的就是
+     「这一枚跳帧」(2026-10-03 修的 5+ BUG)。
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档
      240ms 按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
-  --mob-w-dur: var(--mob-switch-dur);
   --mob-name-delay: 170ms;
   --mob-name-in-dur: 300ms;
+}
+
+/* 只有「组内切换」(JS 加的 .is-switching)才缩短宽度时长;
+   首次展开 / 整组复位一律与收起项同步走 --mob-dock-dur。 */
+html[data-device="mobile"] .mob-profile-stats.is-switching.is-docked .mob-profile-stat.is-active {
+  --mob-w-dur: var(--mob-switch-dur);
 }
 
 /* 选中卡英文 dock 态缩一档(2026-10-03 用户要求),静止态字号不动。
@@ -2166,7 +2172,7 @@ html[data-device="mobile"] .mob-profile-skills.is-docked {
 /* 整组**复位**(dock → 静止)：五枚芯片一起回到自然宽，名称/图标等卡宽快到位
    (460/620 ≈ 74%，该曲线此处已走到 ~98%)才浮现 —— 看到的永远是全称。 */
 html[data-device="mobile"] .mob-profile-skills:not(.is-docked) {
-  --mob-name-delay: 200ms;
+  --mob-name-delay: 110ms;
   --mob-name-in-dur: 520ms;
 }
 
@@ -2224,14 +2230,20 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
   padding: 8px 14px;
   /* dock 内**换选中项**(用户反馈「切换不流畅」的根因):旧版新选中项要走满
      1000ms 宽度 + 700ms 名称延迟 ≈ 1.1s 才看得见名字。现在宽度单独走
-     --mob-switch-dur(340ms)、名称 250ms 后浮现 → 约 390ms 完成。
+     --mob-switch-dur(340ms)、名称 170ms 后浮现 → 约 450ms 完成。
+     ⚠⚠ 但 --mob-w-dur 这档快时长只能由 .is-switching 触发(见下),不能留在
+     .is-active 上 —— 首次展开时被点的那枚会提前到位(实测 9 帧 vs 其余 20 帧),
+     用户看到的就是「这一枚跳帧」(2026-10-03 修的 5+ BUG)。
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档 240ms
      按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
-  --mob-w-dur: var(--mob-switch-dur);
   --mob-name-delay: 170ms;
-  /* dock 内切换仍要快(用户要求「切换不流畅」已修):切换宽度 340ms,
-     名称 150ms 后浮现、300ms 完成,约 450ms。 */
   --mob-name-in-dur: 300ms;
+}
+
+/* 只有「组内切换」(JS 加的 .is-switching)才缩短宽度时长;
+   首次展开 / 整组复位一律与收起项同步走 --mob-dock-dur。 */
+html[data-device="mobile"] .mob-profile-skills.is-switching.is-docked .mob-profile-skill.is-active {
+  --mob-w-dur: var(--mob-switch-dur);
 }
 
 /* 描述卡(dock 上方)底边与 dock 上沿贴合:这 -1px 让两者之间不出现双边。

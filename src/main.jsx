@@ -2501,12 +2501,23 @@ function ProfileContent() {
   const statWidths = useMeasuredWidths('.mob-profile-stat', PC_STATS.length, undefined, measureStatDockWidth);
   const skillWidths = useMeasuredWidths('.mob-profile-skill', PC_SKILLS.length);
 
+  /* 「已在 dock 内换选中项」标记(2026-10-03 修 BUG):
+     用户报「5+ 那枚跳帧、10+/50+ 没有」—— 逐帧实测发现被点的那枚宽度只用
+     ~270ms 就到位(9 帧),其余收起项走满 620ms(20 帧)。根因:dock 态
+     .is-active 上那档 --mob-w-dur: --mob-switch-dur(340ms) 在**首次展开**时也
+     生效,于是被点的卡提前到位、其余仍在动 → 视觉上就是「这一枚跳了一下」。
+     修法:这档快时长只在**组内切换**时生效(activeXxx 原先非空且换了另一枚),
+     首次展开/整组复位一律走 --mob-dock-dur。 */
+  const [switching, setSwitching] = useState(null);
+
   const toggleStat = (id) => {
+    setSwitching(activeStat && activeStat !== id ? 'stat' : null);
     setActiveStat((prev) => (prev === id ? null : id));
     setActiveSkill(null);
   };
 
   const toggleSkill = (id) => {
+    setSwitching(activeSkill && activeSkill !== id ? 'skill' : null);
     setActiveSkill((prev) => (prev === id ? null : id));
     setActiveStat(null);
   };
@@ -2589,7 +2600,7 @@ function ProfileContent() {
             直接把多个子项塞进 shell 会各占一行，行高得用 auto auto 描述，
             而 auto↔0fr 不可插值 → 互斥收起瞬间跳变；单子项 1fr↔0fr 才有平滑过渡。 */}
         <div className="mob-shell-inner">
-        <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}`}>
+        <div className={`mob-profile-stats${statActive ? ' is-docked' : ''}${switching === 'stat' ? ' is-switching' : ''}`}>
           {PC_STATS.map((s, i) => (
             <button
               type="button"
@@ -2651,7 +2662,7 @@ function ProfileContent() {
           )}
         </div>
 
-        <div className={`mob-profile-skills${skillActive ? ' is-docked' : ''}`}>
+        <div className={`mob-profile-skills${skillActive ? ' is-docked' : ''}${switching === 'skill' ? ' is-switching' : ''}`}>
           {/* DOM 顺序 == 数据顺序:用 sort / order 把选中项顶到行首会让节点被移动,
               移动即 re-layout,宽度形变变成跳变而非滑动,正是慢曲线要消除的两段感。
               PC端同样让选中标签原地 morph。技能 dock 的收起项靠 width 收窄,
