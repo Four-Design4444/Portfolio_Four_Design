@@ -699,51 +699,6 @@ html[data-device="mobile"] .mob-thumb.on {
   transform: translateY(-3px);
 }
 
-/* --- 4. Contact --------------------------------------------------------- */
-
-html[data-device="mobile"] .contact-head .section-kicker {
-  font-size: clamp(40px, 13vw, 60px);
-}
-
-html[data-device="mobile"] .contact-head h2 {
-  min-height: 38px;
-  padding: 0 18px;
-  font-size: 16px;
-}
-
-html[data-device="mobile"] .contact-page .container {
-  padding-top: 76px;
-  padding-bottom: 56px;
-}
-
-html[data-device="mobile"] .contact-sentence {
-  margin-top: 30px;
-  font-size: clamp(26px, 7.6vw, 34px);
-  line-height: 1.28;
-}
-
-html[data-device="mobile"] .contact-actions {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  margin-top: 30px;
-}
-
-html[data-device="mobile"] .contact-mail,
-html[data-device="mobile"] .contact-phone {
-  justify-content: center;
-  height: 50px;
-  padding: 0 20px;
-  font-size: 15px;
-}
-
-html[data-device="mobile"] .contact-bottom {
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  margin-top: 56px;
-  font-size: 12px;
-}
-
 /* --- 5. Works index ----------------------------------------------------- */
 
 html[data-device="mobile"] .works-index-page {
@@ -2084,4 +2039,63 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
    同上，不能用 `+`（壳包裹后两者不再是兄弟），从壳内定位。 */
 html[data-device="mobile"] .mob-profile-shell-skills .mob-profile-skill-card.is-visible + .mob-profile-skills.is-docked {
   margin-top: -1px;
+}
+
+/* ---- 折叠图标(移动端,2026-10-03):描述卡展开时出现在所在行(经验标签行/
+   技能行)右端、描述卡右缘上(图1/图2 红圈位置)。点它或点页面空白都恢复
+   初始静止态(收起逻辑见 ProfileContent 的 onDocClick)。
+   锚在行元素上(position:relative):行的右缘 = 描述卡右缘,dock 的
+   margin-left 只把行左缘右移、右缘不动,图标横向全程稳定。绝对定位不参与
+   flex,不干扰三/五枚芯片的宽度形变与 useMeasuredWidths 测量。
+   灰度与经验卡图标同档(白 @55%,同 .mob-profile-stat-label 的处理);
+   收起 shell(is-collapsed pointer-events:none)时随整组一起不可点。 */
+html[data-device="mobile"] .mob-profile-stats,
+html[data-device="mobile"] .mob-profile-skills {
+  position: relative;
+}
+
+html[data-device="mobile"] .mob-fold {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.72);
+  transition:
+    opacity 300ms ease,
+    transform 360ms cubic-bezier(0.34, 1.2, 0.44, 1);
+}
+
+html[data-device="mobile"] .mob-fold.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) scale(1);
+}
+
+html[data-device="mobile"] .mob-fold:active {
+  color: #ffffff;
+  transform: translateY(-50%) scale(0.92);
+}
+
+/* 经验态下移:视觉对齐左侧收起芯片里的小图标(芯片贴行底,中心低于行中线)。
+   手调静态偏移,不做计算式对齐。 */
+html[data-device="mobile"] .mob-fold-stat {
+  top: calc(50% + 13px);
+}
+
+html[data-device="mobile"] .mob-fold svg {
+  display: block;
+  /* 与收起芯片的图标同尺寸(mob-profile-stat/skill 收起态均为 14px),
+     视觉上保持同一档,不抢图标的戏。 */
+  width: 14px;
+  height: 14px;
 }

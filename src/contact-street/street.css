@@ -1,0 +1,639 @@
+/* Ported from the 联系我们demo v2.03 (src/style.css). Mechanical transforms only:
+   every selector is scoped under .street-app, position:fixed became
+   position:absolute (the street lives inside one 100vh section, not a page),
+   and body/root-level rules moved onto .street-app. No values were retuned. */
+
+.street-app {
+  position: absolute;
+  inset: 0;
+  /* Paints above the shared home-rays layer (z 20) and below MorphNav (z 40);
+     isolation keeps the demo's own z-index scale contained in here. */
+  z-index: 21;
+  isolation: isolate;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  color: #e9e6dd;
+  background: #101c26;
+  font-synthesis: none;
+  --muted: #91a1a6;
+  --accent: #e4b77d;
+  --line: #d8e7e42e;
+  color-scheme: dark;
+}
+
+.street-app,
+.street-app * { box-sizing: border-box; }
+
+.street-app button,
+.street-app a { -webkit-tap-highlight-color: transparent; }
+
+.street-app button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+.street-app button:focus-visible,
+.street-app a:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+
+.street-app a { color: inherit; text-decoration: none; }
+
+.street-app [hidden] { display: none !important; }
+
+.street-app #scene {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 58% 42%, #243b46 0, #152632 40%, #101c26 77%);
+  touch-action: pan-y;
+}
+
+.street-app #scene canvas { display: block; width: 100%; height: 100%; }
+
+.street-app .vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, #0a141c2e, transparent 25%, transparent 70%, #091219a6);
+  z-index: 1;
+}
+
+/* Integration note: the site's own MorphNav is a fixed 80px bar at the top of
+   the viewport, so the street header (and only its offset) sits below it. */
+.street-app .header { top: 96px; }
+
+.street-app .header {
+  position: absolute;
+  z-index: 5;
+  left: 46px;
+  right: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.street-app .header a { pointer-events: auto; }
+
+.street-app .brand { display: flex; align-items: center; gap: 20px; }
+
+.street-app .brand img { width: 102px; opacity: .94; }
+
+.street-app .brand span {
+  font-size: 9px;
+  line-height: 1.55;
+  letter-spacing: 2.5px;
+  color: #aebabc;
+  border-left: 1px solid #596469;
+  padding-left: 19px;
+}
+
+.street-app .weather {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #b4c2c5;
+}
+
+.street-app .weather i { height: 12px; width: 1px; background: #465a61; }
+
+.street-app .weather time { font-variant-numeric: tabular-nums; }
+
+.street-app .weather-note { font-size: 8px; letter-spacing: 1.6px; margin-left: 15px; color: #758a92; }
+
+.street-app .weather-dot,
+.street-app .status-dot {
+  width: 5px;
+  height: 5px;
+  background: #eac286;
+  border-radius: 50%;
+  box-shadow: 0 0 9px #c8995c88;
+}
+
+.street-app .intro {
+  position: absolute;
+  left: 4.1vw;
+  bottom: 164px;
+  z-index: 2;
+  pointer-events: none;
+  transition: opacity .5s, transform .6s;
+}
+
+.street-app .eyebrow {
+  font-size: 8px;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #9dadaf;
+}
+
+.street-app .tiny-line { height: 1px; width: 25px; background: #c6ac84; }
+
+.street-app .intro h1 {
+  font-family: Georgia, "Noto Serif SC", "Songti SC", SimSun, serif;
+  font-size: clamp(28px, 3.05vw, 47px);
+  font-weight: 400;
+  line-height: 1.42;
+  letter-spacing: 5px;
+  margin: 23px 0 19px;
+  text-shadow: 0 2px 20px #101c26;
+}
+
+.street-app .amber { color: var(--accent); }
+
+.street-app .intro p { font-size: 11px; letter-spacing: 2px; color: #96a8ac; }
+
+.street-app .intro-foot {
+  margin-top: 32px;
+  display: flex;
+  gap: 18px;
+  font-size: 7px;
+  letter-spacing: 1.4px;
+  color: #71868c;
+}
+
+.street-app .intro-foot span:first-child { color: #b5c2c1; }
+
+.street-app #scene-caption {
+  position: absolute;
+  right: 47px;
+  bottom: 155px;
+  z-index: 2;
+  text-align: right;
+  pointer-events: none;
+  transition: opacity .4s;
+}
+
+.street-app #scene-caption span { font-size: 8px; letter-spacing: 2px; color: #81979f; }
+
+.street-app #scene-caption p { font-size: 10px; letter-spacing: 1.6px; color: #9aafb2; }
+
+.street-app .hud {
+  position: absolute;
+  z-index: 5;
+  bottom: 35px;
+  left: 46px;
+  right: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.street-app .explore-note {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #889ca4;
+  width: 220px;
+}
+
+.street-app .explore-note i { font-style: normal; margin: 0 5px; }
+
+.street-app .mouse-icon {
+  width: 12px;
+  height: 19px;
+  border: 1px solid #647b85;
+  border-radius: 7px;
+  position: relative;
+}
+
+.street-app .mouse-icon:after {
+  content: "";
+  height: 4px;
+  width: 1px;
+  background: #b5c5c8;
+  position: absolute;
+  top: 4px;
+  left: 5px;
+}
+
+.street-app #navigation {
+  display: flex;
+  align-items: center;
+  border: 1px solid #42535a;
+  border-radius: 60px;
+  padding: 6px;
+  background: #14232cd9;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 36px #09121830;
+  outline: none;
+}
+
+.street-app #navigation button {
+  border-radius: 40px;
+  padding: 15px 20px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: 1px;
+  transition: background .25s, color .25s;
+}
+
+.street-app #navigation button:hover,
+.street-app #navigation button[aria-current=true] { background: #d8c49e; color: #19262b; }
+
+.street-app .nav-number { font-size: 8px; color: #7a949d; letter-spacing: 0; }
+
+.street-app .nav-arrow { color: #b9bfae; font-size: 12px; }
+
+.street-app .nav-divider { height: 12px; width: 1px; background: #425059; }
+
+.street-app .controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 220px;
+}
+
+.street-app .controls button {
+  border: 1px solid transparent;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #819ba5;
+  transition: color .2s, border-color .2s;
+}
+
+.street-app .controls button:hover { border-color: #69818b; color: #e4b77d; }
+
+.street-app .controls button[aria-pressed=true] { color: #d4be95; }
+
+.street-app .controls svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.street-app #quality { width: 42px; border-radius: 4px; font-size: 8px; letter-spacing: 1px; }
+
+.street-app .progress-track {
+  height: 1px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #2a3b44;
+  z-index: 10;
+}
+
+.street-app #progress { height: 100%; width: 0; background: #d4b689; }
+
+.street-app #detail {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 44%;
+  padding: 132px 6vw 120px 3vw;
+  z-index: 4;
+  background: linear-gradient(90deg, transparent, #101c26e8 25%, #101c26fa);
+  overflow-y: auto;
+  animation: panel-in .65s both;
+}
+
+.street-app .back {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #96acb4;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 0;
+  margin-bottom: 55px;
+}
+
+.street-app .back > span { font-size: 18px; color: var(--accent); }
+
+.street-app kbd {
+  font-family: inherit;
+  font-size: 7px;
+  border: 1px solid #3c4e56;
+  border-radius: 3px;
+  padding: 3px;
+  margin-left: 15px;
+}
+
+.street-app .detail-kicker { font-size: 9px; letter-spacing: 3px; color: var(--accent); margin-bottom: 23px; }
+
+.street-app .detail-title {
+  font: 400 clamp(31px, 3.2vw, 49px)/1.35 Georgia, SimSun, serif;
+  letter-spacing: 2px;
+  margin: 0 0 16px;
+}
+
+.street-app .detail-en { font: italic 15px Georgia, serif; color: #9aadb0; margin: 0 0 32px; }
+
+.street-app .detail-copy {
+  font-size: 12px;
+  line-height: 2.1;
+  letter-spacing: 1px;
+  color: #acbabe;
+  max-width: 380px;
+}
+
+.street-app .services {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px 18px;
+  margin: 27px 0 33px;
+  color: #cccec3;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.street-app .services span:before { content: "+"; color: #a38258; margin-right: 8px; }
+
+.street-app .detail-rule { height: 1px; background: linear-gradient(90deg, #59635d, transparent); margin: 30px 0; }
+
+.street-app .contact-label { font-size: 8px; letter-spacing: 2px; color: #7d98a2; margin-bottom: 12px; }
+
+.street-app .contact-value {
+  display: block;
+  font-size: clamp(15px, 1.7vw, 26px);
+  letter-spacing: 1px;
+  color: #e8d5b6;
+  overflow-wrap: anywhere;
+}
+
+.street-app .contact-value.email { font-size: clamp(13px, 1.45vw, 21px); letter-spacing: .2px; }
+
+.street-app .actions { display: flex; align-items: center; gap: 20px; margin-top: 27px; }
+
+.street-app .primary-action {
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 13px 19px;
+  border: 1px solid #8d8068;
+  border-radius: 2px;
+  color: #e2c494;
+  display: inline-flex;
+  gap: 23px;
+  align-items: center;
+  transition: background .2s;
+}
+
+.street-app .primary-action:hover { background: #d4b27c; color: #13212b; }
+
+.street-app .copy { font-size: 10px; color: #8b9fa7; padding: 10px 0; }
+
+.street-app .small-note { font-size: 9px; line-height: 1.8; color: #6e8993; margin-top: 24px; }
+
+.street-app .panel-signature {
+  font-size: 7px;
+  letter-spacing: 1.4px;
+  color: #607e8b;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 45px;
+}
+
+.street-app .panel-signature .status-dot { width: 4px; height: 4px; }
+
+.street-app:not([data-mode=overview]) .intro,
+.street-app:not([data-mode=overview]) #scene-caption,
+.street-app:not([data-mode=overview]) .explore-note { opacity: 0; pointer-events: none; }
+
+.street-app:not([data-mode=overview]) #navigation { opacity: 0; pointer-events: none; }
+
+.street-app:not([data-mode=overview]) .controls { visibility: hidden; }
+
+.street-app #loading {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: #101c26;
+  transition: opacity 1s, visibility 1s;
+}
+
+.street-app #loading.loaded { opacity: 0; visibility: hidden; }
+
+.street-app #loading img { width: 128px; }
+
+.street-app #loading p { font-size: 8px; letter-spacing: 3px; color: #7b929c; margin-top: 30px; }
+
+.street-app .load-line {
+  height: 1px;
+  width: 160px;
+  background: #30424b;
+  margin-top: 22px;
+  overflow: hidden;
+}
+
+.street-app .load-line:after {
+  content: "";
+  display: block;
+  width: 65px;
+  height: 1px;
+  background: #d6b482;
+  animation: loading 1.2s ease-in-out infinite;
+}
+
+.street-app #loading > span { font-size: 10px; letter-spacing: 3px; color: #8ba0a8; margin-top: 20px; }
+
+.street-app #toast {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: 119px;
+  transform: translate(-50%, 10px);
+  padding: 12px 22px;
+  background: #23373e;
+  border: 1px solid #596659;
+  color: #e7dcc5;
+  border-radius: 30px;
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s, transform .2s;
+}
+
+.street-app #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.street-app #hover-label {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #e9d7b5;
+  opacity: 0;
+  transition: opacity .2s;
+  padding: 8px 0;
+  text-shadow: 0 1px 5px #000;
+}
+
+.street-app .skip {
+  position: absolute;
+  left: 15px;
+  top: -100px;
+  z-index: 101;
+  background: #e3c993;
+  color: #17252d;
+  padding: 12px;
+}
+
+.street-app .skip:focus { top: 10px; }
+
+.street-app #fallback {
+  position: absolute;
+  left: 35%;
+  right: 25%;
+  top: 35%;
+  z-index: 3;
+  font-size: 13px;
+  line-height: 2;
+  color: #b9c4c4;
+}
+
+@keyframes loading {
+  0% { transform: translateX(-70px); }
+  100% { transform: translateX(170px); }
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (min-width: 1600px) {
+  .street-app .intro { bottom: 190px; }
+  .street-app .hud { bottom: 45px; }
+  .street-app #detail { padding-top: 18vh; }
+}
+
+@media (max-width: 1100px) {
+  .street-app .weather-note { display: none; }
+  .street-app .header { left: 28px; right: 28px; }
+  .street-app .hud { left: 28px; right: 28px; gap: 12px; }
+  .street-app .explore-note,
+  .street-app .controls { width: 150px; }
+  .street-app #navigation button { padding: 13px 13px; gap: 7px; }
+  .street-app .intro { left: 30px; bottom: 145px; }
+  .street-app .intro-foot span:last-child { display: none; }
+  .street-app #detail { width: 46%; padding-right: 4vw; padding-left: 2vw; }
+  .street-app .back { margin-bottom: 40px; }
+}
+
+@media (max-width: 700px) {
+  .street-app .header { left: 23px; right: 23px; top: 84px; }
+  .street-app .brand { gap: 12px; }
+  .street-app .brand img { width: 78px; }
+  .street-app .brand span { font-size: 7px; padding-left: 12px; letter-spacing: 1.8px; }
+  .street-app .weather { gap: 8px; font-size: 8px; }
+  .street-app .weather i { display: none; }
+  .street-app .weather time { font-size: 9px; }
+  .street-app .intro { left: 25px; bottom: 156px; }
+  .street-app .eyebrow { font-size: 6px; letter-spacing: 1.2px; }
+  .street-app .intro h1 { font-size: 29px; letter-spacing: 3px; margin: 14px 0 10px; line-height: 1.37; }
+  .street-app .intro p { font-size: 9px; letter-spacing: 1.2px; }
+  .street-app .intro-foot { margin-top: 15px; font-size: 6px; }
+  .street-app #scene-caption { right: 24px; bottom: 164px; }
+  .street-app #scene-caption span { font-size: 6px; }
+  .street-app #scene-caption p { display: none; }
+  .street-app .hud { left: 16px; right: 16px; bottom: max(23px, env(safe-area-inset-bottom)); justify-content: center; flex-wrap: wrap; gap: 14px; }
+  .street-app .explore-note { position: absolute; bottom: 80px; left: 9px; font-size: 7px; width: auto; gap: 7px; }
+  .street-app .mouse-icon { width: 9px; height: 14px; }
+  .street-app .mouse-icon:after { left: 3px; top: 3px; height: 3px; }
+  .street-app #navigation { order: 2; width: 100%; justify-content: space-around; padding: 5px; }
+  .street-app #navigation button { font-size: 10px; padding: 13px 10px; gap: 7px; flex: 1; justify-content: center; }
+  .street-app .nav-number { font-size: 7px; }
+  .street-app .controls { position: absolute; bottom: 71px; right: 0; width: auto; gap: 0; }
+  .street-app .controls button { width: 29px; height: 29px; }
+  .street-app .controls svg { width: 14px; height: 14px; }
+  .street-app #quality { font-size: 7px; width: 36px; }
+  .street-app #detail { top: 43%; height: 57%; width: 100%; padding: 28px 29px max(38px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, #101c2600, #101c26f5 8%, #101c26 30%); scrollbar-width: none; }
+  .street-app .back { margin: 0 0 25px; font-size: 9px; }
+  .street-app .back > span { font-size: 15px; }
+  .street-app .detail-kicker { font-size: 8px; margin: 0 0 13px; }
+  .street-app .detail-title { font-size: 32px; margin-bottom: 12px; }
+  .street-app .detail-en { font-size: 12px; margin-bottom: 18px; }
+  .street-app .detail-copy { font-size: 11px; line-height: 1.9; }
+  .street-app .services { margin: 16px 0 19px; font-size: 9px; }
+  .street-app .detail-rule { margin: 19px 0; }
+  .street-app .contact-value { font-size: 25px; }
+  .street-app .contact-value.email { font-size: 19px; }
+  .street-app .actions { margin-top: 20px; }
+  .street-app .panel-signature { margin-top: 24px; }
+  .street-app .small-note { margin-top: 17px; }
+  .street-app .primary-action { padding: 11px 14px; font-size: 10px; }
+  .street-app:not([data-mode=overview]) .hud { display: none; }
+  .street-app #toast { bottom: 30px; white-space: nowrap; }
+  .street-app #fallback { left: 25px; right: 25px; top: 23%; font-size: 11px; }
+}
+
+/* ---- v2.03 additions (appended last, mirroring the demo's source order) ---- */
+
+.street-app:not([data-mode=overview]) #scene { touch-action: none; }
+
+.street-app .gesture-note {
+  font-size: 9px;
+  line-height: 1.8;
+  color: #8ba0a6;
+  margin-top: 30px;
+  letter-spacing: .6px;
+}
+
+.street-app .inspiration-note {
+  font-size: 13px;
+  line-height: 1.9;
+  color: #dfd4bc;
+  border-left: 2px solid #9c845f;
+  padding-left: 14px;
+  min-height: 58px;
+}
+
+.street-app #navigation button { padding-left: 14px; padding-right: 14px; gap: 8px; }
+
+@media (min-width: 701px) and (max-width: 1250px) {
+  .street-app .explore-note,
+  .street-app .controls { width: auto; flex-shrink: 0; }
+  .street-app .hud { gap: 10px; }
+  .street-app #navigation button { padding: 13px 9px; font-size: 10px; }
+  .street-app .nav-arrow { display: none; }
+  .street-app .explore-note { font-size: 8px; }
+}
+
+@media (max-width: 700px) {
+  .street-app #navigation { max-width: 100%; padding: 4px; }
+  .street-app #navigation button { min-width: 0; font-size: 9px; padding: 13px 4px; gap: 3px; letter-spacing: 0; }
+  .street-app .nav-arrow { display: none; }
+  .street-app .nav-number { font-size: 6px; }
+  .street-app .actions { flex-wrap: wrap; gap: 10px; }
+  .street-app .gesture-note { font-size: 8px; margin-top: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .street-app,
+  .street-app *,
+  .street-app *:before,
+  .street-app *:after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.street-app.reduce-motion *,
+.street-app.reduce-motion *:before,
+.street-app.reduce-motion *:after {
+  animation-duration: .01ms !important;
+  transition-duration: .01ms !important;
+}

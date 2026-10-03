@@ -44,11 +44,10 @@
   font-family: "Rany Display", sans-serif !important;
 }
 
-/* Keep the override scoped to the two selected home-page display headings.
+/* Keep the override scoped to the selected home-page display heading.
    The later component rules use more specific selectors, so repeat that
    specificity here without touching nav labels or decorative copy. */
-.projects-heading h2.rany-display-heading,
-.contact-head .section-kicker.rany-display-heading {
+.projects-heading h2.rany-display-heading {
   font-family: "Rany Display", sans-serif !important;
 }
 
@@ -1891,11 +1890,7 @@ h2 {
 .motion-reveal-section .profile-contact-line,
 .motion-reveal-section .profile-stats-row,
 .motion-reveal-section .profile-tools,
-.motion-reveal-section .profile-bottom-line,
-.motion-reveal-section.contact-page .section-kicker,
-.motion-reveal-section.contact-page h2,
-.motion-reveal-section .contact-sentence,
-.motion-reveal-section .contact-bottom {
+.motion-reveal-section .profile-bottom-line {
   opacity: 0;
   transform: translate3d(0, 72px, 0);
   transition:
@@ -1904,9 +1899,7 @@ h2 {
     clip-path 940ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.motion-reveal-section .profile-bg,
-.motion-reveal-section.contact-page .section-kicker,
-.motion-reveal-section.contact-page h2 {
+.motion-reveal-section .profile-bg {
   clip-path: inset(0 0 100% 0);
 }
 
@@ -1916,33 +1909,25 @@ h2 {
 .motion-reveal-section.is-visible .profile-contact-line,
 .motion-reveal-section.is-visible .profile-stats-row,
 .motion-reveal-section.is-visible .profile-tools,
-.motion-reveal-section.is-visible .profile-bottom-line,
-.motion-reveal-section.is-visible.contact-page .section-kicker,
-.motion-reveal-section.is-visible.contact-page h2,
-.motion-reveal-section.is-visible .contact-sentence,
-.motion-reveal-section.is-visible .contact-bottom {
+.motion-reveal-section.is-visible .profile-bottom-line {
   opacity: 1;
   transform: translate3d(0, 0, 0);
   clip-path: inset(0 0 0 0);
 }
 
-.profile-shot .profile-label,
-.contact-page .section-kicker {
+.profile-shot .profile-label {
   transition-delay: 0ms;
 }
 
-.profile-shot .profile-name-row,
-.contact-page h2 {
+.profile-shot .profile-name-row {
   transition-delay: 90ms;
 }
 
-.profile-shot .profile-contact-line,
-.contact-page .contact-sentence {
+.profile-shot .profile-contact-line {
   transition-delay: 160ms;
 }
 
-.profile-shot .profile-stats-row,
-.contact-page .contact-bottom {
+.profile-shot .profile-stats-row {
   transition-delay: 230ms;
 }
 
@@ -1961,12 +1946,7 @@ h2 {
 .motion-reveal-section .profile-tools p,
 .motion-reveal-section .profile-tool-list span,
 .motion-reveal-section .projects-heading h2,
-.motion-reveal-section .projects-heading span,
-.motion-reveal-section.contact-page .section-kicker,
-.motion-reveal-section.contact-page h2,
-.motion-reveal-section .contact-sentence,
-.motion-reveal-section .contact-bottom span,
-.motion-reveal-section .contact-bottom a {
+.motion-reveal-section .projects-heading span {
   opacity: 0;
   transform: translate3d(0, 26px, 0);
   transition:
@@ -1976,9 +1956,7 @@ h2 {
 }
 
 .motion-reveal-section .profile-name-row .four-logo,
-.motion-reveal-section .projects-heading h2,
-.motion-reveal-section.contact-page .section-kicker,
-.motion-reveal-section.contact-page h2 {
+.motion-reveal-section .projects-heading h2 {
   clip-path: inset(0 100% 0 0);
   transform: translate3d(-18px, 0, 0) scaleX(0.92);
   transform-origin: left center;
@@ -2032,11 +2010,6 @@ h2 {
 .motion-reveal-section.is-visible .profile-tool-list span,
 .motion-reveal-section.is-visible .projects-heading h2,
 .motion-reveal-section.is-visible .projects-heading span,
-.motion-reveal-section.is-visible.contact-page .section-kicker,
-.motion-reveal-section.is-visible.contact-page h2,
-.motion-reveal-section.is-visible .contact-sentence,
-.motion-reveal-section.is-visible .contact-bottom span,
-.motion-reveal-section.is-visible .contact-bottom a,
 .motion-reveal-section.is-visible .profile-name-row .four-logo {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
@@ -2048,33 +2021,28 @@ h2 {
 }
 
 .profile-shot .profile-name-row h2,
-.projects .projects-heading span,
-.contact-page h2 {
+.projects .projects-heading span {
   transition-delay: 120ms;
 }
 
 .profile-shot .profile-contact-line span:nth-child(1),
-.profile-shot .profile-stats-row div:nth-child(1),
-.contact-page .contact-sentence {
+.profile-shot .profile-stats-row div:nth-child(1) {
   transition-delay: 210ms;
 }
 
 .profile-shot .profile-contact-line span:nth-child(2),
 .profile-shot .profile-stats-row div:nth-child(2),
-.profile-shot .profile-tool-list span:nth-child(1),
-.contact-page .contact-bottom span:nth-child(1) {
+.profile-shot .profile-tool-list span:nth-child(1) {
   transition-delay: 280ms;
 }
 
 .profile-shot .profile-contact-line span:nth-child(3),
 .profile-shot .profile-stats-row div:nth-child(3),
-.profile-shot .profile-tool-list span:nth-child(2),
-.contact-page .contact-bottom a {
+.profile-shot .profile-tool-list span:nth-child(2) {
   transition-delay: 350ms;
 }
 
-.profile-shot .profile-tool-list span:nth-child(3),
-.contact-page .contact-bottom span:nth-child(3) {
+.profile-shot .profile-tool-list span:nth-child(3) {
   transition-delay: 420ms;
 }
 
@@ -2446,37 +2414,6 @@ h2 {
   overflow: hidden;
 }
 
-.contact-head {
-  display: grid;
-  gap: 16px;
-}
-
-.contact-head .section-kicker {
-  color: #ffffff !important;
-  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", "Arial Black", sans-serif !important;
-  font-size: clamp(74px, 7.4vw, 132px);
-  line-height: 0.86;
-  font-weight: 900;
-  letter-spacing: 0;
-}
-
-.contact-head h2 {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  min-height: 42px;
-  padding: 0 24px;
-  border: 1px solid #0060f4;
-  border-radius: 999px;
-  background: rgba(0, 96, 244, 0.1);
-  color: #0060f4 !important;
-  font-size: 19px;
-  font-weight: 600;
-  font-family: "PingFang SC", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  text-transform: none;
-}
-
 
 /* The same ray burst, shared by the projects screen. It sits in
    its own viewport-fixed layer rather than inside either section: paging scrolls
@@ -2512,135 +2449,6 @@ h2 {
   inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.contact-page .container {
-  position: relative;
-  z-index: 5;
-  padding-top: clamp(64px, 7vh, 96px);
-  padding-bottom: clamp(54px, 6vh, 84px);
-}
-
-.contact-sentence {
-  max-width: 1120px;
-  margin: clamp(38px, 5vh, 58px) 0 0;
-  font-size: clamp(34px, 3.55vw, 68px);
-  line-height: 1.16;
-  font-weight: 700;
-}
-
-.contact-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: clamp(30px, 4vh, 44px);
-}
-
-.contact-mail,
-.contact-phone {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 46px;
-  padding: 0 22px;
-  border-radius: 10px;
-  background: #111111;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 15px;
-  transition:
-    transform 220ms ease,
-    background 220ms ease,
-    color 220ms ease;
-}
-
-.contact-mail {
-  background: #005df5;
-  color: #ffffff;
-}
-
-.contact-phone {
-  border: 1px solid rgba(255, 255, 255, 0.22);
-}
-
-.contact-mail:hover,
-.contact-phone:hover {
-  transform: translateY(-3px);
-}
-
-.contact-bottom {
-  display: flex;
-  justify-content: space-between;
-  margin-top: clamp(76px, 12vh, 128px);
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.28);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 14px;
-}
-
-.contact-bottom {
-  width: 100%;
-}
-
-.contact-head,
-.contact-actions,
-.contact-bottom,
-.contact-sentence {
-  opacity: 0;
-  transform: translate3d(0, 24px, 0);
-}
-
-.contact-head.is-visible,
-.contact-actions.is-visible,
-.contact-bottom.is-visible,
-.contact-sentence.is-visible {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  transition:
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.contact-page .section-kicker,
-.contact-page h2,
-.contact-sentence,
-.contact-actions,
-.contact-bottom {
-  transition:
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.contact-page.is-visible .contact-head .section-kicker {
-  transition-delay: 0ms;
-}
-
-.contact-page.is-visible .contact-head h2 {
-  transition-delay: 120ms;
-}
-
-.contact-page.is-visible .contact-sentence {
-  transition-delay: 220ms;
-}
-
-.contact-page.is-visible .contact-actions {
-  transition-delay: 320ms;
-}
-
-.contact-page.is-visible .contact-bottom {
-  transition-delay: 420ms;
-}
-
-.contact-mail,
-.contact-phone {
-  transition:
-    transform 220ms ease,
-    background 220ms ease,
-    color 220ms ease;
-}
-
-.contact-mail:hover,
-.contact-phone:hover {
-  transform: translateY(-3px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3946,38 +3754,11 @@ html[data-paging="on"] .project-list {
   margin: clamp(28px, 4vh, 64px) auto 0;
 }
 
-/* --- page 05: contact ----------------------------------------------------- */
+/* --- page 04: contact ----------------------------------------------------- */
 
 html[data-paging="on"] .contact-page {
   height: calc(var(--vh, 1vh) * 100);
   min-height: calc(var(--vh, 1vh) * 100);
-}
-
-/* Every value below is already viewport-relative, but the display *sizes* are
-   driven by the viewport width alone, so on a wide-but-short window the page
-   grew taller than the screen it had to fit. Capping each against the viewport
-   height as well only changes anything on those short windows; on an ordinary
-   screen the width term still wins and the page looks untouched. */
-html[data-paging="on"] .contact-page .container {
-  padding-top: clamp(40px, 7vh, 96px);
-  padding-bottom: clamp(32px, 6vh, 84px);
-}
-
-html[data-paging="on"] .contact-head .section-kicker {
-  font-size: clamp(64px, min(7.4vw, 14vh), 132px);
-}
-
-html[data-paging="on"] .contact-sentence {
-  margin-top: clamp(18px, 4.6vh, 58px);
-  font-size: clamp(30px, min(3.55vw, 8.4vh), 68px);
-}
-
-html[data-paging="on"] .contact-actions {
-  margin-top: clamp(20px, 3.6vh, 44px);
-}
-
-html[data-paging="on"] .contact-bottom {
-  margin-top: clamp(24px, 7vh, 76px);
 }
 
 /* The home layer is kept mounted for the whole session and only hidden when

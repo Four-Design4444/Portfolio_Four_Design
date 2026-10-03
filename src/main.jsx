@@ -7,6 +7,7 @@ import './mobile.css';
 import fourLogo from './assets/four-logo.svg';
 import group10Markup from './assets/group-10.svg?raw';
 import { createWebCodecsPlayer } from './heroWebCodecs';
+import ContactStreet from './contact-street/Street.jsx';
 
 const HERO_HEVC_BASE_SRC = '/media/hero-hevc.mp4';
 const HERO_HEVC_MASK_SRC = '/media/hero-mask-hevc.mp4';
@@ -2428,6 +2429,18 @@ function useMeasuredMaxCardHeight(infoRef) {
   }, []);
 }
 
+// 折叠图标(业主提供的 折叠.svg,四角向内收缩)。移动端专用:描述卡展开时出现在
+// 所在行右端,点它或点页面空白都把卡片组恢复初始静止态。内联 SVG 走 currentColor,
+// 灰度由 mobile.css 的 .mob-fold 一处定义,与经验卡图标(白 @55%)同灰。
+const MOB_FOLD_ICON = (
+  <svg viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
+    <path
+      fill="currentColor"
+      d="M942.1 41H657.9c-20.4 0-39.5 13.8-42.9 34-4.3 25.6 15.5 48 40.4 48h225.3c11.3 0 20.5 9.2 20.5 20.5v222.8c0 20.4 13.8 39.5 34 42.9 25.6 4.3 48-15.5 48-40.4V81.9C983 59.4 964.6 41 942.1 41zM368.6 901.1H143.4c-11.3 0-20.5-9.2-20.5-20.5V657.9c0-20.4-13.8-39.5-34-42.9-25.6-4.3-48 15.5-48 40.4v286.7c0 22.5 18.4 41 41 41h284.2c20.4 0 39.5-13.8 42.9-34 4.3-25.6-15.5-48-40.4-48zM424.5 404c0-0.2-0.1-0.5-0.1-0.7v-204c0-22.5-18.4-41-41-41-22.5 0-41 18.4-41 41v105.8L151.8 114.3c-15.9-15.9-42-15.9-57.9 0-15.9 15.9-15.9 42 0 57.9L284.6 363H178.8c-22.5 0-41 18.4-41 41 0 22.5 18.4 41 41 41h204c0.2 0 0.5 0.1 0.7 0.1 8 0 15.5-2.4 21.8-6.5 0.2-0.2 0.5-0.3 0.8-0.4 2.3-1.5 4.4-3.2 6.3-5.2 1.9-1.9 3.7-4.1 5.2-6.3 0.2-0.2 0.3-0.5 0.4-0.7 4.1-6.5 6.5-14 6.5-22zM739.4 681.5h105.8c22.5 0 41-18.4 41-41 0-22.5-18.4-41-41-41h-204c-0.2 0-0.5-0.1-0.7-0.1-8.1 0-15.5 2.4-21.9 6.5-0.2 0.1-0.5 0.2-0.7 0.4-2.3 1.5-4.4 3.2-6.3 5.2-1.9 1.9-3.7 4.1-5.2 6.3-0.1 0.2-0.2 0.5-0.4 0.7-4.1 6.4-6.5 13.8-6.5 21.9 0 0.2 0.1 0.5 0.1 0.7v204c0 22.5 18.4 41 41 41 22.5 0 41-18.4 41-41V739.4l190.7 190.7c15.9 15.9 42 15.9 57.9 0s15.9-42 0-57.9L739.4 681.5z"
+    />
+  </svg>
+);
+
 function ProfileContent() {
   const [activeStat, setActiveStat] = useState(null);
   const [activeSkill, setActiveSkill] = useState(null);
@@ -2480,6 +2493,23 @@ function ProfileContent() {
   const statActive = !!activeStat;
   const skillActive = !!activeSkill;
 
+  // 折叠:点折叠图标或点展开卡片组之外的任何空白都恢复初始静止态。
+  // 描述卡本身豁免(正文可选中阅读),标签按钮有自己的 toggle 不走这条路。
+  // 只在展开期间挂监听,静止态零开销。
+  useEffect(() => {
+    if (!statActive && !skillActive) return undefined;
+    const onDocClick = (e) => {
+      const t = e.target;
+      if (t && t.closest && (t.closest('.mob-profile-stat') || t.closest('.mob-profile-skill')
+        || t.closest('.mob-profile-exp-card') || t.closest('.mob-profile-skill-card')
+        || t.closest('.mob-fold'))) return;
+      setActiveStat(null);
+      setActiveSkill(null);
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [statActive, skillActive]);
+
   return (
     <div className="profile-shot-inner">
       <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
@@ -2523,6 +2553,17 @@ function ProfileContent() {
               </span>
             </button>
           ))}
+          {/* 折叠图标(图1):经验卡展开时停在经验标签行右端、描述卡右缘上。
+              绝对定位不参与 flex,不影响三卡宽度形变与 useMeasuredWidths。 */}
+          <button
+            type="button"
+            className={`mob-fold mob-fold-stat${activeStat ? ' is-visible' : ''}`}
+            aria-label="折叠经验卡片"
+            aria-hidden={!activeStat}
+            onClick={() => { setActiveStat(null); setActiveSkill(null); }}
+          >
+            {MOB_FOLD_ICON}
+          </button>
         </div>
         </div>
         </div>
@@ -2575,6 +2616,16 @@ function ProfileContent() {
               <span className="mob-profile-skill-name">{s.name}</span>
             </button>
           ))}
+          {/* 折叠图标(图2):技能卡展开时停在技能行右端、描述卡右缘下。 */}
+          <button
+            type="button"
+            className={`mob-fold mob-fold-skill${activeSkill ? ' is-visible' : ''}`}
+            aria-label="折叠技能卡片"
+            aria-hidden={!activeSkill}
+            onClick={() => { setActiveStat(null); setActiveSkill(null); }}
+          >
+            {MOB_FOLD_ICON}
+          </button>
         </div>
         </div>
         </div>
@@ -4331,19 +4382,8 @@ function HomePage({ openWorks, paging, active = true }) {
         </div>
       </section>
 
-      <section ref={contactRef} className={`contact-page motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
-        <div className="container">
-          <Reveal as="div" className="contact-head" threshold={0.14} rootMargin="0px 0px -8% 0px">
-            <p className="section-kicker display-reveal-title rany-display-heading">CONTACT</p>
-            <h2 className="display-reveal-subtitle">联系合作</h2>
-          </Reveal>
-          <Reveal as="p" className="contact-sentence" threshold={0.14} rootMargin="0px 0px -8% 0px">从像素到多边形，从代码到创意<br />设计是一种看得见的思考</Reveal>
-          <Reveal as="div" className="contact-actions" threshold={0.14} rootMargin="0px 0px -8% 0px">
-            <a className="contact-mail" href="mailto:Four4444.Design@gmail.com"><Mail size={17} strokeWidth={1.8} />发送邮件</a>
-            <a className="contact-phone" href="tel:18219315597"><Phone size={15} strokeWidth={1.8} />18219315597</a>
-          </Reveal>
-          <Reveal as="div" className="contact-bottom" threshold={0.14} rootMargin="0px 0px -8% 0px"><span>FOUR / Personal website</span><span>Thank you for watching</span></Reveal>
-        </div>
+      <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
+        <ContactStreet active={active && contactVisible} />
       </section>
       </div>
 
