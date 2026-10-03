@@ -663,6 +663,15 @@ img {
   transition: opacity 500ms ease 80ms;
 }
 
+/* 2026-10-04: 从首页进二级导航时,行内指示器必须**直接落在当前分类的槽位**。
+   否则 --active-index 与路由同帧变化,指示器会带着 430ms 的 transform 过渡
+   从槽位 0 滑到目标槽位(例如直接进「3D Design」时滑两格),跟正在淡入的
+   文字不同步。此前这被共享胶囊浮层盖住看不见,现在浮层只在有源胶囊的
+   works↔detail 之间创建,这里必须显式取消掉。 */
+.nav-works.motion-home-to-works .works-nav-indicator {
+  transition: none;
+}
+
 .nav-detail .home-primary-items,
 .nav-detail .works-nav-items {
   opacity: 0;

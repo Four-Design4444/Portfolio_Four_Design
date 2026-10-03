@@ -667,6 +667,14 @@ function App() {
 
     if (route.page === 'works' && previousPage !== 'detail') {
       setSharedPill(null);
+      // 2026-10-04: home → works 时**没有源胶囊可变形**(首页导航里根本不存在
+      // 那枚蓝胶囊)。此前仍会新建浮层,效果是这个新元素每帧追锚点、却带着自己
+      // 的 680ms left/top 过渡 —— 探针实测:相对锚点最多滞后 5.6px,且文字
+      // 325ms 已淡入到 1,胶囊要到 542ms 才停 —— 业主看到的「文字都出现了,
+      // 胶囊还在动/有弹性地飘进来」。
+      // 改:直接交给**行内指示器** (.works-nav-indicator)。它是选项行的子元素,
+      // 跟随行的 opacity 一起淡入、随整条栏一起位移,与文字完全同步、零滞后。
+      if (previousPage === 'home') return undefined;
       startTracking();
     } else {
       startTracking();

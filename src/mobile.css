@@ -113,6 +113,11 @@ html[data-device="mobile"] .morph-nav.nav-home .home-primary-items {
 /* Burger button, pinned to the right edge of the transparent home bar. */
 html[data-device="mobile"] .mobile-menu-toggle {
   grid-column: 3;
+  /* 必须钉在第一行:works-nav-items 的横跨规则(1/-1)作用于所有状态后,
+     首页第一行被它整行占满,自动放置的汉堡会掉进隐式第二行 —— 既让汉堡
+     下坠错位,又使首页(两行)与 works(单行)行结构不一致,home→works
+     形变时 logo 随行高瞬跳。钉行后与 logo 同行居中,行结构全态一致。 */
+  grid-row: 1;
   justify-self: end;
   display: flex;
   align-items: center;
