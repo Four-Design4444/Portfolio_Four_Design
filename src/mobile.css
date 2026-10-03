@@ -1691,7 +1691,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档
      240ms 按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
-  --mob-name-delay: 150ms;
+  --mob-name-delay: 170ms;
   --mob-name-in-dur: 300ms;
 }
 
@@ -2161,7 +2161,7 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档 240ms
      按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
-  --mob-name-delay: 150ms;
+  --mob-name-delay: 170ms;
   /* dock 内切换仍要快(用户要求「切换不流畅」已修):切换宽度 340ms,
      名称 150ms 后浮现、300ms 完成,约 450ms。 */
   --mob-name-in-dur: 300ms;
