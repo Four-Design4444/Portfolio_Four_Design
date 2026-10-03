@@ -149,14 +149,8 @@ html[data-device="mobile"] .mobile-menu-toggle .hm-line {
   stroke-linecap: round;
   stroke-linejoin: round;
   transform-origin: 16px 16px;
-  /* d + stroke-width + transform 三者同拍 620ms:线条一边飞行一边自身形变成
-     房子轮廓。菜单开合的 X 形变另在 .is-open 里压回 380ms —— 那是本地动作,
-     不涉及 d / 描边宽度。 */
-  transition:
-    d 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity .3s ease;
+  /* transition 不写在这里:三条线的**节奏不同**(拱门线要慢一档、还要换一条
+     "两头快中间慢"的曲线),分档声明见下方「汉堡 ⇄ 房子」段。 */
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-line {
@@ -358,7 +352,19 @@ html[data-device="mobile"] .nav-works .works-nav-items button {
       走成"右侧",否则两端会在空中交叉,中途就折成一个结(逐帧截图实锤)。
       所以墙是从左屋檐 (7,14) 往下、沿底边、再上到右屋檐 (25,14);
       门是从左门框底 (13,25) 往上过梁再下到右门框底 (19,25)。
-      照抄 lucide 原路径的方向正好是反的(它从左墙经 `z` 收口)。 */
+      照抄 lucide 原路径的方向正好是反的(它从左墙经 `z` 收口)。
+   ④ **弧段的弦长 = 形变中途那个"拱门"的尺寸旋钮**,这是本设计里唯一刻意
+      保留的"几何副作用"。弧的两端在静止态重合与否,汉堡态渲染都一样(重合段
+      按规范省略),但插值中途它们必然分开:弦长从"起点态间距"线性变成"目标态
+      间距(屋脊 2.58)"。一旦 2r < 弦长,SVG 规范要求半径**自动放大到恰好连接
+      两端点** → 半径被撑到弦长的一半,画出一个拱,拱高 ≈ 弦长/2。
+        · 弦长 0(两端重合) → 全程无拱,中间态是"矮人字"(业主嫌太素)
+        · 弦长 20(横线两端) → 拱门最大(实测回程 p=0.95 拱高 10 单位,顶点
+          y=0.6,比真实屋脊 6.47 还高)——**业主选定的口味**,见 main.jsx 注释
+      代价:拱在过渡末尾才最大,而弧半径是线性插值到 0 的 → 最后一帧弧退化,
+      拱"突然消失"。所以**收尾必须靠节奏曲线**(见下方「形变节奏」):hm-top
+      用"两头快中间慢"的曲线把它压成"快速拉直",既让拱门挂住展示,又不让它
+      "啪一下没了"。 */
 
 /* 汉堡 / 房子共用这同一枚按钮:首页态是汉堡(三条线各就各位),works 态按钮
    整体缩到 2/3、与白圆同心,同时线条的 d 形变成房子的三个笔画。 */
@@ -376,6 +382,64 @@ html[data-device="mobile"] .mobile-menu-toggle {
     opacity 360ms ease,
     color 200ms ease-out 100ms,
     transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- 形变节奏:拱门线(hm-top)与墙/门线**错开** ---
+   业主定的观感:回一级导航时,"下面两条已经收成直线了,上面那个拱门还在",
+   然后拱门被快速拉直。要做到这个画面,两条线就不能同拍:
+
+     · 墙/门线(hm-mid / hm-bot) 420ms ease-out
+       —— 前段快,迅速收成直线,先到位。
+     · 拱门线(hm-top) 600ms cubic-bezier(0.2, 0.45, 0.8, 0.55)
+       —— 这条曲线**两头快、中间慢**:起点斜率 2.25(拱门很快拱起来)、
+          终点斜率 2.25(最后猛地拉直)、中段斜率只有 0.3 上下(拱门
+          "挂"在那里展示)。实测它让"拱→直线"这段收束从原来的 300ms
+          压缩到约 110ms,读起来是**拉直**而不是"啪一下消失"。
+
+   ⚠ 千万别用 ease-out(0.22, 1, 0.36, 1) 收这条线:它的尾部斜率趋 0,
+     而弧的放大倍数 = 弦长/2 在结尾最大(回程 p=0.95 时拱高 10 单位,
+     比房子还高),于是拱门会在末尾长时间"挂着不动",最后在弧半径归零的
+     那一帧突然消失 —— 业主原话就是"停留太久 / 啪一下没了"。
+     也不要用两头慢中间快的曲线:那等于把"挂着"的时间再拉长。
+
+   方向也是错的就白搭:去程要让拱门先成形(hm-top 快、墙/门慢),回程要
+   让墙/门先收直(hm-top 慢)。过渡取**目的地样式**的 transition,所以
+   基础规则管回程、.nav-works/.nav-detail 规则管去程,两边刻意写成反的。 */
+html[data-device="mobile"] .mobile-menu-toggle .hm-top {
+  transition:
+    d 600ms cubic-bezier(0.2, 0.45, 0.8, 0.55),
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
+}
+
+html[data-device="mobile"] .mobile-menu-toggle .hm-mid,
+html[data-device="mobile"] .mobile-menu-toggle .hm-bot {
+  transition:
+    d 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-top,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-top {
+  transition:
+    d 420ms cubic-bezier(0.2, 0.45, 0.8, 0.55),
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
+}
+
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-mid,
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-bot,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-mid,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-bot {
+  transition:
+    d 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
 }
 
 /* 房子的"装裱底"——那枚 24px 白圆 —— 直接长在汉堡按钮上(::before)。
