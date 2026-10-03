@@ -611,6 +611,20 @@ function App() {
     const previousPage = previousPageRef.current;
     previousPageRef.current = route.page;
 
+    // 「汉堡 ⇄ 房子」形变类的**兜底来源**:只看 page 有没有在
+    // home ⇄ 非 home 之间翻转,与"谁触发的"无关。
+    // 2026-10-04:此前只有 goHome()/goWorks() 里显式挂类,浏览器后退/前进走的是
+    // hashchange → setRoute(parseRoute()),绕过这两个函数 —— 而 icon 的 `d` 已经
+    // 没有 transition 兜底(改由关键帧驱动),漏掉类就是**硬切**。
+    // 放在 useLayoutEffect 里是为了在浏览器绘制这一帧之前把类挂上,关键帧从 0% 起手。
+    // (goHome/goWorks 里那两处 setNavMotion 仍然保留:它们还兼管"works 内部换分类
+    //  时提前撤掉上一轮的类"这类额外语义,这里只是补上缺失的那条路径。)
+    if (previousPage !== route.page) {
+      if (previousPage === 'home') setNavMotion('home-to-works');
+      else if (route.page === 'home') setNavMotion('works-to-home');
+      else setNavMotion('');
+    }
+
     if (route.page === 'home') {
       setSharedPill(null);
       return undefined;
@@ -776,7 +790,11 @@ function App() {
   };
 
   const goHome = () => {
-    setNavMotion('');
+    // 回程也要挂一个 motion 类:**汉堡 icon 那套「拱门 → 拉直」的关键帧动画
+    // 靠 `motion-works-to-home` 触发**(见 mobile.css「拱门关键帧」)。
+    // 此前这里一律置 '',于是回程的 icon 只有 transition、没有关键帧。
+    // detail → home 也走这条路径,同样受益(detail 下 icon 的静止 d 已是房子形态)。
+    setNavMotion(route.page === 'home' ? '' : 'works-to-home');
     setSharedPill(null);
     setWorksActiveLocked(false);
     window.location.hash = '';
@@ -1632,21 +1650,17 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
                   也必须对齐 —— 写法与理由见 mobile.css「汉堡 ⇄ 房子」整段说明:
                   命令类型或方向对不上,d 会退化成硬切或在空中打结。
                   ⚠ 弧段的**弦长**是刻意留的,见下一段说明 —— 它不是笔误。 */}
-              {/* ⚠⚠ hm-top 中间那一段是**弧**,它的两端间距(弦长)就是形变中途
-                  那个"拱门"的**高度来源**。业主明确要这个拱门(原话:"一开始那个
-                  是下面两条直、上面的拱门,你在用动效加速拉直就好了")。
-                  原理:起点态弦长 = 20(横线左右两端),目标态屋脊弧弦长 = 2.58。
-                  插值途中弦长介于两者之间,一旦 2r < 弦长,按 SVG 规范"半径不足时
-                  自动放大到恰好连接两端点",半径被撑到弦长的一半 —— 于是画出一个拱,
-                  拱高 ≈ 弦长/2。所以弦长就是这个拱门的"尺寸旋钮":
-                    · 弦长 0(两端重合) → 全程无拱,中间态是"矮人字"(太素)
-                    · 弦长 20           → 拱门最大(回程 p=0.95 时拱高 10 单位,
-                                          比房子还高)—— 业主选的口味
-                  代价是"拱在过渡末尾才最大,且在弧半径线性归零的那一帧突然消失",
-                  所以收尾必须由 CSS 的节奏曲线负责(见 mobile.css「形变节奏」:
-                  hm-top 用"两头快中间慢"的曲线,把这段收束压成"快速拉直")。
-                  半径写 0:静止态这段弧按规范直接退化为直线,仍是三条横线,零像素变化。 */}
-              <path className="hm-line hm-top" d="M 6 10.5 A 0 0 0 0 1 6 10.5 L 6 10.5 A 0 0 0 0 1 26 10.5 L 26 10.5 A 0 0 0 0 1 26 10.5" />
+              {/* ⚠⚠ hm-top 的"拱门"由 CSS 的**中间关键帧**显式给出(见 mobile.css
+                  「拱门关键帧」)。这里静止态的 d 刻意让那两段弧**完全退化**
+                  (端点重合、半径 0) —— 静止态渲染仍是三条横线、像素零变化,
+                  而"拱门"交给关键帧里一个"弦长 20、半径 11"的真实弧去画。
+                  为什么不能只靠两端插值把拱"变出来":静止态半径必须是 0,插值
+                  途中半径就一路线性归零,而弧在被"按需放大"时拱高 ≈ 弦长/2,
+                  等于**越接近终点拱越大**,最后一帧半径归零弧整段省略 → 拱在
+                  40ms 内从最大直接消失(业主:"停留太久、然后啪一下没了")。
+                  有了中间关键帧,两段插值的 2r 都恒 ≥ 弦长,永不触发自动放大,
+                  拱高就随之连续变化:6.47 → 6.08 → 8.3 → 10.5(回程逐帧实测)。 */}
+              <path className="hm-line hm-top" d="M 6 10.5 A 0 0 0 0 1 6 10.5 L 6 10.5 A 0 0 0 0 1 6 10.5 L 26 10.5 A 0 0 0 0 1 26 10.5" />
               <path className="hm-line hm-mid" d="M 6 16 V 16 A 2 2 0 0 0 6 16 H 26 A 2 2 0 0 0 26 16 V 16" />
               <path className="hm-line hm-bot" d="M 6 21.5 V 21.5 A 1 1 0 0 1 6 21.5 H 26 A 1 1 0 0 1 26 21.5 V 21.5" />
             </svg>

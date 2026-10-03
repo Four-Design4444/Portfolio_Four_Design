@@ -149,8 +149,13 @@ html[data-device="mobile"] .mobile-menu-toggle .hm-line {
   stroke-linecap: round;
   stroke-linejoin: round;
   transform-origin: 16px 16px;
-  /* transition 不写在这里:三条线的**节奏不同**(拱门线要慢一档、还要换一条
-     "两头快中间慢"的曲线),分档声明见下方「汉堡 ⇄ 房子」段。 */
+  /* 只留 stroke-width / transform 的过渡(**不含 d**):d 由下方「拱门关键帧」
+     的 animation 驱动 —— 那条路径需要中间关键帧,transition 做不到。
+     菜单开合的 X 形变另在 .is-open 里压回 380ms。 */
+  transition:
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-line {
@@ -361,10 +366,11 @@ html[data-device="mobile"] .nav-works .works-nav-items button {
         · 弦长 0(两端重合) → 全程无拱,中间态是"矮人字"(业主嫌太素)
         · 弦长 20(横线两端) → 拱门最大(实测回程 p=0.95 拱高 10 单位,顶点
           y=0.6,比真实屋脊 6.47 还高)——**业主选定的口味**,见 main.jsx 注释
-      代价:拱在过渡末尾才最大,而弧半径是线性插值到 0 的 → 最后一帧弧退化,
-      拱"突然消失"。所以**收尾必须靠节奏曲线**(见下方「形变节奏」):hm-top
-      用"两头快中间慢"的曲线把它压成"快速拉直",既让拱门挂住展示,又不让它
-      "啪一下没了"。 */
+      坑:这个副作用**不可控**。拱在过渡末尾才最大,而弧半径是线性插值到 0 的
+      → 最后一帧弧退化,拱在 40ms 内"啪一下没了";调曲线只能换来"挂着不动
+      再啪一下"。所以拱门改由**关键帧里的一根真实弧**显式给出(弦长 20、半径 11,
+      2r=22 ≥ 弦长,永不触发自动放大),收尾的缓急另交给每段自己的 easing ——
+      见下方「拱门关键帧」与「回程关键帧」。 */
 
 /* 汉堡 / 房子共用这同一枚按钮:首页态是汉堡(三条线各就各位),works 态按钮
    整体缩到 2/3、与白圆同心,同时线条的 d 形变成房子的三个笔画。 */
@@ -375,71 +381,138 @@ html[data-device="mobile"] .mobile-menu-toggle {
   z-index: 3;
   /* 线条白⇄黑之间必然经过一个与背景同灰度的瞬间 —— 若与白圆的出现/消失
      同拍, 那一刻线条会整个"溶解"掉。让**圆先走、线条慢半拍**:
-     圆 200ms 快速铺白/缩退, 线条 100ms 后才开始变色(同样 200ms)。
-     两条 ease-out 曲线的亮度差全程 ≥ 25(实测逐帧), 中间不再有隐形窗口;
-     且行程短(200ms), 整体读作"眨眼间换了配色", 不拖泥带水。 */
+     圆 200ms 快速铺白, 线条 50ms 后才开始变色、并用 160ms 走完。
+     ⚠ 2026-10-04 修正:原值 `color 200ms ease-out 100ms` 在 t≈120ms 实测
+     线 rgb(214) / 底 rgb(206)(白圆已 0.79),ΔL* ≈ 1 —— 是个真正的隐形帧,
+     逐帧截图里那一格就是"只剩一枚灰圆"。改成 160ms + 50ms 延迟后,线条在
+     白圆铺满前就已经压暗,最差一帧 ΔL* ≈ 13。 */
   transition:
     opacity 360ms ease,
-    color 200ms ease-out 100ms,
+    color 160ms ease-out 50ms,
     transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* --- 形变节奏:拱门线(hm-top)与墙/门线**错开** ---
-   业主定的观感:回一级导航时,"下面两条已经收成直线了,上面那个拱门还在",
-   然后拱门被快速拉直。要做到这个画面,两条线就不能同拍:
+/* --- 拱门关键帧:「下两条直 + 上面一个拱门」是**显式设计**的中间态 ---
+   业主的观感诉求(原话):回一级导航时"下面两条已经收成直线了,上面那个拱门
+   还在",然后拱门被**加速拉直**。
 
-     · 墙/门线(hm-mid / hm-bot) 420ms ease-out
-       —— 前段快,迅速收成直线,先到位。
-     · 拱门线(hm-top) 600ms cubic-bezier(0.2, 0.45, 0.8, 0.55)
-       —— 这条曲线**两头快、中间慢**:起点斜率 2.25(拱门很快拱起来)、
-          终点斜率 2.25(最后猛地拉直)、中段斜率只有 0.3 上下(拱门
-          "挂"在那里展示)。实测它让"拱→直线"这段收束从原来的 300ms
-          压缩到约 110ms,读起来是**拉直**而不是"啪一下消失"。
+   为什么必须用关键帧,而不是两端 transition:
+   静止态(汉堡)里那段弧必须完全退化(端点重合 + 半径 0)才能"像素零变化",
+   于是插值途中半径会一路线性归零 —— 而弧一旦 2r < 弦长,浏览器按 SVG 规范
+   把半径**放大到恰好连接两端点**,拱高 ≈ 弦长/2 随 p 单调**增长**:拱在最后
+   一刻最大(实测回程 560ms 拱顶 y=1.1,比房子还高),然后在半径归零的那一帧
+   弧整段省略 → 40ms 内从最大直接归零。曲线怎么调都救不了:尾部陡就是"啪一下
+   没了",尾部缓就是"挂着不动再啪一下"。
 
-   ⚠ 千万别用 ease-out(0.22, 1, 0.36, 1) 收这条线:它的尾部斜率趋 0,
-     而弧的放大倍数 = 弦长/2 在结尾最大(回程 p=0.95 时拱高 10 单位,
-     比房子还高),于是拱门会在末尾长时间"挂着不动",最后在弧半径归零的
-     那一帧突然消失 —— 业主原话就是"停留太久 / 啪一下没了"。
-     也不要用两头慢中间快的曲线:那等于把"挂着"的时间再拉长。
+   关键帧把"拱门"定义成一个**半径足够大的真实弧**(弦长 20、半径 11 →
+   2r=22 ≥ 20,永不触发自动放大),于是两段插值的拱高都随参数**连续**变化:
+     横线  →  拱门(拱顶 y=6.08)  →  屋顶(拱顶 y=6.47)
+   逐帧实测拱顶:6.47 → 6.08 → 6.85 → 8.3 → 10.5,平滑单调、无突跳。
 
-   方向也是错的就白搭:去程要让拱门先成形(hm-top 快、墙/门慢),回程要
-   让墙/门先收直(hm-top 慢)。过渡取**目的地样式**的 transition,所以
-   基础规则管回程、.nav-works/.nav-detail 规则管去程,两边刻意写成反的。 */
-html[data-device="mobile"] .mobile-menu-toggle .hm-top {
-  transition:
-    d 600ms cubic-bezier(0.2, 0.45, 0.8, 0.55),
-    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity .3s ease;
+   55% 的位置是有意的:hm-mid / hm-bot 的 0% 与 55% 关键帧写成**同一段**
+   (都是横线),于是去程是 0→55% 只有 hm-top 拱起来(下两条不动)、
+   55→100% 三条线一起展开成房子。
+   ⚠⚠ 这组关键帧**只给去程用**。回程绝不能靠 `animation-direction: reverse`
+   复用:`reverse` 会把**每一段关键帧区间的 easing 也一起镜像**,去程 ease-out
+   的"快起慢收"倒过来成为每段"慢起快收"——实测回程 position(t/620):
+   0→1.0, 0.29→1.0, 0.48→0.55, 0.58→0.55, 1.0→0。房子被钉在 1.0 整整
+   180ms 不动,然后 100ms 内直冲拱门(中间那条 U→直线就挤在这 100ms 里) ——
+   正是业主反馈的"中间那条的变形跳跃太大"。回程另写一组,见下方「回程关键帧」。 */
+@keyframes hm-top-arch {
+  0% { d: path("M 6 10.5 A 0 0 0 0 1 6 10.5 L 6 10.5 A 0 0 0 0 1 6 10.5 L 26 10.5 A 0 0 0 0 1 26 10.5"); }
+  55% { d: path("M 5.5 14 A 2 2 0 0 1 6 13 L 6 12.5 A 11 11 0 0 1 26 12.5 L 26.5 14 A 2 2 0 0 1 27 14"); }
+  100% { d: path("M 7 14 A 2 2 0 0 1 7.709 12.472 L 14.709 6.472 A 2 2 0 0 1 17.291 6.472 L 24.291 12.472 A 2 2 0 0 1 25 14"); }
 }
 
-html[data-device="mobile"] .mobile-menu-toggle .hm-mid,
-html[data-device="mobile"] .mobile-menu-toggle .hm-bot {
-  transition:
-    d 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity .3s ease;
+@keyframes hm-mid-house {
+  0%, 55% { d: path("M 6 16 V 16 A 2 2 0 0 0 6 16 H 26 A 2 2 0 0 0 26 16 V 16"); }
+  100% { d: path("M 7 14 V 23 A 2 2 0 0 0 9 25 H 23 A 2 2 0 0 0 25 23 V 14"); }
 }
 
-html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-top,
-html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-top {
-  transition:
-    d 420ms cubic-bezier(0.2, 0.45, 0.8, 0.55),
-    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity .3s ease;
+@keyframes hm-bot-house {
+  0%, 55% { d: path("M 6 21.5 V 21.5 A 1 1 0 0 1 6 21.5 H 26 A 1 1 0 0 1 26 21.5 V 21.5"); }
+  100% { d: path("M 13 25 V 17 A 1 1 0 0 1 14 16 H 18 A 1 1 0 0 1 19 17 V 25"); }
 }
 
-html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-mid,
-html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-bot,
-html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-mid,
-html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-bot {
+/* 去程:home → works,正向播放(横线 → 拱门 → 房子)。 */
+html[data-device="mobile"] .morph-nav.motion-home-to-works .hm-top {
+  animation: hm-top-arch 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+html[data-device="mobile"] .morph-nav.motion-home-to-works .hm-mid {
+  animation: hm-mid-house 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+html[data-device="mobile"] .morph-nav.motion-home-to-works .hm-bot {
+  animation: hm-bot-house 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* --- 回程关键帧:形状与去程同一批,但**节奏单独编排** ---
+   两段,不是"倒放一段":
+     0 → 60%(372ms)  房子 → 拱门(下两条同时收成直线)
+                     节奏 `cubic-bezier(0.35,0.08,0.6,0.95)`,近似缓入缓出 ——
+                     全程连续变形,没有"钉住不动"的窗口。这就是业主夸的
+                     "下面两条直 + 上面一个拱门"那一帧,而它是一个**过渡点**,
+                     不是停放点。
+     60 → 100%(248ms) 只剩 hm-top:拱门 → 横线。
+                     节奏 `cubic-bezier(0.5,0.03,0.9,0.5)` —— 缓入,但**不能太缓**。
+                     第一版用了 `cubic-bezier(0.62,0.02,0.9,0.42)`,逐帧实测
+                     420→520ms 拱顶只抬 0.9 单位(≈0.85px)、最后 80ms 才收完 ——
+                     又变回业主吐槽的"挂着不动再啪一下"。现在这条曲线把加速铺满
+                     整段:进度 0.25/0.5/0.75 处分别是 0.08/0.25/0.52,越收越快
+                     但一刻不停。
+   easing 写在 0% / 60% 两个关键帧上(CSS 的 `animation-timing-function` 属于
+   "从这个关键帧出发的那一段"),两段各用各的曲线,互不牵连。 */
+@keyframes hm-top-arch-back {
+  0% { d: path("M 7 14 A 2 2 0 0 1 7.709 12.472 L 14.709 6.472 A 2 2 0 0 1 17.291 6.472 L 24.291 12.472 A 2 2 0 0 1 25 14"); animation-timing-function: cubic-bezier(0.35, 0.08, 0.6, 0.95); }
+  60% { d: path("M 5.5 14 A 2 2 0 0 1 6 13 L 6 12.5 A 11 11 0 0 1 26 12.5 L 26.5 14 A 2 2 0 0 1 27 14"); animation-timing-function: cubic-bezier(0.5, 0.03, 0.9, 0.5); }
+  100% { d: path("M 6 10.5 A 0 0 0 0 1 6 10.5 L 6 10.5 A 0 0 0 0 1 6 10.5 L 26 10.5 A 0 0 0 0 1 26 10.5"); }
+}
+
+@keyframes hm-mid-house-back {
+  0% { d: path("M 7 14 V 23 A 2 2 0 0 0 9 25 H 23 A 2 2 0 0 0 25 23 V 14"); animation-timing-function: cubic-bezier(0.35, 0.08, 0.6, 0.95); }
+  60%, 100% { d: path("M 6 16 V 16 A 2 2 0 0 0 6 16 H 26 A 2 2 0 0 0 26 16 V 16"); }
+}
+
+@keyframes hm-bot-house-back {
+  0% { d: path("M 13 25 V 17 A 1 1 0 0 1 14 16 H 18 A 1 1 0 0 1 19 17 V 25"); animation-timing-function: cubic-bezier(0.35, 0.08, 0.6, 0.95); }
+  60%, 100% { d: path("M 6 21.5 V 21.5 A 1 1 0 0 1 6 21.5 H 26 A 1 1 0 0 1 26 21.5 V 21.5"); }
+}
+
+/* 回程:works/detail → home。不按 page 状态限定 —— detail 回首页时 icon 的
+   静止 d 本来就是房子形态,起手就是关键帧的 0%,接得上。 */
+html[data-device="mobile"] .morph-nav.motion-works-to-home .hm-top {
+  animation: hm-top-arch-back 620ms both;
+}
+html[data-device="mobile"] .morph-nav.motion-works-to-home .hm-mid {
+  animation: hm-mid-house-back 620ms both;
+}
+html[data-device="mobile"] .morph-nav.motion-works-to-home .hm-bot {
+  animation: hm-bot-house-back 620ms both;
+}
+
+/* 回程的**配色节奏必须与去程相反**。
+   去程(深底 → 白圆)是"白圆先铺、线条慢半拍再转黑"(基础规则里的
+   `color 200ms ease-out 100ms`):白圆先把底照亮,线条才敢变暗。
+   回程方向正好倒过来 —— 白圆要**退场**,底会从亮退回深色。照抄同一条
+   transition 的逐帧实测:
+     t=120ms 圆 0.79 / 线条 rgb(214) → 亮圆上压亮线,几乎不可见;
+     t=180ms 圆 0.02 / 线条 rgb(146) → 圆已经没了,灰线落在深色背景上,
+                                        整体"溶进背景"。
+   两条亮度斜坡(底色 255→25、线条 0→255)**必然交叉一次**,交叉点就是
+   不可见的那一帧 —— 能做的只有把这段压到最短,做法是让"底变暗"比
+   "线变亮"**跑得更快、且错开半个身位**:线条 0→110ms 就转白,白圆
+   50ms 后才淡出、且只用 150ms 走完。逐帧核算最差一帧在 t≈80ms:
+   线 rgb(227) / 底 rgb(180),ΔL* ≈ 13,已经不是隐形窗口。
+   (去程同理,基础规则里的 `color 200ms ease-out 100ms` 换成了
+   `color 160ms ease-out 50ms`:原来最差一帧 t≈120ms 线 rgb(214) /
+   底 rgb(206),ΔL* ≈ 1 —— 那是真的看不见。) */
+html[data-device="mobile"] .morph-nav.motion-works-to-home .mobile-menu-toggle {
   transition:
-    d 600ms cubic-bezier(0.22, 1, 0.36, 1),
-    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity .3s ease;
+    opacity 360ms ease,
+    color 110ms ease-out,
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-device="mobile"] .morph-nav.motion-works-to-home .mobile-menu-toggle::before {
+  transition: opacity 150ms ease-out 50ms;
 }
 
 /* 房子的"装裱底"——那枚 24px 白圆 —— 直接长在汉堡按钮上(::before)。
