@@ -142,13 +142,21 @@ html[data-device="mobile"] .mobile-menu-toggle svg {
 
 html[data-device="mobile"] .mobile-menu-toggle .hm-line {
   stroke: currentColor;
-  stroke-width: 1.7;
+  /* 1.0 渲染出来约 0.94px,与左上角 FOUR 的字重(0.8px)同档 —— 业主反馈
+     1.7(1.59px)比 FOUR 粗太多。房子态改用 1.5:房子随按钮缩到 2/3 渲染,
+     1.5 × 20/32 = 0.94px,与汉堡态完全是同一档细度。 */
+  stroke-width: 1;
   stroke-linecap: round;
+  stroke-linejoin: round;
   transform-origin: 16px 16px;
-  /* 620ms 与整条栏的形变同拍(home→works 时"栏收缩 + 线条拼成房子"同步
-     收束)。菜单开合的 X 形变另在 .is-open 里压回 380ms —— 那是本地动作,
-     不需要跟栏同拍。 */
-  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity .3s ease;
+  /* d + stroke-width + transform 三者同拍 620ms:线条一边飞行一边自身形变成
+     房子轮廓。菜单开合的 X 形变另在 .is-open 里压回 380ms —— 那是本地动作,
+     不涉及 d / 描边宽度。 */
+  transition:
+    d 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity .3s ease;
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-line {
@@ -175,12 +183,6 @@ html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-mid {
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-bot {
-  transform: rotate(45deg) translateY(-5.5px);
-}
-
-/* hm-wall 与 hm-bot 始终同形:汉堡态同坐标(重叠),X 态同 transform(重叠),
-   所以在任何时刻房子那道"多余的线"都不会露出来。 */
-html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-wall {
   transform: rotate(45deg) translateY(-5.5px);
 }
 
@@ -322,25 +324,44 @@ html[data-device="mobile"] .nav-works .works-nav-items button {
   pointer-events: auto;
 }
 
-/* --- 汉堡 ⇄ 房子：同一条 SVG 内的线条形变 (2026-10-04 v2) ---
+/* --- 汉堡 ⇄ 房子：同一条 SVG 内的路径形变 (2026-10-04 v3) ---
    v1 是"两个 icon 交叉淡入淡出"(汉堡按钮淡出、独立的小房子胶囊淡入),
-   业主反馈太生硬。v2 换成真正的形变:汉堡那 4 条 <line> 就地旋转/平移/
-   缩放拼成房子轮廓 —— 和"汉堡→X"是同一套手法,只是终点换成房子。
+   业主反馈太生硬。v2 用 transform 把线条旋转/平移/缩放**拼**出房子轮廓 ——
+   斜边角度与墙顶接缝都是拟合出来的近似形。v3 直接把 path 的 d 形变成
+   lucide House 的原始路径,与 PC 端 <House size={15}> 逐点一致。
 
-   几何(32×32 用户坐标,transform-origin: 16px 16px):
-     屋顶左斜 (8,14)→(16,5.5)      ← hm-top
-     屋顶右斜 (16,5.5)→(24,14)     ← hm-mid
-     左墙   (10.5,11.34)→(10.5,24) ← hm-bot
-     右墙   (21.5,11.34)→(21.5,24) ← hm-wall
-   墙顶 y=11.34 正好落在屋顶斜边上(不悬空),四笔首尾相接成一座房子。
+   为什么必须是 <path>:CSS 只能对 path 的 d 做形变,<line> 的 x1/y1/x2/y2
+   是离散属性,没有补间。三条线全部改成 path,汉堡态的 d 写成"退化路径"
+   (零半径弧按 SVG spec 退化为直线),渲染出来仍是原来那三条横线,像素零变化。
 
-   每条线的 transform = translate(t) rotate(θ) scaleX(s)(CSS 从右往左作用:
-   先沿线压缩长度、再绕图形中心旋转、最后平移到位),三个量由
-   「线段中心 = C + R(θ)·(0,v) + t」反解(v 是该线中心到 C 的初始偏移),
-   端点误差 < 0.01 用户单位。 */
+   ⚠ 三条线 → 房子只要 **2 个轮廓**(屋架 + 门),但绝不能让两条线同时去描
+   同一个轮廓:它们的起点不同(line y=10.5 与 y=21.5),同一进度下就是两个
+   "年龄不同"的轮廓叠在一起 —— 逐帧截图里那团打结的形状就是这么来的。
+   正确做法是**三条线各成一个笔画**,合起来正好是一座房子:
 
-/* 汉堡 / 房子共用这同一枚按钮:首页态是汉堡(不写 transform,四条线各就各位),
-   works 态就地缩到 24px、与白圆同心,线条同时形变成房子。 */
+     hm-top (y=10.5)  → 屋顶(左右两道斜边 + 圆角屋脊),  M 7 14  … 25 14
+     hm-mid (y=16)    → 左右墙 + 底边(一个 U),           M 25 14 … 7 14
+     hm-bot (y=21.5)  → 门(开口矩形),                    M 19 25 … 13 25
+
+   三笔首尾相接:屋顶终点 (25,14) = 墙起点,墙终点 (7,14) = 屋顶起点
+   —— 合成一个闭合屋架;门是独立一笔。圆头线帽让接缝看不出来。
+
+   ⚠ 命令结构必须逐位一一对应,d 才会补间而不是硬切:
+     每条都是 6 段 —— M,A,L,A,L,A(屋顶) / M,V,A,H,A,V(墙) / M,V,A,H,A,V(门)
+   三条硬规矩:
+   ① 目标路径里的 v/h 会被浏览器归一化成**绝对 V/H**,与 L 不是同一种命令
+      → 与汉堡侧对不上就只会离散跳变(实测 t=0 就已经跳到终点,全程无补间)。
+      所以两侧统一写成大写绝对命令。
+   ② 弧命令的 large-arc / sweep 标志两侧保持一致(汉堡侧弧是退化的,标志
+      取什么值都不可见,那就直接对齐目标值,避免实现差异导致退化为硬切)。
+   ③ **遍历方向必须让端点一一对应**。横线的左端只能走成"房子的左侧"、右端
+      走成"右侧",否则两端会在空中交叉,中途就折成一个结(逐帧截图实锤)。
+      所以墙是从左屋檐 (7,14) 往下、沿底边、再上到右屋檐 (25,14);
+      门是从左门框底 (13,25) 往上过梁再下到右门框底 (19,25)。
+      照抄 lucide 原路径的方向正好是反的(它从左墙经 `z` 收口)。 */
+
+/* 汉堡 / 房子共用这同一枚按钮:首页态是汉堡(三条线各就各位),works 态按钮
+   整体缩到 2/3、与白圆同心,同时线条的 d 形变成房子的三个笔画。 */
 html[data-device="mobile"] .mobile-menu-toggle {
   /* 建一个 stacking context:白圆(::before, z-index:-1)与 SVG 线条的上下
      关系都锚在这里,也让这枚按钮整体压住分类行。 */
@@ -361,16 +382,16 @@ html[data-device="mobile"] .mobile-menu-toggle {
    为什么不继续用 .morph-home-pill 的白底:两者是**两个盒子**,home→works
    时各自沿不同轨迹移动(汉堡跟 padding-top/height,固定圆跟 height),中途
    差最多 10px —— 线条会明显飞出圆外(逐帧截图实锤)。长在同一个 transform
-   上就永远同心:按钮 scale(0.55) 时 43.6px 正好渲染成 24px。
+   上就永远同心:按钮缩到 2/3 时 36px 正好渲染成 24px。
    点击性仍由透明的 .morph-home-pill 提供(它 pointer-events 可切)。 */
 html[data-device="mobile"] .mobile-menu-toggle::before {
   content: "";
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 43.6px;
-  height: 43.6px;
-  margin: -21.8px 0 0 -21.8px;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
   border-radius: 50%;
   background: #ffffff;
   /* 绝对定位元素默认画在 flow 内容(SVG 线条)**之上** —— 白圆会把线条盖掉
@@ -389,11 +410,13 @@ html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle::before {
 html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle,
 html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle {
   /* 它不再是"淡出的汉堡",而是房子本体:保持渲染,颜色转深(落在白圆上),
-     整体缩到 24px 与白圆同心。汉堡 44px、胶囊 24px,两者各贴右内边距 →
+     整体缩到 2/3 —— svg 30px 渲染成 20px,内嵌的 lucide House(24 视框)
+     正好 15px,与 PC 端 <House size={15}> 一致;白圆 36px 同时渲染成 24px。
+     汉堡 44px、白圆命中区 24px,两者各贴右内边距 →
      静止时中心天然差 10px,这 10px 位移把它们收到同一个中心。 */
   color: #000000;
   pointer-events: none;
-  transform: translateX(10px) scale(0.55);
+  transform: translateX(10px) scale(0.6667);
 }
 
 /* works 态线条就是可见的房子;detail 态右侧是分类下拉、没有 icon 位,整枚
@@ -407,26 +430,38 @@ html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle {
   opacity: 0;
 }
 
-/* 房子形态(works / detail 共用;detail 下不可见,但形态先就位) */
+/* 房子形态(works / detail 共用;detail 下不可见,但形态先就位)。
+   lucide House 的 24 视框坐标 +4/+4 平移进 32 视框,并拆成三个笔画:
+     hm-top → 屋顶 (7,14) --弧--> (7.709,12.472) --斜边--> (14.709,6.472)
+              --弧(屋脊)--> (17.291,6.472) --斜边--> (24.291,12.472) --弧--> (25,14)
+     hm-mid → 左墙 + 底边 + 右墙 (7,14) → (7,23) --弧--> (9,25) → (23,25)
+              --弧--> (25,23) → (25,14)
+     hm-bot → 门 (13,25) → (13,17) --弧--> (14,16) → (18,16) --弧--> (19,17) → (19,25)
+   屋顶终点与墙终点都是 (25,14)、起点都是 (7,14) —— 两笔合成一个闭合屋架;
+   门是独立一笔。lucide 原作末尾那个 `z`(左墙)在这一版里由 hm-mid 显式画出,
+   所以三笔都是**开口路径**,端口靠 stroke-linecap:round 的圆头接顺。 */
 html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-top,
 html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-top {
-  transform: translate(0, -2.481px) rotate(-46.74deg) scaleX(0.5837);
+  d: path("M 7 14 A 2 2 0 0 1 7.709 12.472 L 14.709 6.472 A 2 2 0 0 1 17.291 6.472 L 24.291 12.472 A 2 2 0 0 1 25 14");
 }
 
 html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-mid,
 html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-mid {
+  /* opacity:1 是防御:X 态里 hm-mid 被置 0,若类名残留在按钮上,墙就会缺一笔。 */
   opacity: 1;
-  transform: translate(4px, -6.25px) rotate(46.74deg) scaleX(0.5837);
+  d: path("M 7 14 V 23 A 2 2 0 0 0 9 25 H 23 A 2 2 0 0 0 25 23 V 14");
 }
 
 html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-bot,
 html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-bot {
-  transform: translate(0, 1.67px) rotate(90deg) scaleX(0.633);
+  d: path("M 13 25 V 17 A 1 1 0 0 1 14 16 H 18 A 1 1 0 0 1 19 17 V 25");
 }
 
-html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-wall,
-html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-wall {
-  transform: translate(11px, 1.67px) rotate(90deg) scaleX(0.633);
+/* 房子态的描边宽度:房子随按钮缩到 2/3 渲染,1.5 × 20/32 = 0.94px,
+   与汉堡态 1.0 × 30/32 = 0.94px 完全同细。 */
+html[data-device="mobile"] .morph-nav.nav-works .mobile-menu-toggle .hm-line,
+html[data-device="mobile"] .morph-nav.nav-detail .mobile-menu-toggle .hm-line {
+  stroke-width: 1.5;
 }
 
 /* Shrunken Home pill —— 2026-10-04 起它只剩"点击热区 + 无障碍标签":
@@ -483,7 +518,7 @@ html[data-device="mobile"] .morph-nav .morph-home-pill svg {
 /* 按压回弹:白圆和线条都在汉堡按钮上,所以把"按下"反馈也交给它 ——
    pill 只是透明热区,按到它就等于按住那枚圆。 */
 html[data-device="mobile"] .morph-nav.nav-works:has(.morph-home-pill:active) .mobile-menu-toggle {
-  transform: translateX(10px) scale(0.5);
+  transform: translateX(10px) scale(0.6);
   transition: transform 120ms ease-out;
 }
 

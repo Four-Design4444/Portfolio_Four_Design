@@ -1622,15 +1622,31 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             tabIndex={isHome ? 0 : -1}
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
-            <svg viewBox="0 0 32 32" aria-hidden="true">
-              <line className="hm-line hm-top" x1="6" y1="10.5" x2="26" y2="10.5" />
-              <line className="hm-line hm-mid" x1="6" y1="16" x2="26" y2="16" />
-              <line className="hm-line hm-bot" x1="6" y1="21.5" x2="26" y2="21.5" />
-              {/* 2026-10-04: 第 4 条线,坐标与 hm-bot **完全相同** —— 汉堡态
-                  两条线重叠成一条(像素零变化),works 态它们一起"劈开"成
-                  房子的左右两道竖墙。房子需要 4 笔(2 屋顶斜边 + 2 墙),汉堡
-                  只有 3 条,这条冗余线就是补上的那一笔。 */}
-              <line className="hm-line hm-wall" x1="6" y1="21.5" x2="26" y2="21.5" />
+            <svg viewBox="0 0 32 32" aria-hidden="true" fill="none">
+              {/* 2026-10-04:三条线全部改成 <path> —— 只有 path 的 d 能被 CSS
+                  形变(<line> 的 x1/y1/x2/y2 是离散属性,没有补间)。
+                  汉堡态的 d 是"退化路径"(端点重合的段按 SVG spec 直接省略),
+                  渲染出来仍是原来那三条横线,像素零变化。
+                  三条 path 的命令结构 (M A L A L A / M V A H A V / M V A H A V)
+                  各自与房子的一个笔画(屋顶 / 墙+底 / 门)逐位对应,连遍历方向
+                  也必须对齐 —— 写法与理由见 mobile.css「汉堡 ⇄ 房子」整段说明:
+                  命令类型或方向对不上,d 会退化成硬切或在空中打结。
+                  ⚠ 弧命令的半径与**两端点**位置同样要按目标对齐(见下),否则
+                  插值中途弧会被浏览器"按需放大",生成一个比房子还高的半圆拱。 */}
+              {/* ⚠⚠ 为什么 hm-top 中间那两个点是 (16,10.5) 而不是横线右端 (26,10.5):
+                  这两点是**弧形屋脊**的起点/终点,目标态相距只有 2.58。若起点态
+                  把它们放在 (6,10.5)/(26,10.5)(相距 20),插值途中弦长会从 20 一路
+                  缩到 2.58 —— 全程远大于 2r(半径 2 → 直径 4),按 SVG 规范"半径不足
+                  时自动放大到恰好连接两端点",浏览器把半径撑到弦长的一半,于是中途
+                  渲染出一个**巨大的半圆拱**:实测回程 340ms 时 hm-top 的顶点冲到
+                  y=0.6,比真实屋脊(y=6.47)高一倍,而此时白圆已淡出、线条已转白,
+                  就读成了"屏幕上冒出一个白色拱门"(业主截图实锤)。
+                  把两个端点收在中部重合:弦长全程 ≤ 2.58 < 4,半径永远够用,
+                  中间态是"矮人字",不再有放大。半径写 2(与目标一致)同理 ——
+                  起点半径写 0 会让中途半径只有 p×2,放大风险窗口更大。 */}
+              <path className="hm-line hm-top" d="M 6 10.5 A 2 2 0 0 1 6 10.5 L 16 10.5 A 2 2 0 0 1 16 10.5 L 26 10.5 A 2 2 0 0 1 26 10.5" />
+              <path className="hm-line hm-mid" d="M 6 16 V 16 A 2 2 0 0 0 6 16 H 26 A 2 2 0 0 0 26 16 V 16" />
+              <path className="hm-line hm-bot" d="M 6 21.5 V 21.5 A 1 1 0 0 1 6 21.5 H 26 A 1 1 0 0 1 26 21.5 V 21.5" />
             </svg>
           </button>
           {/* The panel portals to <body>: .morph-nav has transform + contain:paint,
