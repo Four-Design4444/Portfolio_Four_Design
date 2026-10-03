@@ -301,10 +301,14 @@ html[data-device="mobile"] .nav-works .morph-home-pill:active {
 }
 
 /* The second-level category capsule is visually lighter when it is a little
-   flatter than the surrounding floating bar. Keep detail mode at its own
-   trigger height below. */
+   flatter than the surrounding floating bar. 26px (2026-10-03: user asked to
+   slim the active pill down to the detail-level capsule height, which is
+   26px) — this variable drives the category button, the in-works indicator
+   AND (via the measured anchor rect) the shared pill, so all three shrink
+   together and the works<->detail pill morph stays height-neutral. Detail
+   mode keeps its own explicit 26px trigger height below. */
 html[data-device="mobile"] .morph-nav.nav-works {
-  --works-nav-height: 30px;
+  --works-nav-height: 26px;
 }
 
 html[data-device="mobile"] .works-nav-items button {
@@ -346,9 +350,10 @@ html[data-device="mobile"] .detail-nav-back-icon {
   width: 5px;
   height: 9px;
   /* 5x9 与图标 viewBox 10:18 等比(6x10 那档业主嫌大)。 */
-  /* 实测 flex 居中后图标中心比文字中心低 0.5px(文字字形盒略高于行盒),
-     上移 0.5px 做到精确同轴(PC 用 -1px,此处字号小减半)。 */
-  transform: translateY(-0.5px);
+  /* 对齐用业主实拍截图做过像素测量:缩到 5x9 后若沿用旧的 -0.5px 上移,
+     小箭头会比「Back」文字墨迹中心高出约 1px(质心实测),改为下移
+     0.5px 才与 8px 文字同轴。 */
+  transform: translateY(0.5px);
 }
 
 html[data-device="mobile"] .detail-pager {
@@ -1586,13 +1591,13 @@ html[data-device="mobile"] .mob-profile-stats.is-docked {
   margin-left: 14px;
 }
 
-/* 整组**复位**(dock → 静止)是「慢编排」:三张卡一起回到自然宽,
-   名称/数字等卡宽快到位(380/620 ≈ 61%,该曲线此处已走到 ~92%)开始
-   **缓缓浮现**(420ms)—— 旧版 200ms 只有 4 个中间帧,看着就是「啪一下出现」。
-   同时带 3px 上浮:纯 translateY,不改布局、不挤压文字,所以不会出现缩略态。 */
+/* 整组**复位**(dock → 静止)是「慢编排」:三张卡一起回到自然宽。
+   文字显现**提前触发**(用户反馈「快复位完毕了才出现,要提前」):
+   200ms 时宽度曲线(0.32,0.86,0.28,1)已走 ~80%,名字从此刻开始 520ms
+   缓缓浮现 —— 早期透明度极低,被卡边裁掉的部分肉眼无感,不会读出缩略态。 */
 html[data-device="mobile"] .mob-profile-stats:not(.is-docked) {
-  --mob-name-delay: 380ms;
-  --mob-name-in-dur: 420ms;
+  --mob-name-delay: 200ms;
+  --mob-name-in-dur: 520ms;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat {
@@ -1625,7 +1630,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
      列 gap(clamp(5,1.3vh,7),2026-10-03 随卡高收窄从 10 同步降到 7),
      stretch 行内卡片高度随之收缩,底边仍与选中卡/描述卡同线。
      margin 在基础态 transition 里,全程可插值无跳变。 */
-  margin-top: calc(clamp(16px, 4.9vw, 23px) + clamp(5px, 1.3vh, 7px));
+  margin-top: calc(clamp(14px, 4.2vw, 19px) + clamp(4px, 1.1vh, 6px));
   /* 数字盒随字号**连续**归零(font-size 可插值,非 max-height 那种离散跳变),
      列 gap 同步归零 → 内容只剩 label 一行,恰好填满收缩后的内容盒:
      每一帧 内容高 == 内容盒高,零裁切;图标由基础态 justify-content:center
@@ -1635,9 +1640,10 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
   padding-right: 0;
 }
 
-/* dock 态整体等比缩小一档(用户要求)：数字、英文、图标同步收小 */
+/* dock 态整体等比缩小一档(用户要求)：数字、英文、图标同步收小。
+   2026-10-03 再缩一档:数字 clamp(14,4.2vw,19)、英文 clamp(7,1.9vw,9)、图标 7px。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat strong {
-  font-size: clamp(16px, 4.9vw, 23px);
+  font-size: clamp(14px, 4.2vw, 19px);
 }
 
 /* 收起项数字淡出 + 盒高随字号归零：过渡写在 docked 规则里(dock 方向的
@@ -1655,7 +1661,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) .mob-profile-stat-label {
   gap: 0;
-  font-size: clamp(8px, 2.2vw, 10px);
+  font-size: clamp(7px, 1.9vw, 9px);
 }
 
 /* 收起项英文名:淡出 + 3px 下沉(复位时反向 = 文字从下方缓缓浮起,比纯淡入自然)。
@@ -1685,13 +1691,13 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-act
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档
      240ms 按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
-  --mob-name-delay: 250ms;
+  --mob-name-delay: 150ms;
   --mob-name-in-dur: 300ms;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active .mob-profile-stat-icon {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active strong {
@@ -2093,8 +2099,8 @@ html[data-device="mobile"] .mob-profile-skills.is-docked {
 /* 整组**复位**(dock → 静止)：五枚芯片一起回到自然宽，名称/图标等卡宽快到位
    (460/620 ≈ 74%，该曲线此处已走到 ~98%)才浮现 —— 看到的永远是全称。 */
 html[data-device="mobile"] .mob-profile-skills:not(.is-docked) {
-  --mob-name-delay: 380ms;
-  --mob-name-in-dur: 420ms;
+  --mob-name-delay: 200ms;
+  --mob-name-in-dur: 520ms;
 }
 
 /* 收起项同样**不用 justify-content: center**(离散、不可过渡,会让图标相对
@@ -2155,9 +2161,9 @@ html[data-device="mobile"] .mob-profile-skills.is-docked .mob-profile-skill.is-a
      ⚠ 只覆写变量、不写 transition 简写 —— 否则会盖掉 :active 那档 240ms
      按压回弹(简写里没有它,按压就会跟着变成 340ms)。 */
   --mob-w-dur: var(--mob-switch-dur);
-  --mob-name-delay: 250ms;
-  /* dock 内切换仍要快(用户要求「切换不流畅」已修),但淡入从 200ms 拉到
-     300ms —— 切换宽度 340ms,名称 250ms 后浮现、300ms 完成,约 550ms。 */
+  --mob-name-delay: 150ms;
+  /* dock 内切换仍要快(用户要求「切换不流畅」已修):切换宽度 340ms,
+     名称 150ms 后浮现、300ms 完成,约 450ms。 */
   --mob-name-in-dur: 300ms;
 }
 
