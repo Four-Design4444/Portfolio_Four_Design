@@ -1695,7 +1695,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
           </div>
         </div>
       ) : (
-        <button type="button" className="morph-home-pill" onClick={goHome}><House size={15} strokeWidth={2} />Home</button>
+        <button type="button" className="morph-home-pill" onClick={goHome} aria-label="Home"><House size={15} strokeWidth={2} />Home</button>
       )}
     </header>
   );
@@ -1822,7 +1822,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
      SIDE_OFFSET scales with the card: the deck is sized from the stage height
      (see .mob-stage) and the side cards keep a constant fraction of the card
      width, so enlarging the whole component means raising both together. */
-  const SIDE_OFFSET = 72;
+  const SIDE_OFFSET = 81;
   const poseAt = (eff) => {
     if (eff >= 0) {
       if (eff <= 1) {                                  // right slot -> centre (covers up)
@@ -2429,15 +2429,26 @@ function useMeasuredMaxCardHeight(infoRef) {
   }, []);
 }
 
-// 折叠图标(业主提供的 折叠.svg,四角向内收缩)。移动端专用:描述卡展开时出现在
-// 所在行右端,点它或点页面空白都把卡片组恢复初始静止态。内联 SVG 走 currentColor,
-// 灰度由 mobile.css 的 .mob-fold 一处定义,与经验卡图标(白 @55%)同灰。
+// 折叠图标(按业主提供的 折叠.svg 重绘的描边版,形状一致;原填充版笔画固定,
+// 无法调粗细)。stroke-width 66 ≈ 原版 82 的 80%,视觉上"微微细一档"——
+// 要再调粗细只改这一个数字(82 = 与原版完全等粗)。移动端专用:描述卡展开时
+// 出现在所在行右端,点它或点页面空白都把卡片组恢复初始静止态。内联 SVG 走
+// currentColor,灰度由 mobile.css 的 .mob-fold 一处定义,与经验卡图标同灰。
 const MOB_FOLD_ICON = (
-  <svg viewBox="0 0 1024 1024" aria-hidden="true" focusable="false">
-    <path
-      fill="currentColor"
-      d="M942.1 41H657.9c-20.4 0-39.5 13.8-42.9 34-4.3 25.6 15.5 48 40.4 48h225.3c11.3 0 20.5 9.2 20.5 20.5v222.8c0 20.4 13.8 39.5 34 42.9 25.6 4.3 48-15.5 48-40.4V81.9C983 59.4 964.6 41 942.1 41zM368.6 901.1H143.4c-11.3 0-20.5-9.2-20.5-20.5V657.9c0-20.4-13.8-39.5-34-42.9-25.6-4.3-48 15.5-48 40.4v286.7c0 22.5 18.4 41 41 41h284.2c20.4 0 39.5-13.8 42.9-34 4.3-25.6-15.5-48-40.4-48zM424.5 404c0-0.2-0.1-0.5-0.1-0.7v-204c0-22.5-18.4-41-41-41-22.5 0-41 18.4-41 41v105.8L151.8 114.3c-15.9-15.9-42-15.9-57.9 0-15.9 15.9-15.9 42 0 57.9L284.6 363H178.8c-22.5 0-41 18.4-41 41 0 22.5 18.4 41 41 41h204c0.2 0 0.5 0.1 0.7 0.1 8 0 15.5-2.4 21.8-6.5 0.2-0.2 0.5-0.3 0.8-0.4 2.3-1.5 4.4-3.2 6.3-5.2 1.9-1.9 3.7-4.1 5.2-6.3 0.2-0.2 0.3-0.5 0.4-0.7 4.1-6.5 6.5-14 6.5-22zM739.4 681.5h105.8c22.5 0 41-18.4 41-41 0-22.5-18.4-41-41-41h-204c-0.2 0-0.5-0.1-0.7-0.1-8.1 0-15.5 2.4-21.9 6.5-0.2 0.1-0.5 0.2-0.7 0.4-2.3 1.5-4.4 3.2-6.3 5.2-1.9 1.9-3.7 4.1-5.2 6.3-0.1 0.2-0.2 0.5-0.4 0.7-4.1 6.4-6.5 13.8-6.5 21.9 0 0.2 0.1 0.5 0.1 0.7v204c0 22.5 18.4 41 41 41 22.5 0 41-18.4 41-41V739.4l190.7 190.7c15.9 15.9 42 15.9 57.9 0s15.9-42 0-57.9L739.4 681.5z"
-    />
+  <svg
+    viewBox="0 0 1024 1024"
+    aria-hidden="true"
+    focusable="false"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="66"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M636 82 H921 A41 41 0 0 1 962 123 V411" />
+    <path d="M409 942 H124 A41 41 0 0 1 83 901 V613" />
+    <path d="M230 230 L429 429 M470 270 V429 A41 41 0 0 1 429 470 H270" />
+    <path d="M794 794 L595 595 M554 754 V595 A41 41 0 0 1 595 554 H754" />
   </svg>
 );
 

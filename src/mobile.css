@@ -131,9 +131,16 @@ html[data-device="mobile"] .mobile-menu-toggle .hm-line {
 
 /* Burger -> X: each line first translates onto the centre, then rotates
    around it (rotate before translate in the transform list), so both arms
-   cross at the exact middle of the icon. */
+   cross at the exact middle of the icon.
+   Rotation signs are flipped (+45/-45 -> -45/+45) on purpose: with the
+   plain signs the crossing point of the two arms swings to the RIGHT
+   mid-flight (translateY runs in the already-rotated frame and drags both
+   stroke centres right), so the X reads as collapsing/expanding toward the
+   right edge. Both end states are mirror-symmetric (burger, X), so flipping
+   only the angles mirrors the whole path — the arms now gather toward the
+   LEFT while the rendered endpoints stay pixel-identical. */
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-top {
-  transform: rotate(45deg) translateY(5.5px);
+  transform: rotate(-45deg) translateY(5.5px);
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-mid {
@@ -142,7 +149,7 @@ html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-mid {
 }
 
 html[data-device="mobile"] .mobile-menu-toggle.is-open .hm-bot {
-  transform: rotate(-45deg) translateY(-5.5px);
+  transform: rotate(45deg) translateY(-5.5px);
 }
 
 /* Fullscreen panel underneath the bar (bar keeps z-index 40, panel 30), so
@@ -237,8 +244,10 @@ html[data-device="mobile"] .morph-nav.nav-detail {
 }
 
 /* Logo is kept on the left of the top capsule on every level and doubles
-   as the way back to Home (its onClick is goHome), so the separate Home pill
-   is dropped on the works level to give the category row the full width. */
+   as the way back to Home (its onClick is goHome). The works level ALSO keeps
+   a small Home button on the right (2026-10-03: user asked for the same
+   "back to Home" entry as PC, but tiny) — icon-only 24px round pill, the
+   JSX "Home" label is collapsed via font-size:0 so no text node width. */
 html[data-device="mobile"] .nav-works .morph-logo {
   display: block;
 }
@@ -249,8 +258,38 @@ html[data-device="mobile"] .nav-works .works-nav-items {
   width: auto;
 }
 
+/* Shrunken Home pill: 24px white circle, black 11px house glyph.
+   The approach offset is halved (28px -> 12px) so the slide-in reads right
+   at this size; the lit transform must be re-pinned below because this
+   mobile base rule out-specifies / out-orders the PC lit rule. */
+html[data-device="mobile"] .morph-home-pill {
+  transform: translateX(12px) scale(0.9);
+}
+
 html[data-device="mobile"] .nav-works .morph-home-pill {
-  display: none;
+  display: inline-flex;
+  min-width: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  gap: 0;
+  font-size: 0;
+  transform: translateX(0) scale(1);
+}
+
+html[data-device="mobile"] .nav-works .morph-home-pill svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Touch keeps :hover stuck after a tap — pin the lit transform and give the
+   press its own spring-back instead of the PC hover lift. */
+html[data-device="mobile"] .nav-works .morph-home-pill:hover {
+  transform: translateX(0) scale(1);
+}
+
+html[data-device="mobile"] .nav-works .morph-home-pill:active {
+  transform: translateX(0) scale(0.92);
 }
 
 /* The second-level category capsule is visually lighter when it is a little
@@ -420,6 +459,10 @@ html[data-device="mobile"] .section {
 html[data-device="mobile"] .projects,
 html[data-device="mobile"] .section.projects {
   padding-top: 0;
+  /* The desktop 92px bottom padding double-stacks with the showcase's own
+     bottom padding and kept the thumbnail strip floating far above the
+     bottom edge; on the paged mobile screen the showcase owns the bottom. */
+  padding-bottom: 0;
 }
 
 html[data-device="mobile"] .projects-heading {
@@ -506,10 +549,19 @@ html[data-device="mobile"] .project-list {
    a generous, roughly even ~60-68px (≈7vh) of air between EVERY pair of
    components — title(15vh) -> counter -> cards(30.5vh) -> dots -> view-all
    -> thumbnails -> ~11vh bottom. Clamps shrink the gaps on short viewports
-   so a 667px-tall phone still fits one paged screen. */
+   so a 667px-tall phone still fits one paged screen.
+   2026-10-03: the thumbnail strip is pinned to the bottom of the screen —
+   the free slack collects between the view-all button and the strip instead
+   of sitting under it. min-height fills everything below the 40px
+   .project-list offset (the section's own bottom padding is 0 on mobile),
+   and the strip's margin-top:auto absorbs the leftover. */
 html[data-device="mobile"] .mob-showcase {
   padding-top: clamp(84px, 15vh, 132px);
-  padding-bottom: clamp(48px, 11vh, 96px);
+  padding-bottom: clamp(22px, 4.5vh, 44px);
+}
+
+html[data-device="mobile"][data-paging="on"] .mob-showcase {
+  min-height: calc(var(--vh, 1vh) * 100 - 40px);
 }
 
 /* Standalone section title, set in the site's display face (Rany). */
@@ -543,12 +595,14 @@ html[data-device="mobile"] .mob-counter {
 
 /* The deck is sized from this height: a card is 100% of it and 3:5 wide, so
    raising the height scales the whole component proportionally. The side-card
-   offset lives in MobileShowcaseDeck (SIDE_OFFSET) and must move with it. */
+   offset lives in MobileShowcaseDeck (SIDE_OFFSET) and must move with it.
+   2026-10-03: 37.5vh/322 → 42vh/354,上间距 5.6vh → 7vh(用户要求卡组放大、
+   与计数器/圆点的间距拉开;底部余量仍够,约 13px)。 */
 html[data-device="mobile"] .mob-stage {
   position: relative;
   width: 100%;
-  height: min(37.5vh, 322px);
-  margin: clamp(28px, 5.6vh, 52px) 0 0;
+  height: min(42vh, 354px);
+  margin: clamp(36px, 7vh, 60px) 0 0;
 }
 
 html[data-device="mobile"] .mob-deck {
@@ -623,7 +677,8 @@ html[data-device="mobile"] .mob-dots {
   display: flex;
   justify-content: center;
   gap: 9px;
-  margin: clamp(28px, 5.6vh, 52px) 0 0;
+  /* 与卡组的间距同步拉开(2026-10-03,见 .mob-stage 注释)。 */
+  margin: clamp(36px, 7vh, 60px) 0 0;
 }
 html[data-device="mobile"] .mob-dots i {
   width: 7px;
@@ -642,6 +697,10 @@ html[data-device="mobile"] .mob-dots i.on {
 html[data-device="mobile"] .mob-viewall {
   appearance: none;
   margin-top: clamp(26px, 5.4vh, 48px);
+  /* Minimum air between the button and the thumbnail strip below it: the
+     strip's margin-top:auto eats all free space and would bottom out at 0
+     on short viewports. */
+  margin-bottom: clamp(22px, 4vh, 40px);
   padding: 8px 34px;
   border: 1px solid rgba(255, 255, 255, .38);
   border-radius: 999px;
@@ -664,7 +723,9 @@ html[data-device="mobile"] .mob-viewall:active {
    render loop centres the active thumbnail via scrollTo instead.
    touch-action:pan-x keeps native horizontal panning on touch; the pager's
    touchmove handler exempts touches starting on this strip, so horizontal
-   swipes scroll it instead of flipping the page. */
+   swipes scroll it instead of flipping the page.
+   margin-top:auto pins the strip to the bottom of the (min-height-filled)
+   showcase: all leftover screen height lands in this one gap. */
 html[data-device="mobile"] .mob-thumbs {
   display: flex;
   gap: 4px;
@@ -674,7 +735,7 @@ html[data-device="mobile"] .mob-thumbs {
   cursor: grab;
   padding: 4px 0 24px;
   scroll-behavior: smooth;
-  margin-top: clamp(28px, 6vh, 52px);
+  margin-top: auto;
   width: 100%;
 }
 html[data-device="mobile"] .mob-thumbs.dragging { cursor: grabbing; scroll-behavior: auto; }
@@ -1284,7 +1345,10 @@ html[data-device="mobile"] .mob-profile-contact {
   flex-direction: column;
   align-items: flex-start;
   gap: clamp(12px, 2vh, 16px);
-  margin-bottom: clamp(22px, 4.6vh, 40px);
+  /* 2026-10-03 用户反馈:联系方式与下方 dock/描述卡之间的空档太大,
+     整体收一档。这行同时决定经验展开与技能展开两组的「上方间距」,
+     收小后两组仍然天然一致(见 shell-skills 展开态 margin-top:0)。 */
+  margin-bottom: clamp(12px, 2.8vh, 24px);
 }
 
 html[data-device="mobile"] .mob-profile-contact .pf-copy {
@@ -1656,6 +1720,28 @@ html[data-device="mobile"] .mob-profile-shell-skills {
   margin-top: clamp(18px, 3.8vh, 30px);
 }
 
+/* 技能展开时收紧与上方联系方式的间距(2026-10-03 用户反馈:联系方式与
+   技能描述卡之间的空档太大)。展开态 margin-top 归零后,技能展开时
+   「描述卡到邮箱的距离」= contact 的 margin-bottom,与经验展开时
+   「dock 行到邮箱的距离」完全一致(用户要求两组相同)。 */
+html[data-device="mobile"] .mob-profile-shell-skills:has(.mob-profile-skill-card.is-visible) {
+  margin-top: 0;
+}
+
+/* ⚠⚠ margin-top **必须**参与过渡:info 是 justify-content:flex-end 的
+   底对齐布局,shell-skills 的 margin-top 一变,上方标题/联系方式全部位移。
+   旧版把 margin 从 transition 里摘掉、让 :has 切换即时生效 —— 点击技能卡
+   瞬间邮箱手机瞬移 14~26px(用户报「上面的信息不是无缝移动的,出现跳帧」,
+   2026-10-03),根因就是这条。margin-top 是连续量,恢复过渡即可无缝。
+   (当年注释里的「margin 过渡卡在起始帧」是误判:transition 属性被本条
+   覆盖成只剩 grid-template-rows,margin 变化根本没建过渡,是直接跳。)
+   ⚠ is-collapsed 的 margin 归零同样走这条过渡(经验展开时技能组收走)。 */
+html[data-device="mobile"] .mob-profile-shell-skills {
+  transition:
+    grid-template-rows var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease);
+}
+
 html[data-device="mobile"] .mob-profile-shell.is-collapsed {
   grid-template-rows: 0fr;
   /* 高度归零后仍留 margin 会凭空多出一段空白，同样要一起收掉 */
@@ -1717,10 +1803,12 @@ html[data-device="mobile"] .mob-profile-skill-card {
   /* transform-origin 顶对齐:卡片从被点的那张卡下沿「长出来」,不是从中心炸开。 */
   transform-origin: top center;
   will-change: transform, opacity, height;
-  /* 展开跟 dock 同一档(1000ms):标签条收拢与描述卡长出是**一次**动作的两半,
-     两段时长不一致会看出「先跳一下再长出来」。 */
+  /* 展开跟 dock 同一档(620ms):标签条收拢与描述卡长出是**一次**动作的两半,
+     两段时长不一致会看出「先跳一下再长出来」。margin 也在列:is-visible 的
+     -1px 贴合偏移若即时生效,展开第一帧会跳 1px。 */
   transition:
     height var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
     opacity 420ms cubic-bezier(0.34, 1.2, 0.44, 1),
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
@@ -1799,7 +1887,9 @@ html[data-device="mobile"] .mob-profile-card-box {
   height: var(--mob-card-h, auto);
   min-height: 0;
   overflow: hidden;
-  padding: 12px 14px;
+  /* 上下内边距放宽(2026-10-03 用户反馈:描述卡文字上下太贴边)。
+     12 → clamp(18,2.9vh,26);经验/技能两张信息卡共用,JS 量高会自动跟上。 */
+  padding: clamp(18px, 2.9vh, 26px) 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   background: rgba(10, 10, 12, 0.66);
@@ -1807,11 +1897,21 @@ html[data-device="mobile"] .mob-profile-card-box {
   transition: height var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
-/* 技能描述卡「从 dock 行向上长」:body 顶边 = 容器高(max) − 当前内容高,
-   盒底永远钉在容器底(=技能行顶),切换时只变盒高 —— 技能行与上方内容
-   全程不动,手指的触控锚点不漂移。经验卡不写这条(默认顶对齐,向下长)。 */
+/* 技能描述卡(2026-10-03 改):**统一高度**——用户要求不同选项卡的详情卡
+   高度一致、以最高的为标准。容器高本来就是该组最长文案的实测高(--mob-skill-max),
+   所以展开态让内容盒直接撑满容器(高度=容器高),并去掉原来的「盒底钉住技能行顶」
+   的 body 顶边偏移 —— 偏移正是高度不统一的来源。切换选项卡时盒高恒定,
+   零位移;短文案卡片的下部留白(内容顶对齐)。 */
 html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-body {
-  margin-top: calc(var(--mob-skill-max, 0px) - var(--mob-card-h, 0px));
+  margin-top: 0;
+}
+
+html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-box {
+  height: var(--mob-exp-max, var(--mob-card-h, auto));
+}
+
+html[data-device="mobile"] .mob-profile-skill-card.is-visible .mob-profile-card-box {
+  height: var(--mob-skill-max, var(--mob-card-h, auto));
 }
 
 html[data-device="mobile"] .mob-profile-exp-card.is-visible .mob-profile-card-body,
@@ -2065,7 +2165,10 @@ html[data-device="mobile"] .mob-fold {
   padding: 0;
   border: 0;
   background: none;
-  color: rgba(255, 255, 255, 0.55);
+  /* 与经验卡图标同灰:图标文件本身填 #c9ced4,CSS 再压 0.55 透明度
+     (见 .mob-profile-stat-icon opacity .55)。这里用同色同透明度,
+     合成结果与 <img> 图标完全一致。 */
+  color: rgba(201, 206, 212, 0.55);
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
