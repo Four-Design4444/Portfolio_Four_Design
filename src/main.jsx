@@ -953,7 +953,7 @@ function App() {
               />
             </div>
             {route.page === 'works' ? (
-              <WorksPage activeCategory={activeCategory} goDetail={goDetail} goCategory={goWorks} />
+              <WorksPage activeCategory={activeCategory} goDetail={goDetail} />
             ) : route.page === 'detail' ? (
               <WorkDetailPage activeCategory={activeCategory} work={activeWork} imageTransitionActive={Boolean(sharedImage && sharedImage.workId === activeWork?.id)} />
             ) : null}
@@ -4592,12 +4592,12 @@ function HomePage({ openWorks, paging, active = true }) {
    确认后整块删除该 nav 节点即可。 */
 const ORBIT_AUTO_DELAY = 4000;
 
-function WorksPage({ activeCategory, goDetail, goCategory }) {
+function WorksPage({ activeCategory, goDetail }) {
   const works = worksByCategory[activeCategory.id] ?? [];
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [activeIndex, setActiveIndex] = useState(0);
-  const [navBox, setNavBox] = useState(null);
-  const navRef = useRef(null);
+  const stageRef = useRef(null);
+  const orbitRef = useRef(null);
   const railHoverRef = useRef(false);
   const timerRef = useRef(null);
   const index = works.length ? Math.min(activeIndex, works.length - 1) : 0;
@@ -4638,13 +4638,35 @@ function WorksPage({ activeCategory, goDetail, goCategory }) {
     setActiveIndex(0);
   }, [activeCategory.id]);
 
-  // demo 导航的滑动指示器：跟随当前分类按钮的盒模型。
-  useLayoutEffect(() => {
+  // demo fitGallery 的 orbit 分支：主卡封面 16:9，用 stage 剩余高度反推画廊总宽
+  //（上限 1140），保证一屏内高度刚好占满、间距与 demo 一致。
+  const fitOrbit = useCallback(() => {
     if (isMobile) return;
-    const btn = navRef.current?.querySelector('.works-orbit-category.is-active');
-    if (!btn) return;
-    setNavBox({ x: btn.offsetLeft, y: btn.offsetTop, w: btn.offsetWidth, h: btn.offsetHeight });
-  }, [isMobile, activeCategory.id]);
+    const stage = stageRef.current;
+    const orbit = orbitRef.current;
+    if (!stage || !orbit) return;
+    const label = orbit.querySelector('.works-orbit-label');
+    const desc = orbit.querySelector('.works-orbit-desc');
+    if (!label || !desc) return;
+    const s = getComputedStyle(stage);
+    const available = stage.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom);
+    const gap = parseFloat(getComputedStyle(orbit).columnGap) || 60;
+    const rail = 270;
+    const extra = label.offsetHeight + 13 + desc.offsetHeight + 34;
+    const mainWidth = Math.max(160, available - extra - 34) * (16 / 9) + 34;
+    orbit.style.width = `${Math.min(1140, mainWidth + rail + gap)}px`;
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    fitOrbit();
+    const ro = new ResizeObserver(fitOrbit);
+    if (stageRef.current) ro.observe(stageRef.current);
+    window.addEventListener('resize', fitOrbit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', fitOrbit);
+    };
+  }, [fitOrbit, index, activeCategory.id, works.length]);
 
   const step = (delta) => setActiveIndex((i) => (i + delta + works.length) % works.length);
 
@@ -4762,31 +4784,10 @@ function WorksPage({ activeCategory, goDetail, goCategory }) {
             <h1>作品索引</h1>
             <p>One focus. Many perspectives.</p>
           </div>
-          {/* demo 导航：临时保留用于对比，确认后整块删除。 */}
-          <nav className="works-orbit-nav" aria-label="作品分类" ref={navRef}>
-            {navBox ? (
-              <span
-                className="works-orbit-indicator"
-                style={{ width: navBox.w, height: navBox.h, transform: `translate(${navBox.x}px, ${navBox.y}px)` }}
-                aria-hidden="true"
-              />
-            ) : null}
-            {categories.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`works-orbit-category${item.id === activeCategory.id ? ' is-active' : ''}`}
-                aria-pressed={item.id === activeCategory.id}
-                onClick={() => goCategory?.(item.id)}
-              >
-                <span>{item.title}</span>
-                <small>{item.cn}</small>
-              </button>
-            ))}
-          </nav>
         </div>
 
-        <div className="works-orbit">
+        <div className="works-orbit-stage" ref={stageRef}>
+          <div className="works-orbit" ref={orbitRef}>
           <div className="works-orbit-focus">
             <div className="works-orbit-label">
               <span><i className="works-orbit-dot" />CURRENT FOCUS</span>
@@ -4865,6 +4866,7 @@ function WorksPage({ activeCategory, goDetail, goCategory }) {
                 </div>
               </button>
             ))}
+          </div>
           </div>
         </div>
 

@@ -4619,9 +4619,11 @@ html[data-paging="on"] .contact-page {
 .works-index-page--orbit {
   position: relative;
   min-height: 100vh;
-  padding: 128px 0 88px;
+  /* demo .shell 几何：左右 clamp(24,2.3vw,44) 内边距 + flex 纵排。
+     顶部额外让出固定导航（36+62px）的高度。 */
+  padding: clamp(108px, 12.5vh, 122px) clamp(24px, 2.3vw, 44px) clamp(24px, 2.3vw, 40px);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   background:
     radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
     radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
@@ -4644,72 +4646,23 @@ html[data-paging="on"] .contact-page {
 .works-index-page--orbit .works-container {
   position: relative;
   z-index: 1;
-  width: min(1180px, calc(100% - 120px));
-  margin: 0 auto;
-}
-
-/* --- demo 导航（临时保留对比）--- */
-.works-orbit-nav {
-  position: relative;
-  display: flex;
-  isolation: isolate;
-  gap: 3px;
-  padding: 5px;
+  width: 100%;
+  max-width: none;
   margin: 0;
-  flex-shrink: 0;
-  width: max-content;
-  border: 1px solid rgba(214, 229, 255, 0.09);
-  border-radius: 30px;
-  background: rgba(183, 208, 250, 0.024);
-  box-shadow: inset 0 1px 0 rgba(243, 248, 255, 0.027);
-  backdrop-filter: blur(24px) saturate(120%);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-}
-
-.works-orbit-nav button {
-  position: relative;
-  z-index: 1;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* demo .stage：画廊由 JS 按剩余高度反推宽度后在此居中 */
+.works-orbit-stage {
+  flex: 1;
+  min-height: 320px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  height: 40px;
-  min-width: 88px;
-  padding: 0 20px;
-  border: 0;
-  background: none;
-  border-radius: 24px;
-  color: rgba(233, 239, 244, 0.62);
-  font-size: 11px;
-  letter-spacing: 0.2px;
-  transition: color 0.3s;
-}
-
-.works-orbit-nav button small {
-  font-size: 8px;
-  letter-spacing: 0.4px;
-  opacity: 0.62;
-}
-
-.works-orbit-nav button:hover { color: #ffffff; }
-.works-orbit-nav button.is-active { color: #eff6ff; }
-
-.works-orbit-indicator {
-  position: absolute;
-  z-index: 0;
-  top: 0;
-  left: 0;
-  border-radius: 24px;
-  background: linear-gradient(145deg, rgba(228, 239, 255, 0.13), rgba(145, 177, 226, 0.06));
-  box-shadow:
-    inset 0 0 0 1px rgba(219, 234, 255, 0.13),
-    inset 0 1px 0 rgba(239, 247, 255, 0.09),
-    0 4px 8px rgba(0, 0, 0, 0.05);
-  transition:
-    transform 0.45s cubic-bezier(0.23, 0.76, 0.25, 1),
-    width 0.45s cubic-bezier(0.23, 0.76, 0.25, 1);
-  pointer-events: none;
+  padding: 12px 0 16px;
 }
 
 /* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
@@ -4717,7 +4670,7 @@ html[data-paging="on"] .contact-page {
   display: flex;
   align-items: center;
   gap: 22px;
-  margin-bottom: 38px;
+  margin-bottom: 28px;
   color: #e9edf4;
   font-size: 10px;
   letter-spacing: 1.3px;
@@ -4800,7 +4753,6 @@ html[data-paging="on"] .contact-page {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 34px;
   height: 22px;
 }
 
@@ -4837,7 +4789,7 @@ html[data-paging="on"] .contact-page {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 20px;
+  margin-top: 28px;
   border-top: 1px solid rgba(197, 216, 245, 0.11);
   padding-top: 20px;
   color: #979eac;
@@ -4882,9 +4834,9 @@ html[data-paging="on"] .contact-page {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 18px;
+  padding: 12px;
   border: 1px solid rgba(205, 225, 255, 0.21);
-  border-radius: 20px;
+  border-radius: 15px;
   overflow: hidden;
   isolation: isolate;
   background: linear-gradient(132deg, rgba(231, 242, 255, 0.11), rgba(186, 203, 232, 0.043) 33%, rgba(185, 201, 224, 0.03) 70%, rgba(219, 234, 255, 0.075));
@@ -4968,7 +4920,7 @@ html[data-paging="on"] .contact-page {
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #101724;
   box-shadow: 0 0 0 1px rgba(241, 247, 255, 0.055), 0 4px 14px rgba(0, 0, 0, 0.2);
   isolation: isolate;
@@ -4997,8 +4949,8 @@ html[data-paging="on"] .contact-page {
 .works-orbit-peek {
   position: absolute;
   z-index: 3;
-  bottom: 13px;
-  right: 13px;
+  bottom: 11px;
+  right: 11px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -5068,7 +5020,7 @@ html[data-paging="on"] .contact-page {
 .works-orbit-rail {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 7px;
   align-self: center;
 }
 
