@@ -4526,7 +4526,10 @@ function HomePage({ openWorks, paging, active = true }) {
       </section>
 
       <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
-        <ContactStreet active={active && contactVisible} />
+        {/* preload：Portfolio 屏(index 2)就挂载 iframe，让 Three.js 的 WebGL 上下文
+            创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
+            CSS 里预挂载态是 opacity:0 + pointer-events:none，用户看不到也点不到。 */}
+        <ContactStreet active={active && contactVisible} preload={active && index === 2} />
       </section>
       </div>
 

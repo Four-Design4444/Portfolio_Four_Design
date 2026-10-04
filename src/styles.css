@@ -2434,7 +2434,11 @@ h2 {
    铺满 .contact-page（其本身 position:relative + 100vh），3D 场景充满视口。
    注意：不要写 pointer-events —— demo 的拖动旋转镜头 / 点击热区 / hover 标签
    都绑定在 iframe 内的 #scene 上，置 none 会把这些交互一起杀掉。
-   滚轮与指针交互的分离在 Street.jsx 里做（iframe 内劫持 wheel 转交父页面）。 */
+   滚轮与指针交互的分离在 Street.jsx 里做（iframe 内劫持 wheel 转交父页面）。
+
+   预挂载隐藏：main.jsx 在 Portfolio 屏(index 2)就挂上 iframe 让WebGL 提前编译，
+   那时尾屏还没到，iframe 必须不可见也不可交互（否则会提前露出场景 / 吃掉滚动）。
+   .contact-page.is-visible 是尾屏真正到位的那一刻，此时才淡入并恢复交互。 */
 .street-contact-frame {
   position: absolute;
   inset: 0;
@@ -2442,6 +2446,38 @@ h2 {
   height: 100%;
   border: 0;
   display: block;
+}
+.contact-page .street-contact-frame {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .45s ease;
+}
+.contact-page.is-visible .street-contact-frame {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 揭幕遮罩（P-03）：盖在 iframe 之上，底色与 demo 背景一致（#101c26）。
+   为什么需要它：iframe 与父页面同源 → 它的 JS（含 WebGL shader 编译）与父页面
+   共享同一条主线程。编译期间父页面被饿死，任何"抢时机注入 CSS"的方案都不可靠
+   （实测 16ms 轮询只在忙碌前拿到 16 次采样，加载动画照样闪过）。
+   遮罩是**父页面的元素**，完全不受同源阻塞影响，从第一帧起就稳稳盖住
+   #loading 与 .header，用户绝无可能看到加载动画。
+   等 demo 给 #loading 加上 .loaded（场景就绪）后，.is-gone 淡出遮罩。
+   z-index 高于 iframe；pointer-events:none 不影响 iframe 内的交互。 */
+.street-contact-veil {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #101c26;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+.street-contact-veil.is-gone {
+  opacity: 0;
 }
 
 
