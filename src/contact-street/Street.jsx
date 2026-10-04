@@ -7,6 +7,23 @@ import { useEffect, useState } from 'react';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 
+// 尾屏只保留 3D 场景与底部导航栏（#navigation）。demo 顶部那一栏品牌 / 天气 /
+// 时钟文字信息（.header，position:fixed;top）在 iframe 加载后注入样式隐藏。
+// 注意：不改动 V3.1.12 的构建产物本身，只在本屏展示时叠加隐藏，底部导航栏保留。
+function hideDemoTopChrome(iframe) {
+  try {
+    const doc = iframe.contentDocument;
+    if (!doc || !doc.head) return;
+    if (doc.getElementById('contact-hide-top')) return;
+    const style = doc.createElement('style');
+    style.id = 'contact-hide-top';
+    style.textContent = '.header{display:none!important}';
+    doc.head.appendChild(style);
+  } catch (_) {
+    /* 同源 public 资源可读；跨域时静默跳过 */
+  }
+}
+
 export default function ContactStreet({ active }) {
   const [everActive, setEverActive] = useState(false);
   useEffect(() => { if (active) setEverActive(true); }, [active]);
@@ -19,6 +36,7 @@ export default function ContactStreet({ active }) {
       title="Four Design · 夜深了，灵感还亮着"
       loading="lazy"
       allow="autoplay; fullscreen"
+      onLoad={(e) => hideDemoTopChrome(e.currentTarget)}
     />
   );
 }
