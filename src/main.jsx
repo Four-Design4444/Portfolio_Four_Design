@@ -611,12 +611,13 @@ function App() {
     const previousPage = previousPageRef.current;
     previousPageRef.current = route.page;
 
-    // 「汉堡 ⇄ 房子」形变类的**兜底来源**:只看 page 有没有在
+    // 「这次导航是哪个方向」的唯一信号:只看 page 有没有在
     // home ⇄ 非 home 之间翻转,与"谁触发的"无关。
     // 2026-10-04:此前只有 goHome()/goWorks() 里显式挂类,浏览器后退/前进走的是
-    // hashchange → setRoute(parseRoute()),绕过这两个函数 —— 而 icon 的 `d` 已经
-    // 没有 transition 兜底(改由关键帧驱动),漏掉类就是**硬切**。
-    // 放在 useLayoutEffect 里是为了在浏览器绘制这一帧之前把类挂上,关键帧从 0% 起手。
+    // hashchange → setRoute(parseRoute()),绕过这两个函数 —— 漏掉类会丢掉
+    // PC 分类行的入场动画,以及移动端回程那套"线先转白、白圆慢半拍"的配色。
+    // 放在 useLayoutEffect 里是为了在浏览器绘制这一帧之前把类挂上。
+    // (icon 的 d 形变已回到纯 transition,不再依赖这个类;类只是节奏信号。)
     // (goHome/goWorks 里那两处 setNavMotion 仍然保留:它们还兼管"works 内部换分类
     //  时提前撤掉上一轮的类"这类额外语义,这里只是补上缺失的那条路径。)
     if (previousPage !== route.page) {
@@ -790,10 +791,11 @@ function App() {
   };
 
   const goHome = () => {
-    // 回程也要挂一个 motion 类:**汉堡 icon 那套「拱门 → 拉直」的关键帧动画
-    // 靠 `motion-works-to-home` 触发**(见 mobile.css「拱门关键帧」)。
-    // 此前这里一律置 '',于是回程的 icon 只有 transition、没有关键帧。
-    // detail → home 也走这条路径,同样受益(detail 下 icon 的静止 d 已是房子形态)。
+    // 回程也要挂一个 motion 类:`works-to-home` 在 mobile.css 里被用来把
+    // **回程的配色节奏**翻过来(线先转白、白圆慢半拍再淡出,见「回程的配色
+    // 节奏必须与去程相反」)。此前这里一律置 '',回程就会沿去程的配色时序跑,
+    // 中途出现"灰线落在深色背景上"的隐形帧。
+    // 形变本身不靠这个类(三条线的 d 是纯 transition,状态类一翻就补间)。
     setNavMotion(route.page === 'home' ? '' : 'works-to-home');
     setSharedPill(null);
     setWorksActiveLocked(false);
@@ -1641,28 +1643,19 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
             <svg viewBox="0 0 32 32" aria-hidden="true" fill="none">
-              {/* 2026-10-04:三条线全部改成 <path> —— 只有 path 的 d 能被 CSS
+              {/* 2026-10-04 v5:四条线全部是 <path> —— 只有 path 的 d 能被 CSS
                   形变(<line> 的 x1/y1/x2/y2 是离散属性,没有补间)。
-                  汉堡态的 d 是"退化路径"(端点重合的段按 SVG spec 直接省略),
+                  汉堡态的 d 写成"多条共线折线"(顶点个数 = 房子那笔的顶点数),
                   渲染出来仍是原来那三条横线,像素零变化。
-                  三条 path 的命令结构 (M A L A L A / M V A H A V / M V A H A V)
-                  各自与房子的一个笔画(屋顶 / 墙+底 / 门)逐位对应,连遍历方向
-                  也必须对齐 —— 写法与理由见 mobile.css「汉堡 ⇄ 房子」整段说明:
-                  命令类型或方向对不上,d 会退化成硬切或在空中打结。
-                  ⚠ 弧段的**弦长**是刻意留的,见下一段说明 —— 它不是笔误。 */}
-              {/* ⚠⚠ hm-top 的"拱门"由 CSS 的**中间关键帧**显式给出(见 mobile.css
-                  「拱门关键帧」)。这里静止态的 d 刻意让那两段弧**完全退化**
-                  (端点重合、半径 0) —— 静止态渲染仍是三条横线、像素零变化,
-                  而"拱门"交给关键帧里一个"弦长 20、半径 11"的真实弧去画。
-                  为什么不能只靠两端插值把拱"变出来":静止态半径必须是 0,插值
-                  途中半径就一路线性归零,而弧在被"按需放大"时拱高 ≈ 弦长/2,
-                  等于**越接近终点拱越大**,最后一帧半径归零弧整段省略 → 拱在
-                  40ms 内从最大直接消失(业主:"停留太久、然后啪一下没了")。
-                  有了中间关键帧,两段插值的 2r 都恒 ≥ 弦长,永不触发自动放大,
-                  拱高就随之连续变化:6.47 → 6.08 → 8.3 → 10.5(回程逐帧实测)。 */}
-              <path className="hm-line hm-top" d="M 6 10.5 A 0 0 0 0 1 6 10.5 L 6 10.5 A 0 0 0 0 1 6 10.5 L 26 10.5 A 0 0 0 0 1 26 10.5" />
-              <path className="hm-line hm-mid" d="M 6 16 V 16 A 2 2 0 0 0 6 16 H 26 A 2 2 0 0 0 26 16 V 16" />
-              <path className="hm-line hm-bot" d="M 6 21.5 V 21.5 A 1 1 0 0 1 6 21.5 H 26 A 1 1 0 0 1 26 21.5 V 21.5" />
+                  配色即业主的示意图:绿=屋顶(3 个顶点)、蓝=门(∩)、红=底边;
+                  黄=左右两道墙,是**唯一被舍弃的一笔**(只淡出,不形变)。
+                  三条线顶点一一对应、同一时长同一曲线 → 三条线一同复位。
+                  ⚠ 全部纯折线、不含任何弧命令:弧在插值中途会被浏览器按规范
+                  "放大到连接两端点",凭空冒出一个大拱(见 mobile.css 硬规矩 ②)。 */}
+              <path className="hm-line hm-top" d="M 6 10.5 L 16 10.5 L 26 10.5" />
+              <path className="hm-line hm-mid" d="M 6 16 L 13 16 L 19 16 L 26 16" />
+              <path className="hm-line hm-bot" d="M 6 21.5 L 26 21.5" />
+              <path className="hm-line hm-wall" d="M 7 14 L 7 25 M 25 14 L 25 25" />
             </svg>
           </button>
           {/* The panel portals to <body>: .morph-nav has transform + contain:paint,
