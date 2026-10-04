@@ -2447,10 +2447,21 @@ h2 {
   border: 0;
   display: block;
 }
+/* 可见性交给原生滚动 + 父页面遮罩，不再由 opacity 承担。
+   为什么删掉 450ms 渐显（实测1440x900 / 真实 GPU / 探针 probe-contact-rect）：
+     · 场景在"点击划到尾屏"后 30.6ms 就已就绪（#loading.loaded + canvas 有非零尺寸），
+       遮罩也早已 is-gone —— WebGL 预挂载完全成功，"加载慢"其实是伪命题；
+     · 预挂载期尾屏整块位于视口外一整屏（sectionTop=900=vh，fullyBelow=true），
+       原生滚动根本进不来，所以"藏起来"的职责不需要 opacity；
+     · 但这450ms 渐显会和原生翻页赛跑：滚动 37ms 就把尾屏送进视口，opacity 却要
+       450ms 才到 1 → 画面被压暗约 300ms，观感就是"延迟响应/切换感"。
+   改成恒 opacity:1 —— 能不能看到由【滚动位置】决定；交互仍等is-visible 才auto，
+   预挂载期不可点，不会吃掉 Portfolio 屏的滚动与点击。
+   遮罩是"不透明底色"而非"藏 iframe"，底色与尾屏一致，所以揭开略晚也只会看到
+   纯底色，而不会是压暗的旧画面 —— 失败方向安全。 */
 .contact-page .street-contact-frame {
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
-  transition: opacity .45s ease;
 }
 .contact-page.is-visible .street-contact-frame {
   opacity: 1;
