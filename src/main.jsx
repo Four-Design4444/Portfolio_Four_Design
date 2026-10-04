@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import { Copy, House, Mail, Phone } from 'lucide-react';
@@ -3107,7 +3107,11 @@ function ProfileContentPC() {
   );
 }
 
-function HeroSection({ active = true }) {
+// onVideoReady：首屏视频真正开始播放后回调一次（外部用它给尾屏预挂载当闸门）。
+// 首屏视频优先级绝对最高 —— 尾屏的 WebGL 编译绝不能抢在它前面，所以预挂载
+// 必须等这个信号之后才允许发生。判定用 playing 事件（而非 canplay，因为
+// canplay 只代表数据够了，实际首帧还没上屏），并要求 readyState >= 3。
+function HeroSection({ active = true, onVideoReady }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [assetMode, setAssetMode] = useState(() => {
     // WeChat's XWeb kernel refuses programmatic <video>.play() without a real
@@ -3166,6 +3170,9 @@ function HeroSection({ active = true }) {
   const jsmpegPlayerRef = useRef(null);
   const wcCanvasRef = useRef(null);
   const wcPlayerRef = useRef(null);
+  // 首屏视频是否已真正开始播放（只报一次）。尾屏预挂载等这个信号，
+  // 保证 WebGL 编译不抢在首屏视频前面。
+  const videoReadyRef = useRef(false);
   // Preferred WeChat path: hardware-decode a raw H.264 stream with WebCodecs
   // and paint it onto a canvas. Falls back to JSMpeg (and then to the native
   // video) if the decoder is a stub that never emits frames.
@@ -3270,6 +3277,22 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       document.body.appendChild(overlay);
     }
     const pickVideo = () => document.querySelector('video.hero-mobile-video, video.hero-video-base');
+    // 视频就绪广播：base 视频真正开始播放（playing）且 readyState>=3 时触发一次。
+    // 只用原生 <video> 路径（PC + 非微信移动）；微信走 canvas 解码，没有 video 元素，
+    // 由下面的轮询兜底。
+    if (onVideoReady && !videoReadyRef.current) {
+      const v = document.querySelector('video.hero-video-base') || document.querySelector('video.hero-mobile-video');
+      if (v) {
+        const mark = () => {
+          if (videoReadyRef.current) return;
+          if (v.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+          videoReadyRef.current = true;
+          try { onVideoReady(); } catch (_) { /* noop */ }
+        };
+        v.addEventListener('playing', mark, { once: true });
+        v.addEventListener('canplay', mark, { once: true });
+      }
+    }
     const kick = () => {
       const video = pickVideo();
       if (!video) return;
@@ -4099,6 +4122,10 @@ function usePagingEnabled(active = true) {
 }
 function HomePage({ openWorks, paging, active = true }) {
   const [profileRef, profileSeen] = useRevealOnView();
+  // 首屏视频是否已真正开始播放。尾屏预挂载必须等这个信号 —— 首屏视频优先级
+  // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
+  const [heroVideoReady, setHeroVideoReady] = useState(false);
+  const markHeroVideoReady = useCallback(() => setHeroVideoReady(true), []);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
 
@@ -4498,7 +4525,7 @@ function HomePage({ openWorks, paging, active = true }) {
         )}
       </div>
 
-      <HeroSection active={active} />
+      <HeroSection active={active} onVideoReady={markHeroVideoReady} />
 
       <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
         {isMobile ? <ProfileContent /> : <ProfileContentPC />}
@@ -4526,10 +4553,18 @@ function HomePage({ openWorks, paging, active = true }) {
       </section>
 
       <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
-        {/* preload：Portfolio 屏(index 2)就挂载 iframe，让 Three.js 的 WebGL 上下文
-            创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
+        {/* preload：提前挂载 iframe，让 Three.js 的 WebGL 上下文创建与 shader
+            编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
+            两道闸门（缺一不可）：
+              ① heroVideoReady —— 首屏视频已开始播放。首屏视频优先级绝对最高，
+                 绝不能让 WebGL 编译抢在它前面（会拖慢视频首帧）。
+              ② index >= 2     —— 已进入 Portfolio 屏或更近，给编译留出时间；
+                 index 0/1 不挂载，避免首屏还在播视频时就卷进Three.js。
             CSS 里预挂载态是 opacity:0 + pointer-events:none，用户看不到也点不到。 */}
-        <ContactStreet active={active && contactVisible} preload={active && index === 2} />
+        <ContactStreet
+          active={active && contactVisible}
+          preload={active && heroVideoReady && index >= 2}
+        />
       </section>
       </div>
 

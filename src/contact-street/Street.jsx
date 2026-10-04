@@ -166,18 +166,31 @@ export default function ContactStreet({ active, preload }) {
         if (!cssDone) {
           try { cssDone = injectHostCss(doc) && injectHostJs(doc); } catch (_) { cssDone = false; }
         }
-        if (!readyDone) {
-          // demo 的 ui.setReady() 就是给 #loading 加 .loaded（src/ui.js:35）。
-          const loading = doc.getElementById('loading');
-          if (loading && loading.classList.contains('loaded')) readyDone = true;
-          else if (!loading && win && doc.querySelector('#scene canvas')) readyDone = true;
+if (!readyDone) {
+          // 双信号就绪判定（任一成立即可）：
+          //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
+          //     await renderer.compileAsync() 之后，即 shader 编译完成、场景可画
+          //     （demo src/main.js:314 → ui.js:35）。
+          //  ② canvas 已产生非零绘制尺寸 —— "真的画出来了"的物理证据，不依赖
+          //     demo 的内部实现；demo 万一改了类名也不会误判。
+    const loading = doc.getElementById('loading');
+  if (loading && loading.classList.contains('loaded')) {
+            readyDone = true;
+          } else {
+            const canvas = doc.querySelector('#scene canvas');
+            if (canvas && canvas.width > 0 && canvas.height > 0) readyDone = true;
+          }
         }
         if (!readyDone) {
-          // 兜底：demo 若因 WebGL 不可用走 catch 分支，也会调 setReady；
-          // 若它彻底没跑起来，最多等 6s 就揭幕，让用户至少能看到联系方式入口。
-          elapsed += 1;
-          if (elapsed > 360) readyDone = true;
-        }
+          // 兜底：demo 因 WebGL 不可用走 catch 分支时也会调 setReady()；若它彻底
+          // 没跑起来，最多等 15s 才强制揭幕。
+          // ⚠ 原值 6s 太短 —— 慢 GPU / 同时开着其他 WebGL 页面时编译可能超过 6s，
+          //   就会把"还没编译完"误判成"好了"，揭幕后用户看到一片空白底色
+          //   （业主反馈"有时下滑下来模型还加载不出来"）。宁可遮罩多留一会儿，
+          //   也绝不能提前露出未就绪的场景 —— 失败方向必须是安全的。
+elapsed += 1;
+          if (elapsed > 900) readyDone = true;
+   }
       }
       if (cssDone && readyDone) {
         setRevealed(true);
