@@ -953,7 +953,7 @@ function App() {
               />
             </div>
             {route.page === 'works' ? (
-              <WorksPage activeCategory={activeCategory} goDetail={goDetail} />
+              <WorksPage activeCategory={activeCategory} goDetail={goDetail} goCategory={goWorks} />
             ) : route.page === 'detail' ? (
               <WorkDetailPage activeCategory={activeCategory} work={activeWork} imageTransitionActive={Boolean(sharedImage && sharedImage.workId === activeWork?.id)} />
             ) : null}
@@ -4584,8 +4584,25 @@ function HomePage({ openWorks, paging, active = true }) {
   );
 }
 
-function WorksPage({ activeCategory, goDetail }) {
+/* 二级页：
+   PC 端 = works-v2.0.0 demo 的 orbit 布局（焦点主卡 + 右侧 rail 列表 + 4s 自动轮播，
+   悬停列表暂停 / 切分类或换焦点重置冷却）。
+   移动端保持原有竖排 showcase 列表不变。
+   顶部 .works-orbit-nav 是**临时保留**的 demo 导航（与项目自身 nav-works 并存用于对比），
+   确认后整块删除该 nav 节点即可。 */
+const ORBIT_AUTO_DELAY = 4000;
+
+function WorksPage({ activeCategory, goDetail, goCategory }) {
   const works = worksByCategory[activeCategory.id] ?? [];
+  const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [navBox, setNavBox] = useState(null);
+  const navRef = useRef(null);
+  const railHoverRef = useRef(false);
+  const timerRef = useRef(null);
+  const index = works.length ? Math.min(activeIndex, works.length - 1) : 0;
+  const current = works[index];
+
   const openDetail = (work) => {
     const image = document.querySelector(`[data-work-image="${work.id}"]`);
     const rect = image ? readNavRect(`[data-work-image="${work.id}"]`) : null;
@@ -4596,8 +4613,125 @@ function WorksPage({ activeCategory, goDetail }) {
     });
   };
 
+  const stopAuto = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startAuto = useCallback(() => {
+    stopAuto();
+    if (isMobile || works.length < 2 || railHoverRef.current) return;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setActiveIndex((i) => (i + 1) % works.length);
+    }, ORBIT_AUTO_DELAY);
+  }, [isMobile, works.length, stopAuto]);
+
+  // 换分类 / 换焦点都重新计一次冷却；卸载或离开时清掉定时器。
+  useEffect(() => {
+    startAuto();
+    return stopAuto;
+  }, [startAuto, stopAuto, index, activeCategory.id]);
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [activeCategory.id]);
+
+  // demo 导航的滑动指示器：跟随当前分类按钮的盒模型。
+  useLayoutEffect(() => {
+    if (isMobile) return;
+    const btn = navRef.current?.querySelector('.works-orbit-category.is-active');
+    if (!btn) return;
+    setNavBox({ x: btn.offsetLeft, y: btn.offsetTop, w: btn.offsetWidth, h: btn.offsetHeight });
+  }, [isMobile, activeCategory.id]);
+
+  const step = (delta) => setActiveIndex((i) => (i + delta + works.length) % works.length);
+
+  // 指针视差：只写 CSS 变量，动效交给 CSS transition。
+  const handleCardMove = (event) => {
+    const card = event.currentTarget;
+    const box = card.getBoundingClientRect();
+    const px = Math.max(-0.5, Math.min(0.5, (event.clientX - box.left) / box.width - 0.5));
+    const py = Math.max(-0.5, Math.min(0.5, (event.clientY - box.top) / box.height - 0.5));
+    card.style.setProperty('--rx', `${-py * 8}deg`);
+    card.style.setProperty('--ry', `${px * 11}deg`);
+    card.style.setProperty('--px', `${-px * 12}px`);
+    card.style.setProperty('--py', `${-py * 9}px`);
+    card.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
+    card.style.setProperty('--my', `${(py + 0.5) * 100}%`);
+  };
+  const handleCardLeave = (event) => {
+    ['--rx', '--ry', '--px', '--py'].forEach((key) => event.currentTarget.style.removeProperty(key));
+  };
+  const handleRailEnter = () => {
+    railHoverRef.current = true;
+    stopAuto();
+  };
+  const handleRailLeave = () => {
+    railHoverRef.current = false;
+    startAuto();
+  };
+
+  const orbitArrow = (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d="M5 19L19 5M5 5h14v14" />
+    </svg>
+  );
+  const orbitChevron = (dir) => (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d={dir === 'prev' ? 'M14 6l-6 6 6 6' : 'M10 6l6 6-6 6'} />
+    </svg>
+  );
+
+  if (isMobile) {
+    return (
+      <section className="works-index-page">
+        <SideRays
+          className="works-side-rays"
+          speed={2.5}
+          rayColor1="#EAB308"
+          rayColor2="#96c8ff"
+          intensity={2}
+          spread={2}
+          origin="top-right"
+          tilt={0}
+          saturation={1.5}
+          blend={0.75}
+          falloff={1.6}
+          opacity={1}
+        />
+        <div className="works-container">
+          <div className="works-showcase-list">
+            {works.map((work) => (
+              <article className="showcase-item" key={work.id}>
+                <button className="showcase-main-img" type="button" onClick={() => openDetail(work)}>
+                  <LazyImage data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
+                </button>
+                <div className="showcase-copy">
+                  {/* 左下两行文字(标题+副标题)整体可点,同样进入三级详情页
+                      (2026-10-03 用户要求)。包裹按钮在桌面/移动两端都有中和样式,
+                      不改变原排版。 */}
+                  <button
+                    type="button"
+                    className="showcase-copy-text"
+                    onClick={() => openDetail(work)}
+                  >
+                    <h2>{work.title}</h2>
+                    <p>{work.subtitle}</p>
+                  </button>
+                  <button type="button" className="showcase-more" onClick={() => openDetail(work)}>查看设计详情</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="works-index-page">
+    <section className="works-index-page works-index-page--orbit">
       <SideRays
         className="works-side-rays"
         speed={2.5}
@@ -4612,29 +4746,110 @@ function WorksPage({ activeCategory, goDetail }) {
         falloff={1.6}
         opacity={1}
       />
-      <div className="works-container">
-        <div className="works-showcase-list">
-          {works.map((work) => (
-            <article className="showcase-item" key={work.id}>
-              <button className="showcase-main-img" type="button" onClick={() => openDetail(work)}>
-                <LazyImage data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
-              </button>
-              <div className="showcase-copy">
-                {/* 左下两行文字(标题+副标题)整体可点,同样进入三级详情页
-                    (2026-10-03 用户要求)。包裹按钮在桌面/移动两端都有中和样式,
-                    不改变原排版。 */}
-                <button
-                  type="button"
-                  className="showcase-copy-text"
-                  onClick={() => openDetail(work)}
-                >
-                  <h2>{work.title}</h2>
-                  <p>{work.subtitle}</p>
-                </button>
-                <button type="button" className="showcase-more" onClick={() => openDetail(work)}>查看设计详情</button>
-              </div>
-            </article>
+      <div className="works-container works-orbit-container">
+        {/* demo 导航：临时保留用于对比，确认后整块删除。 */}
+        <nav className="works-orbit-nav" aria-label="作品分类" ref={navRef}>
+          {navBox ? (
+            <span
+              className="works-orbit-indicator"
+              style={{ width: navBox.w, height: navBox.h, transform: `translate(${navBox.x}px, ${navBox.y}px)` }}
+              aria-hidden="true"
+            />
+          ) : null}
+          {categories.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`works-orbit-category${item.id === activeCategory.id ? ' is-active' : ''}`}
+              aria-pressed={item.id === activeCategory.id}
+              onClick={() => goCategory?.(item.id)}
+            >
+              <span>{item.title}</span>
+              <small>{item.cn}</small>
+            </button>
           ))}
+        </nav>
+
+        <div className="works-orbit">
+          <div className="works-orbit-focus">
+            <div className="works-orbit-label">
+              <span><i className="works-orbit-dot" />CURRENT FOCUS</span>
+              <span className="works-orbit-counter">
+                {String(index + 1).padStart(2, '0')} / {String(works.length).padStart(2, '0')}
+              </span>
+            </div>
+            {current ? (
+              <button
+                type="button"
+                className="works-orbit-card"
+                aria-label={`查看 ${current.title}`}
+                onPointerMove={handleCardMove}
+                onPointerLeave={handleCardLeave}
+                onClick={() => openDetail(current)}
+              >
+                <span className="works-orbit-edge" aria-hidden="true" />
+                <span className="works-orbit-clip" aria-hidden="true">
+                  <span className="works-orbit-sheen" />
+                  <span className="works-orbit-glow" />
+                </span>
+                <div className="works-orbit-cover">
+                  <LazyImage data-work-image={current.id} src={current.detailHero ?? current.image} alt={current.title} />
+                  <span className="works-orbit-peek"><span>OPEN PROJECT</span>{orbitArrow}</span>
+                </div>
+              </button>
+            ) : null}
+            {current ? (
+              <div className="works-orbit-desc">
+                <div>
+                  <h2>{current.title}</h2>
+                  <p>{current.subtitle}</p>
+                </div>
+                <div className="works-orbit-controls">
+                  <button type="button" aria-label="上一件作品" disabled={works.length < 2} onClick={() => step(-1)}>
+                    {orbitChevron('prev')}
+                  </button>
+                  <button type="button" aria-label="下一件作品" disabled={works.length < 2} onClick={() => step(1)}>
+                    {orbitChevron('next')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            className="works-orbit-rail"
+            onPointerEnter={handleRailEnter}
+            onPointerLeave={handleRailLeave}
+          >
+            <div className="works-orbit-rail-label">
+              IN THIS COLLECTION <span>{String(works.length).padStart(2, '0')}</span>
+            </div>
+            {works.map((work, i) => (
+              <button
+                key={work.id}
+                type="button"
+                className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
+                aria-pressed={i === index}
+                aria-label={`选择 ${work.title}`}
+                onPointerEnter={() => setActiveIndex(i)}
+                onClick={() => setActiveIndex(i)}
+              >
+                <span className="works-orbit-clip" aria-hidden="true">
+                  <span className="works-orbit-sheen" />
+                  <span className="works-orbit-glow" />
+                </span>
+                <div className="works-orbit-cover"><img src={work.image} alt={work.subtitle} /></div>
+                <div className="works-orbit-rail-copy">
+                  <span>{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3>{work.title}</h3>
+                    <p>{work.subtitle}</p>
+                  </div>
+                  <span className="works-orbit-rail-arrow">{orbitArrow}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </section>

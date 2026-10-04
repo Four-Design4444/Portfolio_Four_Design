@@ -694,7 +694,9 @@ img {
   height: var(--works-nav-height);
   padding: 0 22px;
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.78);
+  /* 2026-10-05: 对齐 works-v2.0.0 demo 导航观感（浅灰蓝未选中 → 近白选中）。
+     只改颜色，不动 color 过渡与任何交互。 */
+  color: rgba(233, 239, 244, 0.62);
   font-size: 13px;
   line-height: 1;
   transition: color 260ms ease;
@@ -708,8 +710,14 @@ img {
   width: var(--nav-item-width);
   height: var(--works-nav-height);
   border-radius: 999px;
-  background: #0057ff;
-  box-shadow: 0 8px 22px rgba(0, 87, 255, 0.36);
+  /* 2026-10-05: 由纯蓝 #0057ff 改为 demo 的浅色玻璃胶囊（用 inset 描边代替
+     真 border，避免 1px 边框改变盒宽影响既有滑动/形变计算）。只改颜色与阴影，
+     transform 过渡与 --active-index 驱动方式保持原样。 */
+  background: linear-gradient(145deg, rgba(228, 239, 255, 0.13), rgba(145, 177, 226, 0.06));
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 255, 0.13),
+    inset 0 1px 0 rgba(239, 247, 255, 0.09),
+    0 8px 22px rgba(0, 0, 0, 0.28);
   transform: translateX(calc(var(--active-index) * (var(--nav-item-width) + var(--nav-item-gap))));
   transition: transform 430ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
@@ -726,7 +734,7 @@ img {
 }
 
 .nav-works .works-nav-items button.active {
-  color: #ffffff;
+  color: #eff6ff;
 }
 
 .nav-works.motion-to-works .works-nav-indicator {
@@ -4589,5 +4597,443 @@ html[data-paging="on"] .contact-page {
   font-size: clamp(12.5px, 0.76vw, 14px);
   line-height: 2.15;
   color: #d6dae1;
+}
+
+/* ===========================================================================
+   二级页 orbit 版（移植自 works-v2.0.0 demo，PC only）
+   移动端仍走 .works-index-page 的竖排 showcase 列表，不受本段影响。
+   顶部 .works-orbit-nav 为临时保留的 demo 导航，确认后整块删除即可。
+   =========================================================================== */
+.works-index-page--orbit {
+  position: relative;
+  min-height: 100vh;
+  padding: 128px 0 88px;
+  display: flex;
+  align-items: center;
+  background:
+    radial-gradient(circle at 78% 8%, rgba(0, 80, 160, 0.2), transparent 26rem),
+    #000000;
+  overflow: clip;
+}
+
+.works-index-page--orbit > .works-side-rays {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 1;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, black 0%, black 82%, transparent 100%);
+}
+
+.works-index-page--orbit .works-container {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100% - 120px));
+  margin: 0 auto;
+}
+
+/* --- demo 导航（临时保留对比） --- */
+.works-orbit-nav {
+  position: relative;
+  display: flex;
+  isolation: isolate;
+  gap: 3px;
+  padding: 5px;
+  margin: 0 auto 30px;
+  width: max-content;
+  border: 1px solid rgba(214, 229, 255, 0.09);
+  border-radius: 30px;
+  background: rgba(183, 208, 250, 0.024);
+  box-shadow: inset 0 1px 0 rgba(243, 248, 255, 0.027);
+  backdrop-filter: blur(24px) saturate(120%);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+}
+
+.works-orbit-nav button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 40px;
+  min-width: 88px;
+  padding: 0 20px;
+  border: 0;
+  background: none;
+  border-radius: 24px;
+  color: rgba(233, 239, 244, 0.62);
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  transition: color 0.3s;
+}
+
+.works-orbit-nav button small {
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  opacity: 0.62;
+}
+
+.works-orbit-nav button:hover { color: #ffffff; }
+.works-orbit-nav button.is-active { color: #eff6ff; }
+
+.works-orbit-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(228, 239, 255, 0.13), rgba(145, 177, 226, 0.06));
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 255, 0.13),
+    inset 0 1px 0 rgba(239, 247, 255, 0.09),
+    0 4px 8px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.45s cubic-bezier(0.23, 0.76, 0.25, 1),
+    width 0.45s cubic-bezier(0.23, 0.76, 0.25, 1);
+  pointer-events: none;
+}
+
+/* --- orbit 主体 --- */
+.works-orbit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  column-gap: clamp(42px, 4.7vw, 72px);
+  align-items: center;
+}
+
+.works-orbit-focus { min-width: 0; }
+
+.works-orbit-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+  font-size: 9px;
+  letter-spacing: 1.7px;
+  color: rgba(233, 239, 244, 0.55);
+}
+
+.works-orbit-label > span:first-child { display: flex; align-items: center; gap: 9px; }
+.works-orbit-dot { display: block; width: 4px; height: 4px; border-radius: 50%; background: #b8d3f7; }
+.works-orbit-counter { font-variant-numeric: tabular-nums; }
+
+.works-orbit-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 18px;
+  border: 1px solid rgba(205, 225, 255, 0.21);
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(132deg, rgba(231, 242, 255, 0.11), rgba(186, 203, 232, 0.043) 33%, rgba(185, 201, 224, 0.03) 70%, rgba(219, 234, 255, 0.075));
+  box-shadow:
+    inset 0 0 0 1px rgba(244, 250, 255, 0.02),
+    inset 0 1px 1px rgba(244, 250, 255, 0.07),
+    inset 0 -1px 1px rgba(9, 19, 33, 0.53),
+    0 18px 36px -24px rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+  transform: perspective(1300px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.48s cubic-bezier(0.23, 0.76, 0.25, 1), box-shadow 0.48s cubic-bezier(0.23, 0.76, 0.25, 1), border-color 0.4s;
+}
+
+.works-orbit-card:hover,
+.works-orbit-card:focus-visible {
+  transform: perspective(1300px) translateY(-14px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.025);
+  border-color: rgba(210, 232, 255, 0.46);
+  box-shadow:
+    inset 0 1px 1px rgba(244, 250, 255, 0.14),
+    0 31px 48px -22px rgba(0, 0, 0, 0.87),
+    0 0 25px -19px rgba(164, 204, 255, 0.33);
+}
+
+.works-orbit-edge {
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(215, 234, 255, 0.043);
+  border-radius: 15px;
+  pointer-events: none;
+  box-shadow: inset 1px 1px 2px rgba(245, 252, 255, 0.027), inset -1px -1px 2px rgba(8, 13, 23, 0.2);
+}
+
+.works-orbit-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.works-orbit-sheen {
+  position: absolute;
+  inset: -160% -110%;
+  opacity: 0;
+  background: linear-gradient(112deg, transparent 34%, rgba(230, 244, 255, 0) 39%, rgba(230, 244, 255, 0.03) 44%, rgba(242, 250, 255, 0.15) 49%, rgba(230, 244, 255, 0.03) 54%, rgba(230, 244, 255, 0) 59%, transparent 64%);
+  filter: blur(13px);
+  transform: translateX(-40%);
+  mix-blend-mode: screen;
+}
+
+.works-orbit-card:hover .works-orbit-sheen,
+.works-orbit-rail-card:hover .works-orbit-sheen {
+  animation: works-orbit-sweep 1250ms cubic-bezier(0.25, 0.5, 0.3, 1);
+}
+
+@keyframes works-orbit-sweep {
+  0% { opacity: 0; transform: translateX(-40%); }
+  22% { opacity: 0.8; transform: translateX(-23%); }
+  65% { opacity: 0.72; transform: translateX(17%); }
+  100% { opacity: 0; transform: translateX(40%); }
+}
+
+.works-orbit-glow {
+  position: absolute;
+  inset: -35px;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 210px 130px at var(--mx, 50%) var(--my, 50%), rgba(212, 234, 255, 0.086), transparent 80%);
+  filter: blur(16px);
+  transition: opacity 0.4s;
+  mix-blend-mode: screen;
+}
+
+.works-orbit-card:hover .works-orbit-glow,
+.works-orbit-rail-card:hover .works-orbit-glow { opacity: 1; }
+
+.works-orbit-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #101724;
+  box-shadow: 0 0 0 1px rgba(241, 247, 255, 0.055), 0 4px 14px rgba(0, 0, 0, 0.2);
+  isolation: isolate;
+  z-index: 1;
+}
+
+.works-orbit-cover > img,
+.works-orbit-cover > div {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: translate(var(--px, 0px), var(--py, 0px)) scale(1.015);
+  transition: transform 0.75s cubic-bezier(0.23, 0.76, 0.25, 1), filter 0.45s;
+  filter: brightness(0.96);
+}
+
+.works-orbit-card:hover .works-orbit-cover > img,
+.works-orbit-card:hover .works-orbit-cover > div,
+.works-orbit-card:focus-visible .works-orbit-cover > img,
+.works-orbit-card:focus-visible .works-orbit-cover > div {
+  filter: brightness(1.02);
+  transform: translate(var(--px, 0px), var(--py, 0px)) scale(1.09);
+}
+
+.works-orbit-peek {
+  position: absolute;
+  z-index: 3;
+  bottom: 13px;
+  right: 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(237, 248, 255, 0.21);
+  border-radius: 30px;
+  background: rgba(23, 35, 51, 0.69);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 9px 13px;
+  color: #f3f7ff;
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0;
+  transform: translateY(9px);
+  transition: opacity 0.3s, transform 0.4s cubic-bezier(0.23, 0.76, 0.25, 1);
+}
+
+.works-orbit-card:hover .works-orbit-peek,
+.works-orbit-card:focus-visible .works-orbit-peek { opacity: 1; transform: translateY(0); }
+
+.works-orbit-desc {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 21px 3px 0;
+  gap: 20px;
+}
+
+.works-orbit-desc h2 {
+  font-size: 17px;
+  font-weight: 450;
+  letter-spacing: 0.9px;
+  margin: 0 0 7px;
+  color: #e9edf4;
+}
+
+.works-orbit-desc p {
+  font-size: 12px;
+  margin: 0;
+  color: #a4afc0;
+  letter-spacing: 0.3px;
+}
+
+.works-orbit-controls { display: flex; gap: 8px; }
+
+.works-orbit-controls button {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border: 1px solid rgba(213, 232, 255, 0.18);
+  background: linear-gradient(145deg, rgba(228, 244, 255, 0.07), rgba(185, 208, 247, 0.016));
+  border-radius: 50%;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition: transform 0.3s, background 0.3s, border-color 0.3s;
+}
+
+.works-orbit-controls button:hover:not(:disabled) {
+  transform: translateY(-3px);
+  background: rgba(181, 214, 255, 0.15);
+  border-color: rgba(213, 232, 255, 0.4);
+}
+
+.works-orbit-controls button:disabled { opacity: 0.3; cursor: default; }
+
+.works-orbit-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  align-self: center;
+}
+
+.works-orbit-rail-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: rgba(233, 239, 244, 0.55);
+  margin-bottom: 7px;
+}
+
+.works-orbit-rail-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid rgba(205, 225, 255, 0.078);
+  border-radius: 13px;
+  background: rgba(183, 208, 250, 0.012);
+  padding: 10px;
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  transition: background 0.4s cubic-bezier(0.23, 0.76, 0.25, 1), transform 0.4s cubic-bezier(0.23, 0.76, 0.25, 1), border-color 0.4s, box-shadow 0.4s;
+}
+
+.works-orbit-rail-card .works-orbit-clip { z-index: 2; }
+.works-orbit-rail-card .works-orbit-sheen { inset: -260% -110%; }
+.works-orbit-rail-card .works-orbit-glow {
+  inset: 0;
+  background: radial-gradient(ellipse 140px 75px at var(--mx, 50%) var(--my, 50%), rgba(212, 234, 255, 0.14), transparent 80%);
+  filter: blur(10px);
+}
+
+.works-orbit-rail-card .works-orbit-cover {
+  width: 76px;
+  flex: 0 0 76px;
+  border-radius: 5px;
+}
+
+.works-orbit-rail-card .works-orbit-cover > img { transform: none; filter: brightness(0.88); }
+
+.works-orbit-rail-copy {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.works-orbit-rail-copy > span:first-child { font-size: 9px; color: rgba(233, 239, 244, 0.55); }
+.works-orbit-rail-copy > div { min-width: 0; }
+
+.works-orbit-rail-copy h3 {
+  font-size: 11px;
+  letter-spacing: 0.35px;
+  font-weight: 500;
+  margin: 0 0 5px;
+  color: #e9edf4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.works-orbit-rail-copy p {
+  font-size: 10px;
+  color: rgba(233, 239, 244, 0.55);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.works-orbit-rail-arrow {
+  margin-left: auto;
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: opacity 0.3s, transform 0.3s;
+  color: #e9edf4;
+}
+
+.works-orbit-rail-card.is-selected {
+  background: linear-gradient(135deg, rgba(223, 239, 255, 0.11), rgba(176, 204, 240, 0.043));
+  border-color: rgba(216, 235, 255, 0.27);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.063), 0 12px 24px -16px rgba(0, 0, 0, 0.53);
+  transform: translateX(-7px);
+}
+
+.works-orbit-rail-card.is-selected::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  height: 19px;
+  width: 2px;
+  background: #b8d3f7;
+  border-radius: 2px;
+}
+
+.works-orbit-rail-card.is-selected .works-orbit-cover > img { filter: brightness(1); }
+.works-orbit-rail-card.is-selected .works-orbit-rail-arrow,
+.works-orbit-rail-card:hover .works-orbit-rail-arrow { opacity: 1; transform: translateX(0); }
+
+.works-orbit-rail-card:hover:not(.is-selected) {
+  background: rgba(213, 231, 255, 0.047);
+  transform: translateX(-3px);
+  border-color: rgba(216, 235, 255, 0.15);
+}
+
+@media (max-width: 1280px) {
+  .works-orbit { grid-template-columns: minmax(0, 1fr) 235px; column-gap: 38px; }
+  .works-orbit-rail-card .works-orbit-cover { width: 62px; flex-basis: 62px; }
+  .works-orbit-rail-arrow { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .works-orbit-card:hover,
+  .works-orbit-card:focus-visible { transform: none; }
+  .works-orbit-sheen { display: none; }
 }
 
