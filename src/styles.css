@@ -2431,7 +2431,11 @@ h2 {
 }
 
 /* V3.1.12 联系我们 demo 通过全屏 iframe 嵌入尾屏，字节级原封不动。
-   铺满 .contact-page（其本身 position:relative + 100vh），3D 场景充满视口。 */
+   铺满 .contact-page（其本身 position:relative + 100vh），3D 场景充满视口。
+   pointer-events:none —— 关键修复：iframe 是独立文档，滚轮落在它上面时
+   事件不会冒泡到父窗口，导致尾屏的 pager 收不到滚轮、无法往上翻屏。
+   置 none 后滚轮直接交给父页面，网页翻屏优先级高于 demo 内部探索；
+   demo 的"滚轮探索"改由 main.jsx 的 onWheel 以合成事件转发进 iframe 保留。 */
 .street-contact-frame {
   position: absolute;
   inset: 0;
@@ -2439,6 +2443,7 @@ h2 {
   height: 100%;
   border: 0;
   display: block;
+  pointer-events: none;
 }
 
 
