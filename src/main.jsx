@@ -4747,28 +4747,44 @@ function WorksPage({ activeCategory, goDetail, goCategory }) {
         opacity={1}
       />
       <div className="works-container works-orbit-container">
-        {/* demo 导航：临时保留用于对比，确认后整块删除。 */}
-        <nav className="works-orbit-nav" aria-label="作品分类" ref={navRef}>
-          {navBox ? (
-            <span
-              className="works-orbit-indicator"
-              style={{ width: navBox.w, height: navBox.h, transform: `translate(${navBox.x}px, ${navBox.y}px)` }}
-              aria-hidden="true"
-            />
-          ) : null}
-          {categories.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`works-orbit-category${item.id === activeCategory.id ? ' is-active' : ''}`}
-              aria-pressed={item.id === activeCategory.id}
-              onClick={() => goCategory?.(item.id)}
-            >
-              <span>{item.title}</span>
-              <small>{item.cn}</small>
-            </button>
-          ))}
-        </nav>
+        {/* 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） */}
+        <header className="works-orbit-topline">
+          <span className="works-orbit-wordmark"><i className="works-orbit-mark">a.</i>INDEX / FOUR</span>
+          <span className="works-orbit-edition">
+            SELECTED WORKS <i className="works-orbit-edition-dot" /> VOL. 2026
+            <span className="works-orbit-version-tag">V2.0.0</span>
+          </span>
+        </header>
+
+        <div className="works-orbit-intro">
+          <div className="works-orbit-intro-copy">
+            <span className="works-orbit-eyebrow">V2.0.0 / 焦点主卡 · 浮光轨道</span>
+            <h1>作品索引</h1>
+            <p>One focus. Many perspectives.</p>
+          </div>
+          {/* demo 导航：临时保留用于对比，确认后整块删除。 */}
+          <nav className="works-orbit-nav" aria-label="作品分类" ref={navRef}>
+            {navBox ? (
+              <span
+                className="works-orbit-indicator"
+                style={{ width: navBox.w, height: navBox.h, transform: `translate(${navBox.x}px, ${navBox.y}px)` }}
+                aria-hidden="true"
+              />
+            ) : null}
+            {categories.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`works-orbit-category${item.id === activeCategory.id ? ' is-active' : ''}`}
+                aria-pressed={item.id === activeCategory.id}
+                onClick={() => goCategory?.(item.id)}
+              >
+                <span>{item.title}</span>
+                <small>{item.cn}</small>
+              </button>
+            ))}
+          </nav>
+        </div>
 
         <div className="works-orbit">
           <div className="works-orbit-focus">
@@ -4851,6 +4867,24 @@ function WorksPage({ activeCategory, goDetail, goCategory }) {
             ))}
           </div>
         </div>
+
+        {/* stage 底部信息行 + 页脚点缀（自 demo 移入，纯装饰） */}
+        <div className="works-orbit-stage-meta">
+          <div className="works-orbit-collection-label">
+            <span className="works-orbit-dot" />
+            <span>{activeCategory.cn}</span>
+            <span className="works-orbit-divider">/</span>
+            <span>{String(works.length).padStart(2, '0')} PROJECTS</span>
+          </div>
+          <span className="works-orbit-hint">HOVER TO FOCUS<span className="works-orbit-hint-line" /></span>
+        </div>
+        <footer className="works-orbit-footer">
+          <span>移入右侧索引切换作品，移入主卡探索光与视角。方向键同样可切换。</span>
+          <span className="works-orbit-footer-right">
+            16:9 <span className="works-orbit-divider">/</span> SINGLE SCREEN
+            <span className="works-orbit-version-tag">V2.0.0</span>
+          </span>
+        </footer>
       </div>
     </section>
   );

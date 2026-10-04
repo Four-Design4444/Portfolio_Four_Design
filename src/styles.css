@@ -561,6 +561,17 @@ img {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 }
 
+/* 2026-10-05: 二级页导航对齐 works-v2.0.0 demo 的「透」——demo 分类胶囊是
+   2.4% 白蓝玻璃 + blur(24px)，此前项目导航是 38% 黑底，视觉上暗一档。
+   这里只改颜色/边框/阴影/模糊参数；布局、过渡、交互逻辑一行未动。 */
+.morph-nav.nav-works {
+  --nav-border-color: rgba(214, 229, 255, 0.09);
+  background: rgba(183, 208, 250, 0.024);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
 .morph-logo,
 .morph-home-pill,
 .works-nav-items button,
@@ -2612,8 +2623,9 @@ h2 {
   min-height: 100vh;
   padding: 190px 0 150px;
   background:
-    radial-gradient(circle at 78% 8%, rgba(0, 80, 160, 0.2), transparent 26rem),
-    #000000;
+    radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
+    radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
+    #0d0c12;
   overflow: clip;
 }
 
@@ -4611,8 +4623,9 @@ html[data-paging="on"] .contact-page {
   display: flex;
   align-items: center;
   background:
-    radial-gradient(circle at 78% 8%, rgba(0, 80, 160, 0.2), transparent 26rem),
-    #000000;
+    radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
+    radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
+    #0d0c12;
   overflow: clip;
 }
 
@@ -4635,14 +4648,15 @@ html[data-paging="on"] .contact-page {
   margin: 0 auto;
 }
 
-/* --- demo 导航（临时保留对比） --- */
+/* --- demo 导航（临时保留对比）--- */
 .works-orbit-nav {
   position: relative;
   display: flex;
   isolation: isolate;
   gap: 3px;
   padding: 5px;
-  margin: 0 auto 30px;
+  margin: 0;
+  flex-shrink: 0;
   width: max-content;
   border: 1px solid rgba(214, 229, 255, 0.09);
   border-radius: 30px;
@@ -4696,6 +4710,147 @@ html[data-paging="on"] .contact-page {
     transform 0.45s cubic-bezier(0.23, 0.76, 0.25, 1),
     width 0.45s cubic-bezier(0.23, 0.76, 0.25, 1);
   pointer-events: none;
+}
+
+/* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
+.works-orbit-topline {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 38px;
+  color: #e9edf4;
+  font-size: 10px;
+  letter-spacing: 1.3px;
+}
+
+.works-orbit-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: Georgia, serif;
+  font-size: 11px;
+  letter-spacing: 1.9px;
+}
+
+.works-orbit-mark {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 29px;
+  letter-spacing: -2px;
+  line-height: 1;
+  color: #b7c8e1;
+}
+
+.works-orbit-edition {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #979eac;
+  font-size: 8px;
+  letter-spacing: 1.2px;
+}
+
+.works-orbit-edition-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #afc9ee;
+}
+
+.works-orbit-version-tag {
+  padding: 5px 9px;
+  border: 1px solid rgba(197, 216, 245, 0.11);
+  border-radius: 12px;
+  color: #c1cee0;
+  letter-spacing: 0.6px;
+}
+
+.works-orbit-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 30px;
+  flex-shrink: 0;
+}
+
+.works-orbit-eyebrow {
+  display: block;
+  color: #979eac;
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+
+.works-orbit-intro h1 {
+  margin: 11px 0 8px;
+  color: #e9edf4;
+  font-size: clamp(19px, 1.65vw, 25px);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+.works-orbit-intro p {
+  margin: 0;
+  color: #979eac;
+  font-size: 10px;
+  letter-spacing: 0.25px;
+}
+
+.works-orbit-stage-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 34px;
+  height: 22px;
+}
+
+.works-orbit-collection-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #979eac;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.works-orbit-hint {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #979eac;
+  font-size: 7px;
+  letter-spacing: 1.5px;
+}
+
+.works-orbit-hint-line {
+  height: 1px;
+  width: 44px;
+  background: rgba(197, 216, 245, 0.11);
+}
+
+.works-orbit-divider {
+  opacity: 0.35;
+  padding: 0 2px;
+}
+
+.works-orbit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  border-top: 1px solid rgba(197, 216, 245, 0.11);
+  padding-top: 20px;
+  color: #979eac;
+  font-size: 8px;
+  letter-spacing: 0.3px;
+}
+
+.works-orbit-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 7px;
+  letter-spacing: 1.1px;
 }
 
 /* --- orbit 主体 --- */
