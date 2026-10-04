@@ -1137,30 +1137,9 @@ html[data-device="mobile"] .works-container {
   margin-right: max(20px, env(safe-area-inset-right));
 }
 
-html[data-device="mobile"] .works-eyebrow {
-  font-size: 18px;
-}
-
-html[data-device="mobile"] .works-title-row h1 {
-  /* 旧 clamp(44px,13.5vw,68px) 业主要求大幅缩小 —— 降到约一半,
-     仍明显高于 14.5px 的 works-intro,保住"页标题 vs 正文"的层级。 */
-  font-size: clamp(26px, 7.5vw, 36px);
-  line-height: 1.1;
-}
-
-html[data-device="mobile"] .works-intro {
-  margin-top: 16px;
-  font-size: 14.5px;
-  line-height: 1.8;
-}
-
-html[data-device="mobile"] .works-divider {
-  margin-top: 34px;
-}
-
 html[data-device="mobile"] .works-showcase-list {
   gap: 32px;
-  margin-top: 36px;
+  margin-top: 0;
 }
 
 /* Overlay entry card: one full-bleed image per work, copy pinned to the

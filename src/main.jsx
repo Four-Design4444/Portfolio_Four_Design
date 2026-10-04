@@ -4559,13 +4559,6 @@ function WorksPage({ activeCategory, goDetail }) {
         opacity={1}
       />
       <div className="works-container">
-        <div className="works-title-row">
-          <div className="works-title-block">
-            <h1>{activeCategory.title}</h1>
-          </div>
-          <p className="works-intro">在数字产品层出不穷的今天，{activeCategory.title} 是连接用户与技术的最后一道桥梁，在纷繁复杂的数字世界中，为用户带来清晰、愉悦且富有温度的浏览体验。</p>
-        </div>
-        <div className="works-divider" />
         <div className="works-showcase-list">
           {works.map((work) => (
             <article className="showcase-item" key={work.id}>
