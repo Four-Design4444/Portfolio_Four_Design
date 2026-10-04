@@ -4553,17 +4553,29 @@ function HomePage({ openWorks, paging, active = true }) {
       </section>
 
       <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
-        {/* preload：提前挂载 iframe，让 Three.js 的 WebGL 上下文创建与 shader
-            编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
-            两道闸门（缺一不可）：
-              ① heroVideoReady —— 首屏视频已开始播放。首屏视频优先级绝对最高，
-                 绝不能让 WebGL 编译抢在它前面（会拖慢视频首帧）。
-              ② index >= 2     —— 已进入 Portfolio 屏或更近，给编译留出时间；
-                 index 0/1 不挂载，避免首屏还在播视频时就卷进Three.js。
-            CSS 里预挂载态是 opacity:0 + pointer-events:none，用户看不到也点不到。 */}
+        {/* preload：提前挂载 iframe，让 Three.js 的 WebGL 上下文创建、shader 编译、
+            logo 纹理加载与【2.7 秒灯光渐入】全部在用户到达尾屏之前完成。
+            为什么闸门只有 heroVideoReady 一道（2026-10-04 第二轮修复）：
+              旧条件是 heroVideoReady && index >= 2，漏掉了一条真实路径——
+              用户在 Home/About 屏直接点导航栏「Contact」直达尾屏。此时 index 从
+              0/1 直接跳 3，旧闸门在点击瞬间才放行 → iframe 当场开始加载 demo →
+              场景初始化 + 灯光渐入全部落在用户盯着黑屏的时间里（实测截图：
+              Contact 导航已高亮、画面仍是纯深色底）。
+              demo 的夜街场景有 2.7s 的 intro 灯光渐入（scene.js: intro += dt/2.7，
+              dt 被 clamp 到 0.05s 无法快进），intro=0 时所有灯只有 35% 亮度、
+              phoneLight 全灭 —— 雨夜没灯就是黑的，这就是黑屏的直接原因。
+              （探针测不出来：headless 默认 prefers-reduced-motion → demo
+              intro=reduced?1:0 直接跳过渐入，所以探针里永远"秒亮"。）
+            heroVideoReady 触发时机 = 首屏视频真正开始播放（playing + readyState>=3）。
+            用户铁律是"视频加载优先级最高、尾屏挂载不能在视频之前"——视频一旦
+            playing 就已满足，此后无论用户停在哪一屏都放行预挂载：
+            用户停留 Home 看视频的几秒里，demo 在后台把 intro 烧完，
+            之后无论从哪屏、滚轮还是导航直达，画面都是就绪的。
+            微信端无原生 <video>，heroVideoReady 永不触发 → 行为同旧版
+            （到尾屏才挂载），无回归。 */}
         <ContactStreet
           active={active && contactVisible}
-          preload={active && heroVideoReady && index >= 2}
+          preload={active && heroVideoReady}
         />
       </section>
       </div>
