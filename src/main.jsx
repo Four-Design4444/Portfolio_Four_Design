@@ -4328,29 +4328,10 @@ function HomePage({ openWorks, paging, active = true }) {
 
     const onWheel = (event) => {
       if (event.ctrlKey || event.metaKey) return;    // pinch zoom, leave alone
-      // 尾屏(contact = index 3)全屏 iframe 已 pointer-events:none，滚轮被本
-      // onWheel 接管；把滚轮意图以合成事件转发进 iframe（canvas 优先、冒泡到
-      // window），保留 demo 内部的"滚轮探索"。网页翻屏优先级仍高于探索：
-      // 在尾屏向上滚时 step(-1) 会先翻回上一屏，向下滚已是末屏故只探索。
-      if (indexRef.current === 3) {
-        const frame = document.querySelector('.street-contact-frame');
-        const cw = frame && frame.contentWindow;
-        if (cw) {
-          try {
-            const doc = frame.contentDocument;
-            const target = (doc && doc.querySelector('canvas')) || cw;
-            target.dispatchEvent(new WheelEvent('wheel', {
-              deltaY: event.deltaY,
-              deltaX: event.deltaX || 0,
-              deltaMode: event.deltaMode,
-              bubbles: true,
-              cancelable: false,
-              clientX: event.clientX,
-              clientY: event.clientY,
-            }));
-          } catch (_) { /* 跨域或未就绪时静默跳过 */ }
-        }
-      }
+      // 尾屏(contact = index 3)的 iframe 内部已劫持 wheel：它 preventDefault 掉
+      // 自身滚动(所以 demo 相机不动)，再通过 postMessage 把deltaY 交给本页面的
+      // message 监听 → 由那里合成 WheelEvent 派发到这里(见 Street.jsx)。
+      // 本处只处理落在页面自身(非 iframe)的滚轮，无需再向iframe 回灌，避免环路。
       event.preventDefault();
       const now = performance.now();
       const gap = now - gestureAt;
