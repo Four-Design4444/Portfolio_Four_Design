@@ -577,22 +577,11 @@ body.nav-on-light .morph-nav.nav-detail {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
+/* 2026-10-04: 三级页触发胶囊在任何背景都用与二级导航**完全相同**的样式
+   (基础 .shared-active-pill 浅色玻璃),不再做亮背景翻转;
+   文字与箭头固定白色(业主要求),直接写在下面这条规则里。 */
 body.nav-on-light .shared-active-pill-detail {
-  /* 2026-10-05: 深灰渐变胶囊 → 浅磨砂玻璃 + 深色文字。亮背景上继续压深灰
-     显得又重又闷；反转成白玻璃芯片（与移动端主页圆钮同一套浅色语言），
-     文字/箭头经 currentColor 一起翻成深色，对比度不降反升。
-     只改颜色与阴影，形变、定位、交互一行未动。
-     2026-10-05 二稿:白玻璃太实没有「玻璃感」→ 填充降到 0.38/0.20,
-     加 backdrop-filter 真·磨砂(透过胶囊能看到模糊后的底图),高光描边提亮。
-     深色文字贴着 blur 后的浅底,可读性不受低填充影响。 */
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.38), rgba(240, 244, 250, 0.20));
-  -webkit-backdrop-filter: blur(16px) saturate(1.35);
-  backdrop-filter: blur(16px) saturate(1.35);
-  box-shadow:
-    inset 0 0 0 1px rgba(18, 24, 36, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 8px 22px rgba(0, 0, 0, 0.10);
-  color: #151b26;
+  color: #ffffff;
 }
 
 /* 2026-10-05: 二级页导航对齐 works-v2.0.0 demo 的「透」——demo 分类胶囊是
@@ -1104,18 +1093,18 @@ body.nav-on-light .shared-active-pill-detail {
 .nav-detail .detail-nav-back,
 .nav-detail .detail-pager {
   opacity: 1;
-  /* 2026-10-05: 淡入改挂基础态 —— 这两个元素随 isDetail 挂载即播动画,
-     不再依赖 motion-to-detail 的存活时长。此前动画只在 motion 类存活期间
-     有效,飞行结束类被摘掉时动画被截断,文字看起来像没做淡入;
-     两处动画简写完全一致,类翻转不会重启动画。 */
-  animation: detailTextFadeIn 560ms ease 220ms both;
+  /* 2026-10-04: 淡入延迟 220→520ms —— 原来淡入藏在条栏形变的过程中
+     (条栏还在飞,文字已淡完),视觉上等于直接出现;现在等条栏基本落定
+     (620ms 形变的 ~84%)再开始淡入,560ms 完成,淡入清晰可读。 */
+  animation: detailTextFadeIn 560ms ease 520ms both;
 }
 
 .nav-detail.motion-to-detail .detail-nav-back,
 .nav-detail.motion-to-detail .detail-pager {
   opacity: 0;
-  /* 2026-10-05: 延迟 120→220ms,等二级导航文字基本退场后再浮现,交接不同框。 */
-  animation: detailTextFadeIn 560ms ease 220ms both;
+  /* 与基础态同参数:类翻转不重启动画(见下),motion 期间保持隐形,
+     落定后由基础态的同一动画接管淡入。 */
+  animation: detailTextFadeIn 560ms ease 520ms both;
 }
 
 @keyframes detailTextFadeIn {
@@ -1197,11 +1186,13 @@ body.nav-on-light .shared-active-pill-detail {
 }
 
 .detail-category-menu button.active {
-  /* 2026-10-05: 选中项文字不再蓝 —— 蓝色只留在选中态的圆角矩形底上,
-     文字保持白色,与其它项可读性一致。 */
+  /* 2026-10-04: 选中项不再用蓝底 —— 与导航玻璃语言一致的白玻璃胶囊:
+     白字 + 亮玻璃底 + 高光描边,与 hover 的差异是底色更实、带描边。 */
   color: #ffffff;
-  background: linear-gradient(145deg, rgba(0, 96, 244, 0.5), rgba(0, 87, 255, 0.32));
-  box-shadow: inset 0 0 0 1px rgba(140, 185, 255, 0.4);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(240, 244, 250, 0.07));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .hero {
@@ -4760,7 +4751,7 @@ html[data-paging="on"] .contact-page {
   position: relative;
   min-width: 0;
   isolation: isolate;
-  padding: 18px 0 26px;
+  padding: 18px 0 36px;
 }
 
 /* ---- 悬浮感(2026-10-04,参考图二)--------------------------------------
@@ -4780,116 +4771,67 @@ html[data-paging="on"] .contact-page {
   50% { transform: translateY(-6px); }
 }
 
-/* 地面光池:卡片光在地板上摊开的亮斑,悬浮物的"影子根" */
-.works-orbit-ground-glow {
-  position: absolute;
-  left: 50%;
-  top: calc(100% - 6px);
-  width: 90%;
-  height: 130px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(ellipse 50% 44% at 50% 30%,
-    rgba(154, 194, 255, 0.18),
-    rgba(120, 160, 235, 0.07) 52%,
-    transparent 74%);
-  filter: blur(14px);
-  mix-blend-mode: screen;
-  pointer-events: none;
-  /* 接触阴影:悬浮物挡光在光池中心留下的暗斑 —— 有暗斑,光池才读得出"悬浮" */
-}
-
-.works-orbit-ground-glow::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 6%;
-  width: 46%;
-  height: 40%;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(4, 7, 14, 0.5), rgba(4, 7, 14, 0.22) 55%, transparent 75%);
-  filter: blur(9px);
-}
-
-.works-orbit-reflection-ground {
+/* ---- 高反射地面(2026-10-05 重做)----------------------------------------
+   悬浮感三要素:接触投影(暗斑贴卡片底) + 地平线冷光 + 镜面倒影。
+   旧版雾状光池/流光纹理已删。倒影短而实、快速衰减 = 抛光地板;
+   卡片浮动/hover 上移时地面不动,间隙变化本身就是"悬浮"反馈。 */
+.works-orbit-floor {
   position: absolute;
   left: 12px;
   right: 12px;
-  /* 紧贴卡片底边:反射感来自"倒影从接触点就开始",不留空档 */
-  top: calc(100% - 20px);
-  height: clamp(190px, 38%, 330px);
-  border-radius: 0 0 24px 24px;
+  /* 倒影从接触点就开始:不留空档,悬浮感来自卡片自身的浮动间隙 */
+  top: calc(100% - 4px);
+  height: clamp(120px, 24%, 190px);
   pointer-events: none;
-  overflow: hidden;
-  transition: transform 0.48s cubic-bezier(0.23, 0.76, 0.25, 1);
-  /* 总遮罩:整层(含流光)在容器下缘之前淡到零 —— 消掉底部的硬切痕 */
-  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 46%, transparent 94%);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 46%, transparent 94%);
-  /* 呼吸:独立 translate 通道(不碰 hover 用的 transform),与卡片浮动错拍,
-     让卡片与倒影之间的间隙缓慢呼吸 */
-  animation: works-orbit-ref-breathe 7.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  /* 总遮罩:整层在下缘前淡到零,消掉硬切痕 */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 88%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 88%);
 }
 
-@keyframes works-orbit-ref-breathe {
-  0%, 100% { translate: 0 0; }
-  50% { translate: 0 5px; }
-}
-
-.works-orbit-reflection-ground::after {
-  /* 亮面地板的横向流光纹理(图二式 glossy floor streaks) */
+/* 地平线:一条冷光亮带,读出"地面在这里" */
+.works-orbit-floor::before {
   content: '';
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 64px;
   background:
-    repeating-linear-gradient(180deg,
-      rgba(198, 222, 255, 0.028) 0 1px,
-      transparent 1px 16px),
-    linear-gradient(90deg, transparent 12%, rgba(188, 216, 255, 0.04) 30%, transparent 46%, rgba(188, 216, 255, 0.03) 68%, transparent 84%);
-  mix-blend-mode: screen;
-  opacity: 0.5;
-  filter: blur(0.5px);
-  z-index: 2;
-  pointer-events: none;
+    linear-gradient(180deg, rgba(196, 220, 255, 0.11), transparent 55%),
+    radial-gradient(ellipse 90% 100% at 50% 0%, rgba(150, 190, 255, 0.10), transparent 78%);
+  filter: blur(1px);
 }
 
-.works-orbit-reflection-ground::before {
+/* 接触投影:悬浮物挡光留下的暗斑,压在倒影上方 */
+.works-orbit-floor::after {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  /* 冷色氛围:图二的地板反光带一点蓝,纯镜像会显得"灰" */
-  background:
-    radial-gradient(ellipse 92% 48% at 50% 0%, rgba(158, 196, 255, 0.17), transparent 70%),
-    linear-gradient(to bottom, rgba(178, 208, 255, 0.09), transparent 58%);
-  filter: blur(2px);
-  opacity: 0.9;
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 94%);
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 94%);
-  z-index: 1;
+  left: 10%;
+  right: 10%;
+  top: 2px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse 50% 50% at 50% 42%, rgba(2, 5, 11, 0.6), rgba(2, 5, 11, 0.24) 58%, transparent 80%);
+  filter: blur(6px);
 }
 
-.works-orbit-reflection-image {
+/* 镜面倒影:抛光地板级清晰度,快速衰减 */
+.works-orbit-floor-mirror {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 6px;
+  bottom: 0;
   background-size: 100% auto;
   background-position: center top;
   background-repeat: no-repeat;
-  /* 倒影 = 贴在地板上的反射:翻转 + 轻微透视压缩,不是竖着的镜子 */
-  transform: perspective(520px) rotateX(7deg) scaleY(-1);
-  transform-origin: 50% 0;
-  filter: blur(2.5px) brightness(0.92) contrast(1.04) saturate(1.15);
-  opacity: 0.9;
-  /* 遮罩方向:"to top" 的 0% 在图片【底缘】,翻转后恰好贴着卡片 ——
-     强端必须留在图片底缘(贴卡片处),向上渐隐。 */
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.4) 46%, transparent 86%);
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.4) 46%, transparent 86%);
-}
-
-/* 卡片包进 .works-orbit-float 后,hover 兄弟选择器跟着换宿主 */
-.works-orbit-float:hover ~ .works-orbit-reflection-ground,
-.works-orbit-float:has(.works-orbit-card:focus-visible) ~ .works-orbit-reflection-ground {
-  transform: translateY(-14px);
+  transform: scaleY(-1);
+  filter: blur(1.5px) brightness(0.66) saturate(1.1) contrast(1.03);
+  opacity: 0.78;
+  /* 遮罩:to top 的 0% 在图片底缘,翻转后恰好贴着卡片 ——
+     强端留在贴卡片处,向上(视觉向下)快速淡出 */
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.32) 34%, transparent 62%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.32) 34%, transparent 62%);
 }
 
 /* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
@@ -5253,25 +5195,16 @@ html[data-paging="on"] .contact-page {
   gap: 7px;
   align-self: center;
   position: relative;
-  /* 列表底部的地面光池:整列卡片"悬浮"在一片微光上 */
-  padding-bottom: 26px;
+  /* 下方留白:给整列的镜面反射留出空间 */
+  padding-bottom: 30px;
 }
 
-.works-orbit-rail::after {
-  content: '';
-  position: absolute;
-  left: 4%;
-  right: 10%;
-  bottom: 2px;
-  height: 46px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse 50% 55% at 46% 40%,
-    rgba(150, 190, 255, 0.11),
-    rgba(120, 160, 235, 0.04) 55%,
-    transparent 76%);
-  filter: blur(10px);
-  mix-blend-mode: screen;
-  pointer-events: none;
+/* 整列镜面反射(2026-10-05):替代旧版模糊光池。
+   Chromium/Safari 生效;Firefox 优雅降级(仅无反射)。 */
+@supports (-webkit-box-reflect: below 0) {
+  .works-orbit-rail {
+    -webkit-box-reflect: below 3px linear-gradient(to bottom, rgba(0, 0, 0, 0.10), transparent 28%);
+  }
 }
 
 .works-orbit-rail-label {
@@ -5404,7 +5337,6 @@ html[data-paging="on"] .contact-page {
   .works-orbit-card:focus-visible { transform: none; }
   .works-orbit-sheen { display: none; }
   .works-orbit-float,
-  .works-orbit-rail-card,
-  .works-orbit-reflection-ground { animation: none; translate: none; }
+  .works-orbit-rail-card { animation: none; translate: none; }
 }
 

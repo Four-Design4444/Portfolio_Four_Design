@@ -6,6 +6,34 @@
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="data:," />
+    <!-- 首屏 Loading 遮罩的关键样式必须内联：外链 CSS 要等构建产物下载完才生效，
+         那时已经晚于第一帧，会先闪一下空白。底色与 demo 的 #151f2a 完全一致，
+         所以遮罩存在期间和揭幕之后看不到色差。 -->
+    <style>
+      html { background: #151f2a; }
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: #151f2a;
+        opacity: 1;
+        transition: opacity .5s ease;
+      }
+      #app-loader.is-gone { opacity: 0; pointer-events: none; }
+      #app-loader.is-off { display: none; }
+      #app-loader > iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        color-scheme: dark;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-loader { transition: none; }
+      }
+    </style>
+    <noscript><style>#app-loader { display: none; }</style></noscript>
     <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin />
     <title>UI / Visual / AI Designer Portfolio</title>
     <script>
@@ -138,6 +166,52 @@
     </script>
   </head>
   <body>
+    <!-- 首屏 Loading（typing-cat v1.1）：demo 原文件字节级原封不动放在
+         public/loading/ 下，这里只做「嵌入 + 揭幕」，动画代码一行未改。
+         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
+         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。 -->
+    <div id="app-loader" aria-busy="true" aria-label="页面加载中">
+      <iframe
+        id="app-loader-frame"
+        src="/loading/typing-cat-v1.1.html?embed"
+        title="Loading"
+        tabindex="-1"
+        aria-hidden="true"
+      ></iframe>
+    </div>
+    <script>
+      // 揭幕时序：React 挂载后并不等于"能看了"——首页还要等 hero 首帧。
+      // 所以由 React 在真正就绪时派发 app:ready；这里只负责三件事：
+      //   ① 最短显示时长（600ms）：否则本地秒开时遮罩会一闪而过，比不显示更糟；
+      //   ② 硬超时（6000ms）：hero 视频加载失败 / 微信端无原生 video 时
+      //      heroVideoReady 永不触发，兜底保证遮罩一定会被揭掉；
+      //   ③ 淡出后连 iframe 一起移除：demo 是 rAF 驱动的动画，留在 DOM 里
+      //      会一直空转吃主线程，而首页 hero 视频解码正需要这条线程。
+      (function () {
+        var el = document.getElementById('app-loader');
+        var MIN_SHOW = 600;
+        var HARD_CAP = 6000;
+        var startedAt = Date.now();
+        var hidden = false;
+        function hide() {
+          if (hidden || !el) return;
+          hidden = true;
+          var wait = Math.max(0, MIN_SHOW - (Date.now() - startedAt));
+          window.setTimeout(function () {
+            el.classList.add('is-gone');
+            window.setTimeout(function () {
+              el.classList.add('is-off');
+              var frame = document.getElementById('app-loader-frame');
+              if (frame) frame.remove();
+              el.remove();
+            }, 520);
+          }, wait);
+        }
+        window.__hideAppLoader = hide;
+        window.addEventListener('app:ready', hide);
+        window.setTimeout(hide, HARD_CAP);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

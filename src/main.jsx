@@ -671,6 +671,22 @@ function App() {
   const [worksActiveLocked, setWorksActiveLocked] = useState(false);
   const previousPageRef = useRef(route.page);
 
+  // 首屏 Loading 遮罩的揭幕信号。首页由 HomePage 等 hero 首帧真正播起来再发
+  // （见 markHeroVideoReady），其余路由没有视频，挂载完画一帧就可以揭。
+  // 这里连等两帧：React commit 之后浏览器还要走一次布局+绘制，早一帧揭幕会
+  // 露出"遮罩已淡出、内容还没画出来"的那一帧空白。
+  useEffect(() => {
+    if (route.page === 'home') return undefined;
+    let inner = 0;
+    const outer = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
+    });
+    return () => {
+      window.cancelAnimationFrame(outer);
+      if (inner) window.cancelAnimationFrame(inner);
+    };
+  }, [route.page]);
+
   useEffect(() => {
     const onHashChange = () => setRoute(parseRoute());
     window.addEventListener('hashchange', onHashChange);
@@ -4256,6 +4272,14 @@ function HomePage({ openWorks, paging, active = true }) {
   // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
   const [heroVideoReady, setHeroVideoReady] = useState(false);
   const markHeroVideoReady = useCallback(() => setHeroVideoReady(true), []);
+  // 首屏 Loading 遮罩：hero 真正播起来才是"能看了"的那一刻，此时才揭幕。
+  // 微信端走 WebCodecs 没有原生 <video>，这个信号永不触发 —— 遮罩由
+  // index.html 里的 6000ms 硬超时兜底揭掉，不会卡死在加载态。
+  useEffect(() => {
+    if (!heroVideoReady) return undefined;
+    const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
+    return () => window.cancelAnimationFrame(frame);
+  }, [heroVideoReady]);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
 
@@ -4928,16 +4952,12 @@ function WorksPage({ activeCategory, goDetail }) {
             ) : null}
             </div>
             {current ? (
-              <>
-                {/* 地面光池:卡片光落在地板上的亮斑 */}
-                <div className="works-orbit-ground-glow" aria-hidden="true" />
-                <div className="works-orbit-reflection-ground" aria-hidden="true">
-                  <div
-                    className="works-orbit-reflection-image"
-                    style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
-                  />
-                </div>
-              </>
+              <div className="works-orbit-floor" aria-hidden="true">
+                <div
+                  className="works-orbit-floor-mirror"
+                  style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
+                />
+              </div>
             ) : null}
           </div>
 
