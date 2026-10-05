@@ -4769,32 +4769,9 @@ function WorksPage({ activeCategory, goDetail }) {
         opacity={1}
       />
       <div className="works-container works-orbit-container">
-        {/* 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） */}
-        <header className="works-orbit-topline">
-          <span className="works-orbit-wordmark"><i className="works-orbit-mark">a.</i>INDEX / FOUR</span>
-          <span className="works-orbit-edition">
-            SELECTED WORKS <i className="works-orbit-edition-dot" /> VOL. 2026
-            <span className="works-orbit-version-tag">V2.0.0</span>
-          </span>
-        </header>
-
-        <div className="works-orbit-intro">
-          <div className="works-orbit-intro-copy">
-            <span className="works-orbit-eyebrow">V2.0.0 / 焦点主卡 · 浮光轨道</span>
-            <h1>作品索引</h1>
-            <p>One focus. Many perspectives.</p>
-          </div>
-        </div>
-
         <div className="works-orbit-stage" ref={stageRef}>
           <div className="works-orbit" ref={orbitRef}>
           <div className="works-orbit-focus">
-            <div className="works-orbit-label">
-              <span><i className="works-orbit-dot" />CURRENT FOCUS</span>
-              <span className="works-orbit-counter">
-                {String(index + 1).padStart(2, '0')} / {String(works.length).padStart(2, '0')}
-              </span>
-            </div>
             {current ? (
               <button
                 type="button"
@@ -4816,20 +4793,11 @@ function WorksPage({ activeCategory, goDetail }) {
               </button>
             ) : null}
             {current ? (
-              <div className="works-orbit-desc">
-                <div>
-                  <h2>{current.title}</h2>
-                  <p>{current.subtitle}</p>
-                </div>
-                <div className="works-orbit-controls">
-                  <button type="button" aria-label="上一件作品" disabled={works.length < 2} onClick={() => step(-1)}>
-                    {orbitChevron('prev')}
-                  </button>
-                  <button type="button" aria-label="下一件作品" disabled={works.length < 2} onClick={() => step(1)}>
-                    {orbitChevron('next')}
-                  </button>
-                </div>
-              </div>
+              <div
+                className="works-orbit-reflection"
+                aria-hidden="true"
+                style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
+              />
             ) : null}
           </div>
 

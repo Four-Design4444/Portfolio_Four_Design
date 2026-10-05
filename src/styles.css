@@ -556,9 +556,13 @@ img {
   grid-template-columns: 1fr auto 1fr;
   overflow: visible;
   contain: layout style;
-  background: rgba(0, 0, 0, 0.38);
-  --nav-border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  /* 2026-10-05: 三级页导航对齐二级页（works）玻璃观感，只改颜色/边框/阴影/模糊，
+     布局、过渡、交互逻辑一行未动。 */
+  background: rgba(183, 208, 250, 0.024);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+  --nav-border-color: rgba(214, 229, 255, 0.09);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
 }
 
 /* 2026-10-05: 二级页导航对齐 works-v2.0.0 demo 的「透」——demo 分类胶囊是
@@ -787,11 +791,16 @@ img {
   width: var(--pill-w);
   height: var(--pill-h);
   border-radius: 999px;
-  background: #0057ff;
-  color: #ffffff;
+  /* 2026-10-05: 由纯蓝 #0057ff 改为二级页同款浅色玻璃胶囊（works-nav-indicator
+     同一配色），只改颜色与阴影，left/top/width/height 滑动过渡原样。 */
+  background: linear-gradient(145deg, rgba(228, 239, 255, 0.13), rgba(145, 177, 226, 0.06));
+  color: #eff6ff;
   font-size: 13px;
   line-height: 1;
-  box-shadow: 0 8px 22px rgba(0, 87, 255, 0.36);
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 255, 0.13),
+    inset 0 1px 0 rgba(239, 247, 255, 0.09),
+    0 8px 22px rgba(0, 0, 0, 0.28);
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   transition:
@@ -803,7 +812,11 @@ img {
 }
 
 .shared-active-pill-detail {
-  box-shadow: 0 8px 22px rgba(0, 87, 255, 0.36);
+  /* 2026-10-05: 蓝色光晕 → 二级页同款阴影（与 .shared-active-pill 基础值一致） */
+  box-shadow:
+    inset 0 0 0 1px rgba(219, 234, 255, 0.13),
+    inset 0 1px 0 rgba(239, 247, 255, 0.09),
+    0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
 .shared-active-chevron {
@@ -4665,6 +4678,30 @@ html[data-paging="on"] .contact-page {
   padding: 12px 0 16px;
 }
 
+.works-orbit-focus {
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
+}
+
+.works-orbit-reflection {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(100% - 14px);
+  height: clamp(120px, 24%, 200px);
+  border-radius: 20px;
+  background-size: 100% auto;
+  background-position: center 42%;
+  background-repeat: no-repeat;
+  transform: scaleY(-1);
+  filter: blur(20px) brightness(0.82) saturate(1.05);
+  opacity: 0.78;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.58) 22%, rgba(0, 0, 0, 0.58) 66%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.58) 22%, rgba(0, 0, 0, 0.58) 66%, transparent);
+}
+
 /* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
 .works-orbit-topline {
   display: flex;
@@ -4812,8 +4849,6 @@ html[data-paging="on"] .contact-page {
   column-gap: clamp(42px, 4.7vw, 72px);
   align-items: center;
 }
-
-.works-orbit-focus { min-width: 0; }
 
 .works-orbit-label {
   display: flex;
