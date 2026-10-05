@@ -791,12 +791,14 @@ html[data-device="mobile"] .nav-detail .detail-category-chevron {
   display: none;
 }
 
-/* Nudge the detail-side capsule down slightly so its optical center matches
-   the 48px floating bar rather than reading as top-heavy. The shared overlay
-   follows this transformed anchor through getBoundingClientRect(). */
-html[data-device="mobile"] .nav-detail .detail-category-select {
-  transform: translateY(2px);
-}
+/* 2026-10-06: 删除历史上的 translateY(2px) 补偿。
+   起因:PC/移动端的 .detail-category-select 都是 block 盒,里面 inline-flex 的
+   trigger 走行内格式化,行盒按字体 baseline/descender 多撑 5px(移动端实测
+   select 29px vs trigger 24px),align-self:center 居中这个偏高的盒子 →
+   胶囊真实位置比导航条中心偏上 2.5px,于是这里硬补 +2px(仍剩 -0.5px)。
+   根因已由 styles.css 的 `.detail-category-select{display:flex;align-items:center}`
+   从源头修掉(容器高 == 胶囊高),补偿必须同步撤销 —— 留着反而会向下偏 2px。
+   共享浮层跟随的是 getBoundingClientRect() 的真实锚点,自动跟着归零。 */
 
 html[data-device="mobile"] .shared-active-pill-detail {
   min-width: 0;

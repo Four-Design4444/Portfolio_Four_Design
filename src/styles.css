@@ -1061,6 +1061,15 @@ body.nav-on-light .shared-active-pill-detail {
   position: relative;
   grid-column: 3;
   grid-row: 1;
+  /* 2026-10-06: block → flex。此前 select 是 block 盒,里面那枚 inline-flex 的
+     trigger 走行内格式化,行盒按字体 baseline/descender 多撑出 5px
+     (实测 select 高 41px,trigger 只有 36px),而 align-self:center 居中的是
+     41px 的 select 盒 → 位于行盒顶部的 trigger(以及以它的 rect 为锚点、
+     每帧跟随的共享胶囊)整体比导航条中心**偏上 2.5px**(PC)。
+     改成 flex 后容器高 == 胶囊高,居中是真实的垂直居中。
+     只改容器 display/align-items,胶囊宽高、过渡、锚点测量方式一行未动。 */
+  display: flex;
+  align-items: center;
   justify-self: end;
   align-self: center;
   z-index: 95;
@@ -4771,7 +4780,9 @@ html[data-paging="on"] .contact-page {
   position: relative;
   min-width: 0;
   isolation: isolate;
-  padding: 18px 0 64px;
+  /* 下方留白写成变量:地面要按"卡片底边"定位,必须减掉这段 padding */
+  --focus-pb: 64px;
+  padding: 18px 0 var(--focus-pb);
 }
 
 /* ---- 悬浮感(2026-10-04,参考图二)--------------------------------------
@@ -4808,13 +4819,14 @@ html[data-paging="on"] .contact-page {
      镜像与卡片才能同宽 */
   left: 13px;
   right: 13px;
-  /* 接触线 = 卡片底边,cover 底边即卡片底边 - 13px,倒影从此开始,不留空档 */
-  top: calc(100% - 13px);
+  /* 接触线 = 卡片底边。100% 是 focus 的 padding 盒(含下方 64px 留白),
+     再减 13px(卡片 12px padding + 1px border)才落到 cover 底边。 */
+  top: calc(100% - var(--focus-pb) - 13px);
   height: clamp(260px, 46vh, 560px);
   overflow: hidden; /* 溢出即裁切,绝不产生滚动条 */
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.62) 42%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.62) 42%, rgba(0, 0, 0, 0.22) 72%, transparent 96%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.68) 42%, rgba(0, 0, 0, 0.26) 72%, transparent 96%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.68) 42%, rgba(0, 0, 0, 0.26) 72%, transparent 96%);
 }
 
 /* 地平线:一条冷光亮带,读出"地面在这里"(压暗,避免蓝雾感) */
@@ -4907,8 +4919,8 @@ html[data-paging="on"] .contact-page {
 
 /* 近层:贴接触线处最实,向下快速衰减(浅景深) */
 .works-orbit-floor-mirror-near {
-  filter: blur(0.7px) brightness(0.66) saturate(1.06);
-  opacity: 0.9;
+  filter: blur(0.7px) brightness(0.72) saturate(1.06);
+  opacity: 0.95;
   -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.5) 28%, rgba(0, 0, 0, 0.16) 52%, transparent 72%);
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.5) 28%, rgba(0, 0, 0, 0.16) 52%, transparent 72%);
 }
