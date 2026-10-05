@@ -29,8 +29,43 @@
         background: transparent;
         color-scheme: dark;
       }
+      /* 进度读数：宽度/字号/字距都抄 demo 的微观排版（rail 用 #8b9eaf、副文字
+         9px/1px 字距、#8291a0），所以它是"长在 demo 里"的，而不是外来控件。 */
+      .app-loader-progress {
+        position: absolute;
+        left: 50%;
+        bottom: 34px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        pointer-events: none;
+      }
+      .app-loader-bar {
+        position: relative;
+        width: 140px;
+        height: 1px;
+        background: rgba(185, 203, 213, 0.14);
+        overflow: hidden;
+      }
+      .app-loader-bar > i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        background: #8b9eaf;
+        transition: width .28s ease;
+      }
+      .app-loader-num {
+        font: 9px/1 "Segoe UI", "Microsoft YaHei", sans-serif;
+        letter-spacing: 1.6px;
+        color: #8291a0;
+        font-variant-numeric: tabular-nums;
+      }
       @media (prefers-reduced-motion: reduce) {
         #app-loader { transition: none; }
+        .app-loader-bar > i { transition: none; }
       }
     </style>
     <noscript><style>#app-loader { display: none; }</style></noscript>
@@ -75,6 +110,7 @@
           preload.crossOrigin = 'anonymous';
           preload.href = '/media/hero-mobile-webcodecs.264';
           document.head.appendChild(preload);
+          window.__bootAssets.push({ href: '/media/hero-mobile-webcodecs.264', kind: 'video' });
         }
         // Native-video paths: preload the exact hero clips this device will
         // play, using the SAME decision React makes in HeroSection (device +
@@ -85,6 +121,9 @@
         // crossOrigin) matches the media element's same-origin no-cors
         // request, and the ETag on the server turns the media element's
         // revalidation into a 304 so nothing downloads twice.
+        // 首屏 Loading 的进度来源：这里发出的每个 preload 都是 React 首屏真正要用
+        // 的资源，把它们登记下来，进度条就不再是假动画，而是"这些文件下完了多少"。
+        window.__bootAssets = [];
         var heroPreload = function (href) {
           var link = document.createElement('link');
           link.rel = 'preload';
@@ -92,6 +131,7 @@
           link.href = href;
           link.fetchPriority = 'high';
           document.head.appendChild(link);
+          window.__bootAssets.push({ href: href, kind: 'video' });
         };
         // Desktop hero poster (first frame still): 83KB, but without a preload
         // it queues behind the whole app bundle and the black-hero window
@@ -103,6 +143,7 @@
           link.href = '/media/hero-pc-poster.webp';
           link.fetchPriority = 'high';
           document.head.appendChild(link);
+          window.__bootAssets.push({ href: '/media/hero-pc-poster.webp', kind: 'image' });
         };
         var heroSupportsHEVC = (function () {
           try {
@@ -170,46 +211,183 @@
          public/loading/ 下，这里只做「嵌入 + 揭幕」，动画代码一行未改。
          demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
          并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。 -->
-    <div id="app-loader" aria-busy="true" aria-label="页面加载中">
-      <iframe
-        id="app-loader-frame"
-        src="/loading/typing-cat-v1.1.html?embed"
-        title="Loading"
-        tabindex="-1"
-        aria-hidden="true"
-      ></iframe>
-    </div>
+    <!-- 首屏 Loading（typing-cat v1.1）：demo 原文件字节级原封不动放在
+         public/loading/ 下，这里只做「嵌入 + 进度 + 揭幕」，动画代码一行未改。
+         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
+         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。
+         只有首页会显示：二级(works)/三级(detail)页刷新直接进内容，不挡路。 -->
+    <!-- 遮罩本体由下面的脚本创建，HTML 里故意不放这个 div：Chrome 会在解析过程中
+         穿插绘制，若 div 先于脚本出现，二级/三级页刷新就有可能闪一帧纯色遮罩。
+         现在只有判定为首页时它才会被插进 DOM，其余路由连节点都不存在。 -->
     <script>
-      // 揭幕时序：React 挂载后并不等于"能看了"——首页还要等 hero 首帧。
-      // 所以由 React 在真正就绪时派发 app:ready；这里只负责三件事：
-      //   ① 最短显示时长（600ms）：否则本地秒开时遮罩会一闪而过，比不显示更糟；
-      //   ② 硬超时（6000ms）：hero 视频加载失败 / 微信端无原生 video 时
-      //      heroVideoReady 永不触发，兜底保证遮罩一定会被揭掉；
-      //   ③ 淡出后连 iframe 一起移除：demo 是 rAF 驱动的动画，留在 DOM 里
-      //      会一直空转吃主线程，而首页 hero 视频解码正需要这条线程。
       (function () {
-        var el = document.getElementById('app-loader');
+        // 路由判定与 src/main.jsx 的 parseRoute 保持一致：凡是不是 works /
+        // detail / hero-motion-demo 的 hash 都算首页。
+        var hash = window.location.hash || '';
+        var isHome = !/^#\/(works|detail|hero-motion-demo)/.test(hash);
+        if (!isHome) return; // 二级/三级页刷新：连遮罩节点都不建
+
+        var el = document.createElement('div');
+        el.id = 'app-loader';
+        el.setAttribute('aria-busy', 'true');
+        el.setAttribute('aria-label', '页面加载中');
+        document.body.appendChild(el);
+        var drop = function () { if (el && el.parentNode) el.remove(); };
+
+        // ① demo 本体
+        var frame = document.createElement('iframe');
+        frame.id = 'app-loader-frame';
+        frame.title = 'Loading';
+        frame.setAttribute('tabindex', '-1');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.src = '/loading/typing-cat-v1.1.html?embed';
+        // ② 进度读数
+        var readout = document.createElement('div');
+        readout.className = 'app-loader-progress';
+        readout.setAttribute('aria-hidden', 'true');
+        var bar = document.createElement('div');
+        bar.className = 'app-loader-bar';
+        var fill = document.createElement('i');
+        bar.appendChild(fill);
+        var num = document.createElement('span');
+        num.className = 'app-loader-num';
+        num.textContent = '0%';
+        readout.appendChild(bar);
+        readout.appendChild(num);
+        el.appendChild(frame);
+        el.appendChild(readout);
+
+        // ---- 真实进度：每项都是一个 0..1 的探针，按权重加权 ----
+        // 只有能真正观测到的量才计入，凑不出来的就不假装：
+        //   · 脚本/图片/预取文件：performance 资源条目有 responseEnd 才算完成；
+        //   · 视频：读 <video> 的 buffered 区间（能拿到真实的字节进度），
+        //     拿不到就退回"资源条目完成"这种 0/1 判定；
+        //   · React 首屏就绪：由 app:ready 事件给出。
+        var tasks = [];
+        var addEntryTask = function (href, weight) {
+          tasks.push({
+            weight: weight,
+            read: function () {
+              try {
+                var abs = new URL(href, location.href).href;
+                var entries = performance.getEntriesByName(abs, 'resource');
+                if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
+                if (entries.length && entries[entries.length - 1].responseEnd > 0) return 1;
+              } catch (_) { /* noop */ }
+              return 0;
+            }
+          });
+        };
+        var videoBuffered = function () {
+          var list = document.querySelectorAll('video');
+          if (!list.length) return 0;
+          var sum = 0;
+          var counted = 0;
+          for (var i = 0; i < list.length; i++) {
+            var v = list[i];
+            var dur = v.duration;
+            if (!isFinite(dur) || !dur) continue;
+            try {
+              sum += v.buffered.length ? Math.min(1, v.buffered.end(v.buffered.length - 1) / dur) : 0;
+              counted++;
+            } catch (_) { /* noop */ }
+          }
+          return counted ? sum / counted : 0;
+        };
+        (window.__bootAssets || []).forEach(function (asset) {
+          // 视频是首屏字节大头（~1.9MB），权重给高，进度才不会"一上来就 90%"。
+          var weight = asset.kind === 'video' ? 4 : 1;
+          addEntryTask(asset.href, weight);
+          if (asset.kind === 'video') {
+            tasks.push({
+              weight: weight,
+              read: function () {
+                var buffered = videoBuffered();
+                // 取两者较大值：buffered 更平滑，资源条目完成后直接封顶 1。
+                var done = 0;
+                try {
+                  var abs = new URL(asset.href, location.href).href;
+                  var entries = performance.getEntriesByName(abs, 'resource');
+                  if (!entries.length) entries = performance.getEntriesByName(asset.href, 'resource');
+                  if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
+                } catch (_) { /* noop */ }
+                return Math.max(buffered, done);
+              }
+            });
+          }
+        });
+        // 应用脚本（Vite 注入的 module + modulepreload）
+        Array.prototype.forEach.call(document.querySelectorAll('script[src], link[rel="modulepreload"]'), function (node) {
+          addEntryTask(node.src || node.href, 1);
+        });
+        // 首屏图片：视口内的 <img> 里已经 decode 完的比例。这是真能观测到的量
+        // （complete + naturalWidth），不是按数量拍脑袋。
+        var imagesProgress = function () {
+          var list = document.querySelectorAll('img');
+          var done = 0;
+          var total = 0;
+          for (var i = 0; i < list.length; i++) {
+            var rect = list[i].getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight || !rect.width) continue;
+            total++;
+            if (list[i].complete && list[i].naturalWidth) done++;
+          }
+          return total ? done / total : 0;
+        };
+        tasks.push({ weight: 2, read: imagesProgress });
+
+        var ready = false;
+        tasks.push({ weight: 2, read: function () { return ready ? 1 : 0; } });
+
+        var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;
+        var shown = 0; // 已显示到的进度，只增不减
+        var eased = 0; // 平滑逼近值：真实值是阶梯状的（资源一个个到位），
+                       // 直接刷会让条子一格一格蹦，这里让它连续地追上去
+        var paint = function (value) {
+          // 只增不减：个别资源条目被缓存复用或重复登记时，进度条不能往回跳。
+          if (value < shown) return;
+          shown = value;
+          var percent = Math.round(shown * 100);
+          fill.style.width = percent + '%';
+          num.textContent = percent + '%';
+        };
+        var tick = function () {
+          var sum = 0;
+          for (var i = 0; i < tasks.length; i++) sum += tasks[i].weight * tasks[i].read();
+          var target = Math.min(1, sum / total);
+          eased += (target - eased) * 0.3;
+          if (target - eased < 0.004) eased = target; // 收尾别拖着不到 100
+          paint(eased);
+        };
+
         var MIN_SHOW = 600;
         var HARD_CAP = 6000;
         var startedAt = Date.now();
         var hidden = false;
-        function hide() {
+        var hide = function (finished) {
           if (hidden || !el) return;
           hidden = true;
+          ready = true;
+          // 只有"真的加载完了"才补满 100%；触发硬超时说明没等到就绪，
+          // 这时假装 100% 就是假进度，条子停在原处直接淡出。
+          if (finished) paint(1);
           var wait = Math.max(0, MIN_SHOW - (Date.now() - startedAt));
           window.setTimeout(function () {
             el.classList.add('is-gone');
             window.setTimeout(function () {
               el.classList.add('is-off');
-              var frame = document.getElementById('app-loader-frame');
-              if (frame) frame.remove();
-              el.remove();
+              drop(); // 连 iframe 一起移除：demo 是 rAF 动画，残留会空转抢主线程
             }, 520);
           }, wait);
-        }
-        window.__hideAppLoader = hide;
-        window.addEventListener('app:ready', hide);
-        window.setTimeout(hide, HARD_CAP);
+        };
+        window.__hideAppLoader = function () { hide(true); };
+        window.addEventListener('app:ready', function () { ready = true; hide(true); });
+        var timer = window.setInterval(tick, 120);
+        window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
+        // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
+        // 也要揭幕（不补满进度）。
+        window.setTimeout(function () { hide(false); }, HARD_CAP);
+        tick();
       })();
     </script>
     <div id="root"></div>

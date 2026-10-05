@@ -4713,6 +4713,19 @@ html[data-paging="on"] .contact-page {
   overflow: clip;
 }
 
+/* 纵深暗角:四周压暗、中心聚焦,给整屏"悬浮在空间中"的层次(2026-10-05) */
+.works-index-page--orbit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: radial-gradient(ellipse 115% 92% at 50% 44%,
+    transparent 40%,
+    rgba(5, 8, 15, 0.32) 72%,
+    rgba(3, 5, 10, 0.58) 100%);
+}
+
 .works-index-page--orbit > .works-side-rays {
   position: fixed;
   inset: 0;
@@ -4751,7 +4764,7 @@ html[data-paging="on"] .contact-page {
   position: relative;
   min-width: 0;
   isolation: isolate;
-  padding: 18px 0 36px;
+  padding: 18px 0 64px;
 }
 
 /* ---- 悬浮感(2026-10-04,参考图二)--------------------------------------
@@ -4781,14 +4794,14 @@ html[data-paging="on"] .contact-page {
   right: 12px;
   /* 倒影从接触点就开始:不留空档,悬浮感来自卡片自身的浮动间隙 */
   top: calc(100% - 4px);
-  height: clamp(120px, 24%, 190px);
+  height: clamp(180px, 36%, 300px);
   pointer-events: none;
   /* 总遮罩:整层在下缘前淡到零,消掉硬切痕 */
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 88%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.6) 42%, transparent 88%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.7) 50%, transparent 96%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.7) 50%, transparent 96%);
 }
 
-/* 地平线:一条冷光亮带,读出"地面在这里" */
+/* 地平线:一条冷光亮带,读出"地面在这里"(压暗,避免蓝雾感) */
 .works-orbit-floor::before {
   content: '';
   position: absolute;
@@ -4797,8 +4810,8 @@ html[data-paging="on"] .contact-page {
   top: 0;
   height: 64px;
   background:
-    linear-gradient(180deg, rgba(196, 220, 255, 0.11), transparent 55%),
-    radial-gradient(ellipse 90% 100% at 50% 0%, rgba(150, 190, 255, 0.10), transparent 78%);
+    linear-gradient(180deg, rgba(196, 220, 255, 0.055), transparent 55%),
+    radial-gradient(ellipse 90% 100% at 50% 0%, rgba(150, 190, 255, 0.045), transparent 78%);
   filter: blur(1px);
 }
 
@@ -4816,22 +4829,44 @@ html[data-paging="on"] .contact-page {
 }
 
 /* 镜面倒影:抛光地板级清晰度,快速衰减 */
+/* 镜面倒影:与卡片 cover 同源同裁剪,翻转后贴地面处 = 卡片底边的镜像。
+   不用 3D rotateX —— 翻转坐标系下旋转方向不可控,倒影会被推到地面上方。
+   纵深改由"近清晰 / 远重度模糊"两层景深 + 暗角 + 光锥营造。 */
 .works-orbit-floor-mirror {
   position: absolute;
   left: 0;
   right: 0;
   top: 6px;
   bottom: 0;
-  background-size: 100% auto;
-  background-position: center top;
-  background-repeat: no-repeat;
   transform: scaleY(-1);
-  filter: blur(1.5px) brightness(0.66) saturate(1.1) contrast(1.03);
-  opacity: 0.78;
-  /* 遮罩:to top 的 0% 在图片底缘,翻转后恰好贴着卡片 ——
-     强端留在贴卡片处,向上(视觉向下)快速淡出 */
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.32) 34%, transparent 62%);
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.32) 34%, transparent 62%);
+  transform-origin: 50% 0;
+}
+
+.works-orbit-floor-mirror::before,
+.works-orbit-floor-mirror::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--mirror-src);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* 近层:贴卡片处几乎与本体同清晰度(浅景深) */
+.works-orbit-floor-mirror::before {
+  filter: blur(0.8px) brightness(0.92) saturate(1.08);
+  opacity: 0.95;
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.5) 28%, transparent 56%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.5) 28%, transparent 56%);
+}
+
+/* 远层:越远越糊(大气透视),把地面推远 */
+.works-orbit-floor-mirror::after {
+  filter: blur(11px) brightness(0.48) saturate(1.02);
+  opacity: 0.72;
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 50%, transparent 100%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.45) 50%, transparent 100%);
 }
 
 /* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
@@ -5203,7 +5238,7 @@ html[data-paging="on"] .contact-page {
    Chromium/Safari 生效;Firefox 优雅降级(仅无反射)。 */
 @supports (-webkit-box-reflect: below 0) {
   .works-orbit-rail {
-    -webkit-box-reflect: below 3px linear-gradient(to bottom, rgba(0, 0, 0, 0.10), transparent 28%);
+    -webkit-box-reflect: below 3px linear-gradient(to bottom, rgba(0, 0, 0, 0.20), transparent 45%);
   }
 }
 
