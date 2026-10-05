@@ -4819,7 +4819,8 @@ html[data-paging="on"] .contact-page {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 13px;
+  /* hover 动效上探 ~20px(translateY -14 + scale 外扩)，间距须大于其峰值 */
+  margin-bottom: 36px;
   font-size: 9px;
   letter-spacing: 1.7px;
   color: rgba(233, 239, 244, 0.55);
@@ -4975,7 +4976,8 @@ html[data-paging="on"] .contact-page {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 21px 3px 0;
+  /* hover 动效下探 ~6px(scale 外扩) + 3D 倾斜延伸，留足余量 */
+  padding: 42px 3px 0;
   gap: 20px;
 }
 
