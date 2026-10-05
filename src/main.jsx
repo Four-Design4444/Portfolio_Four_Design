@@ -530,6 +530,130 @@ function parseRoute() {
   return { page: 'home', category: 'ui', workId: '' };
 }
 
+// 2026-10-05: 三级导航实时自适应亮背景。详情页滚动时导航条底下掠过的内容亮度
+// 会变化(顶部 hero 暗、下滑大图可能很亮)。用 elementsFromPoint 探测导航带正下方
+// 当前盖着的元素,图片用 canvas 采样真实像素估算平均亮度;超阈值给 body 挂
+// .nav-on-light 让玻璃翻深色、保证白字可读。rAF 节流 + 滞回阈值防抖。仅 PC
+// 详情页生效(移动端导航是另一套且 dataset 静态)。只改颜色/样式,不动交互动效。
+function useDetailNavOnLight(isDetail) {
+  useEffect(() => {
+    if (!isDetail) {
+      document.body.classList.remove('nav-on-light');
+      return undefined;
+    }
+    if (document.documentElement.dataset.device === 'mobile') {
+      document.body.classList.remove('nav-on-light');
+      return undefined;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 24;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const LUMA_ON = 0.58;   // 平均亮度高于此 → 深色玻璃
+    const LUMA_OFF = 0.46;  // 低于此 → 切回浅玻璃
+    const COLS = 22;
+
+    const luma = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    const getHeader = () => document.querySelector('.morph-nav.nav-detail');
+
+    const sampleImage = (img, clientX, band) => {
+      const rect = img.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) return null;
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      if (!nw || !nh || !img.complete) return null;
+      const fit = getComputedStyle(img).objectFit || 'fill';
+      const scale = (fit === 'cover' || fit === 'none')
+        ? Math.max(rect.width / nw, rect.height / nh)
+        : Math.min(rect.width / nw, rect.height / nh);
+      const cw = nw * scale, ch = nh * scale;
+      const cx = rect.left + (rect.width - cw) / 2;
+      const cy = rect.top + (rect.height - ch) / 2;
+      const sx = ((clientX - cx) / cw) * nw;
+      if (!(sx >= 0) || sx >= nw) return null;
+      const sy0 = Math.max(0, ((band.top - cy) / ch) * nh);
+      const sy1 = Math.min(nh, ((band.bottom - cy) / ch) * nh);
+      if (sy1 - sy0 < 1) return null;
+      try {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.drawImage(img, sx, sy0, 1, sy1 - sy0, 0, 0, 1, 1);
+        const d = ctx.getImageData(0, 0, 1, 1).data;
+        return luma(d[0], d[1], d[2]);
+      } catch {
+        return null;
+      }
+    };
+
+    const estimateAt = (x, y, band, navEl) => {
+      const stack = document.elementsFromPoint(x, y);
+      for (const el of stack) {
+        if (el === canvas || navEl.contains(el)) continue;
+        if (el instanceof HTMLImageElement) {
+          const v = sampleImage(el, x, band);
+          if (v != null) return v;
+          continue;
+        }
+        const bg = getComputedStyle(el).backgroundColor;
+        const m = /^rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/]\s*([\d.]+))?\)/.exec(bg || '');
+        if (m) {
+          const a = m[4] === undefined ? 1 : parseFloat(m[4]);
+          if (a > 0.05) return luma(+m[1], +m[2], +m[3]) * a; // 混黑底
+        }
+      }
+      return 0; // 页面底色黑
+    };
+
+    let onLight = false;
+    let frame = 0;
+
+    const measure = () => {
+      frame = 0;
+      const navEl = getHeader();
+      if (!navEl) return;
+      const r = navEl.getBoundingClientRect();
+      const band = {
+        left: r.left + r.width * 0.02,
+        right: r.left + r.width * 0.98,
+        top: r.top + r.height * 0.28,
+        bottom: r.top + r.height * 0.72,
+      };
+      let sum = 0;
+      for (let i = 0; i < COLS; i++) {
+        const x = band.left + (i + 0.5) * ((band.right - band.left) / COLS);
+        sum += estimateAt(x, (band.top + band.bottom) / 2, band, navEl);
+      }
+      const avg = sum / COLS;
+      const next = onLight ? avg < LUMA_OFF : avg > LUMA_ON;
+      if (next) {
+        onLight = !onLight;
+        document.body.classList.toggle('nav-on-light', onLight);
+      }
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    window.addEventListener('load', onScroll, true);
+
+    // 入场 + 大图懒加载分批到位,延迟复采几次
+    const timers = [0, 350, 900, 1800].map((t) => window.setTimeout(measure, t));
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('load', onScroll, true);
+      timers.forEach((t) => window.clearTimeout(t));
+      if (frame) window.cancelAnimationFrame(frame);
+      document.body.classList.remove('nav-on-light');
+    };
+  }, [isDetail]);
+}
+
 function App() {
   const [route, setRoute] = useState(parseRoute);
   const [homeActiveSection, setHomeActiveSection] = useState('hero');
@@ -1406,6 +1530,7 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
 function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, activeCategory, activeIndex, total, goHome, goWorks, goWorksBack, goDetailByIndex, goDetailCategory }) {
   const isHome = page === 'home';
   const isDetail = page === 'detail';
+  useDetailNavOnLight(isDetail);
   const activeCategoryIndex = Math.max(0, categories.findIndex((category) => category.id === activeCategory.id));
   const isFirst = activeIndex <= 0;
   const isLast = activeIndex >= total - 1;
@@ -4793,11 +4918,12 @@ function WorksPage({ activeCategory, goDetail }) {
               </button>
             ) : null}
             {current ? (
-              <div
-                className="works-orbit-reflection"
-                aria-hidden="true"
-                style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
-              />
+              <div className="works-orbit-reflection-ground" aria-hidden="true">
+                <div
+                  className="works-orbit-reflection-image"
+                  style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
+                />
+              </div>
             ) : null}
           </div>
 
