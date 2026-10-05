@@ -4809,20 +4809,24 @@ function WorksPage({ activeCategory, goDetail }) {
   const step = (delta) => setActiveIndex((i) => (i + delta + works.length) % works.length);
 
   // 指针视差：只写 CSS 变量，动效交给 CSS transition。
+  // 倾斜/位移变量写在共同父级 .works-orbit-focus 上,卡片与镜面倒影同时继承,
+  // 倒影才能与主卡同步动(rotateX 取反 = 地面镜像共轭)。
   const handleCardMove = (event) => {
     const card = event.currentTarget;
+    const scope = card.closest('.works-orbit-focus') ?? card;
     const box = card.getBoundingClientRect();
     const px = Math.max(-0.5, Math.min(0.5, (event.clientX - box.left) / box.width - 0.5));
     const py = Math.max(-0.5, Math.min(0.5, (event.clientY - box.top) / box.height - 0.5));
-    card.style.setProperty('--rx', `${-py * 8}deg`);
-    card.style.setProperty('--ry', `${px * 11}deg`);
-    card.style.setProperty('--px', `${-px * 12}px`);
-    card.style.setProperty('--py', `${-py * 9}px`);
+    scope.style.setProperty('--rx', `${-py * 8}deg`);
+    scope.style.setProperty('--ry', `${px * 11}deg`);
+    scope.style.setProperty('--px', `${-px * 12}px`);
+    scope.style.setProperty('--py', `${-py * 9}px`);
     card.style.setProperty('--mx', `${(px + 0.5) * 100}%`);
     card.style.setProperty('--my', `${(py + 0.5) * 100}%`);
   };
   const handleCardLeave = (event) => {
-    ['--rx', '--ry', '--px', '--py'].forEach((key) => event.currentTarget.style.removeProperty(key));
+    const scope = event.currentTarget.closest('.works-orbit-focus') ?? event.currentTarget;
+    ['--rx', '--ry', '--px', '--py'].forEach((key) => scope.style.removeProperty(key));
   };
   const handleRailEnter = () => {
     railHoverRef.current = true;
@@ -4937,10 +4941,12 @@ function WorksPage({ activeCategory, goDetail }) {
             </div>
             {current ? (
               <div className="works-orbit-floor" aria-hidden="true">
-                <div
-                  className="works-orbit-floor-mirror"
-                  style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
-                />
+                {/* 真实 DOM 镜像:img 与卡片 cover 同宽高同 object-fit,
+                    间距与卡片 1:1 对齐;超出地面的部分由 floor overflow 裁掉 */}
+                <div className="works-orbit-floor-mirror">
+                  <img className="works-orbit-floor-mirror-far" src={current.detailHero ?? current.image} alt="" />
+                  <img className="works-orbit-floor-mirror-near" src={current.detailHero ?? current.image} alt="" />
+                </div>
               </div>
             ) : null}
           </div>

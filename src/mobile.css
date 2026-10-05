@@ -51,12 +51,19 @@ html[data-device="mobile"] .morph-nav {
   bottom: auto;
   left: 50%;
   width: min(calc(100% - 24px), 560px);
-  height: 48px;
+  /* 2026-10-05: 二/三级胶囊栏 48→40。高度仍是显式定值,与 nav-home 的 78px
+     之间照常走 620ms height 过渡(定值↔定值可插值),动效不受影响。 */
+  height: 40px;
   padding: 0 10px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.66);
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
   grid-template-columns: auto minmax(0, 1fr) auto;
+  /* 2026-10-05: 栏收到 40 后比第一行轨道(44px 汉堡布局盒)矮,align-content
+     的 stretch 在溢出时退化为顶端对齐 → 分类胶囊在栏内下坠 2px(上10/下6)。
+     center 让轨道居中,胶囊回到 8/8;home 态因 padding-top:16 的内容盒里
+     stretch 与 center 解析位置相同,首页零变化。 */
+  align-content: center;
   gap: 4px;
   /* pill 行轨道变量必须全态持有:works→home 淡出瞬间 nav-works 类已摘掉,
      若首页没有这两个变量会回落到桌面 128px/14px 轨道,正在淡出的 pill
@@ -64,7 +71,10 @@ html[data-device="mobile"] .morph-nav {
      一致,淡出全程 pill 原位收净,不产生任何位移。 */
   --nav-item-width: 56px;
   --nav-item-gap: 4px;
-  --works-nav-height: 34px;
+  /* 与 nav-works 态同值(2026-10-05 收窄同步 26→24):works→home 淡出瞬间
+     nav-works 类已摘掉,若基础值不同,正在淡出的 pill 行高度会瞬跳。
+     34 是旧桌面轨道,移动端三态统一 24,淡出全程零位移。 */
+  --works-nav-height: 24px;
   transition:
     top 620ms cubic-bezier(0.22, 1, 0.36, 1),
     width 620ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -287,7 +297,8 @@ html[data-device="mobile"] .morph-nav.nav-detail {
   top: max(12px, env(safe-area-inset-top));
   bottom: auto;
   width: min(calc(100% - 24px), 560px);
-  height: 48px;
+  /* 2026-10-05: 与基础规则同步收窄 48→40(两处必须同值)。 */
+  height: 40px;
   padding: 0 10px;
 }
 
@@ -652,14 +663,17 @@ html[data-device="mobile"] .nav-works .morph-home-pill:hover {
 }
 
 /* The second-level category capsule is visually lighter when it is a little
-   flatter than the surrounding floating bar. 26px (2026-10-03: user asked to
-   slim the active pill down to the detail-level capsule height, which is
-   26px) — this variable drives the category button, the in-works indicator
-   AND (via the measured anchor rect) the shared pill, so all three shrink
-   together and the works<->detail pill morph stays height-neutral. Detail
-   mode keeps its own explicit 26px trigger height below. */
+   flatter than the surrounding floating bar. 24px (2026-10-03: user asked to
+   slim the active pill down to the detail-level capsule height; 2026-10-05
+   both went 26→24 with the bar 48→40) — this variable drives the category
+   button, the in-works indicator AND (via the measured anchor rect) the
+   shared pill, so all three shrink together and the works<->detail pill morph
+   stays height-neutral. Detail mode keeps its own explicit 24px trigger
+   height below. */
 html[data-device="mobile"] .morph-nav.nav-works {
-  --works-nav-height: 26px;
+  /* 2026-10-05: 26→24,与基础值统一。works 指示器/按钮与 detail 触发器
+     共用这条链路,两侧同值 → works↔detail 共享胶囊形变保持高度中性。 */
+  --works-nav-height: 24px;
 }
 
 html[data-device="mobile"] .works-nav-items button {
@@ -687,7 +701,8 @@ html[data-device="mobile"] .detail-nav-back {
   grid-column: 1;
   justify-self: start;
   min-width: 36px;
-  height: 34px;
+  /* 2026-10-05: 34→30,随栏高 48→40 等比收窄(30 在 40 里上下各留 5px)。 */
+  height: 30px;
   padding: 0 8px;
   /* 恢复 PC 端同款「Back」英文(此前 font-size:0 只留箭头)。比翻页文字再小
      一档(8px),箭头缩回 PC 尺寸 6x10(原 7x12 对 8px 文字过大)。
@@ -724,7 +739,8 @@ html[data-device="mobile"] .detail-pager {
 
 html[data-device="mobile"] .detail-pager button {
   min-width: 34px;
-  height: 34px;
+  /* 2026-10-05: 34→30,随栏高收窄。 */
+  height: 30px;
   /* 恢复 PC 端同款「Last/Next」英文(此前 font-size:0 只留三角形),字号与
      移动端页码统一 9px(PC 13px),三角形-文字间距按比例收窄(PC 9px)。
      字重与 Back 同步下调一档(400→300)。 */
@@ -754,7 +770,8 @@ html[data-device="mobile"] .detail-pager span {
 html[data-device="mobile"] .detail-category-trigger {
   min-width: 0;
   width: 60px;
-  height: 26px;
+  /* 2026-10-05: 26→24,与 works 分类胶囊同值 → 共享胶囊形变高度中性。 */
+  height: 24px;
   padding: 0 14px 0 9px;
   font-size: 8px;
 }

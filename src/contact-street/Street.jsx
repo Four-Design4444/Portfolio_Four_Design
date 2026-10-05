@@ -30,6 +30,27 @@ const HOST_JS = `
 (function () {
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
+
+  // ── 后台降频（宿主侧叠加，不改动 demo 产物）────────────────────────────
+  // 这条街景是 Three.js 场景，一旦挂上就每帧全量渲染：即使用户停在首屏看视频、
+  // 甚至已经翻到二级/三级页（那时 HomePage 只是被 display:none，同源 iframe 的
+  // rAF 照样跑），它也在烧 CPU —— 实测占满主线程 80%~87%。
+  // three 的 WebGLAnimation 是 "requestAnimationFrame(i)" 递归，每帧都会重新
+  // 查全局，所以在这里包一层就能控帧：__streetPaused 时把回调交给 setTimeout，
+  // 循环不断 —— WebGL 上下文、已编译的 shader、已加载的纹理全部保活，回到尾屏
+  // 立刻满帧，预挂载红利一点不丢 —— 但 CPU 从"每帧渲染"降到 ~4fps 空转。
+  window.__streetPaused = false;
+  var rawRaf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = function (cb) {
+    return rawRaf(function (t) {
+      if (window.__streetPaused) {
+        window.setTimeout(function () { cb(t); }, 240);
+        return;
+      }
+      cb(t);
+    });
+  };
+
   var post = function (dy, cx, cy) {
     try {
       window.parent.postMessage({
@@ -115,6 +136,11 @@ function useStreetWheelBridge(enabled) {
   }, [enabled]);
 }
 
+// demo 的夜街有 2.7s 的 intro 灯光渐入（scene.js: intro += dt/2.7），intro 没走
+// 完时灯只有 35% 亮度 —— 预挂载的全部意义就是"趁用户还没滑到尾屏把这 2.7s 烧完"。
+// 所以刚挂载的那几秒必须满帧，烧完才允许降频；回尾屏时永远满帧。
+const INTRO_BURN_MS = 3200;
+
 export default function ContactStreet({ active, preload }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
   // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
@@ -122,11 +148,38 @@ export default function ContactStreet({ active, preload }) {
   const [revealed, setRevealed] = useState(false);
   const frameRef = useRef(null);
   const everActive = useRef(false);
+  const introBurned = useRef(false);
 
   useEffect(() => {
     if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
+
+  // 降频开关（P-04）：尾屏不在这屏时把 3D 渲染压到 ~4fps 保活。
+  useEffect(() => {
+    if (!mounted) return undefined;
+    const setPaused = (paused) => {
+      try {
+        const win = frameRef.current && frameRef.current.contentWindow;
+        if (win) win.__streetPaused = paused;
+      } catch (_) { /* 已销毁 / 跨域时静默 */ }
+    };
+    if (active) {
+      setPaused(false); // 尾屏可见：永远满帧
+      return undefined;
+    }
+    if (introBurned.current) {
+      setPaused(true);
+      return undefined;
+    }
+    // 刚挂载、尾屏还没到：给满帧 INTRO_BURN_MS 把 intro 灯光烧完，再降频。
+    setPaused(false);
+    const timer = window.setTimeout(() => {
+      introBurned.current = true;
+      setPaused(true);
+    }, INTRO_BURN_MS);
+    return () => window.clearTimeout(timer);
+  }, [mounted, active]);
 
   useStreetWheelBridge(mounted && active);
 
