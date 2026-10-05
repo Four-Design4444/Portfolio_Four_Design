@@ -1551,9 +1551,10 @@ html[data-device="mobile"] .profile-shot-inner {
   overflow: hidden;
 }
 
-/* Full-bleed portrait backdrop (same master photo as the PC screen). The
-   1920x1080 master puts the face at ~76% x / ~30% y; on a narrow portrait
-   viewport cover crops to ~26% of the width, so 85% x centers the face. */
+/* Full-bleed portrait backdrop (2026-10-05: 换成移动端专用竖版形象照
+   mob-portrait-bg.webp,与 PC 的 pc-portrait-bg 是两张不同的照片)。
+   新照人脸居中(~50% x),cover 在窄竖屏上只裁左右两侧,50% 即可让
+   人脸居中、构图与设计稿(iPhone 17 - 个人信息)一致。 */
 html[data-device="mobile"] .mob-profile-bg {
   position: absolute;
   inset: 0;
@@ -1561,7 +1562,7 @@ html[data-device="mobile"] .mob-profile-bg {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 85% 50%;
+  object-position: 50% 50%;
 }
 
 /* ---- 隐形测量条(main.jsx 里 .mob-card-measure)----
@@ -1579,13 +1580,16 @@ html[data-device="mobile"] .mob-card-measure {
   flex: 0 0 auto;
 }
 
-/* Legibility wash: keeps the photo moody where the text docks. */
+/* Legibility wash (2026-10-05 对齐设计稿 iPhone 17 - 个人信息 的渐变图层):
+   线性渐变 0% → #000 0% 不透明度、100% → #000 74% 不透明度,渐变线从
+   画框 ~47% 高度起到 ~76% 处(设计稿手柄坐标折算),76% 以下保持 74% 黑
+   压住底部文字区。数值与坐标区域均按设计稿,不改层级与过渡。 */
 html[data-device="mobile"] .profile-shot-inner::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.58) 78%, rgba(0, 0, 0, 0.72) 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 47%, rgba(0, 0, 0, 0.74) 76%);
   pointer-events: none;
 }
 

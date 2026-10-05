@@ -102,6 +102,9 @@ import blenderIcon from './assets/profile/blender.webp';
 import codexIcon from './assets/profile/codex.webp';
 import photoshopIcon from './assets/profile/photoshop.webp';
 import pcPortraitBg from './assets/profile/pc-portrait-bg.webp';
+/* 2026-10-05: 移动端个人信息页专用竖版形象照(1080 宽 webp,32KB)。
+   移动/PC 是两张不同的照片 —— PC 继续用 pc-portrait-bg,不要共用。 */
+import mobPortraitBg from './assets/profile/mob-portrait-bg.webp';
 import expYearsIcon from './assets/profile/exp-years.svg';
 import expToolsIcon from './assets/profile/exp-tools.svg';
 import expCasesIcon from './assets/profile/exp-cases.svg';
@@ -2776,7 +2779,7 @@ function ProfileContent() {
 
   return (
     <div className="profile-shot-inner">
-      <LazyImage className="mob-profile-bg" src={pcPortraitBg} alt="" />
+      <LazyImage className="mob-profile-bg" src={mobPortraitBg} alt="" />
       <div className="mob-profile-info" ref={profileInfoRef}>
         <MobileWaveHeading />
 
@@ -2968,7 +2971,9 @@ function CopyContactLine({ icon: Icon, label, value }) {
       copiedRef.current = false;
       rollerRef.current.style.width = widthsRef.current.main + 'px';
       setCopied(false);
-    }, 2600);
+      /* 2026-10-05: 提示停留 2600→1300ms(用户要求减半) —— 「已复制」看完即收,
+         复位动画本身(roller 宽度/stack 位移的 CSS 过渡)不受影响。 */
+    }, 1300);
   };
 
   return (
@@ -4897,6 +4902,10 @@ function WorksPage({ activeCategory, goDetail }) {
         <div className="works-orbit-stage" ref={stageRef}>
           <div className="works-orbit" ref={orbitRef}>
           <div className="works-orbit-focus">
+            {/* 悬浮感三件套(2026-10-04):卡片在 .works-orbit-float 里做慢速浮动,
+                底座(显示器支架式)承接投影,地面光池 + 镜面反射营造展台感。
+                浮动动画走 wrapper 的 transform,不碰卡片自己的 tilt transform。 */}
+            <div className="works-orbit-float">
             {current ? (
               <button
                 type="button"
@@ -4917,13 +4926,18 @@ function WorksPage({ activeCategory, goDetail }) {
                 </div>
               </button>
             ) : null}
+            </div>
             {current ? (
-              <div className="works-orbit-reflection-ground" aria-hidden="true">
-                <div
-                  className="works-orbit-reflection-image"
-                  style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
-                />
-              </div>
+              <>
+                {/* 地面光池:卡片光落在地板上的亮斑 */}
+                <div className="works-orbit-ground-glow" aria-hidden="true" />
+                <div className="works-orbit-reflection-ground" aria-hidden="true">
+                  <div
+                    className="works-orbit-reflection-image"
+                    style={{ backgroundImage: `url("${current.detailHero ?? current.image}")` }}
+                  />
+                </div>
+              </>
             ) : null}
           </div>
 
@@ -4942,6 +4956,7 @@ function WorksPage({ activeCategory, goDetail }) {
                 className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
                 aria-pressed={i === index}
                 aria-label={`选择 ${work.title}`}
+                style={{ '--i': i }}
                 onPointerEnter={() => setActiveIndex(i)}
                 onClick={() => setActiveIndex(i)}
               >
