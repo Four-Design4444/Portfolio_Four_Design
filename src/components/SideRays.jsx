@@ -79,11 +79,11 @@ function SideRays({
       await new Promise((resolve) => setTimeout(resolve, 10));
       if (!containerRef.current) return;
 
-      // 移动端降载：背景光线是慢效果，30fps 视觉无差，却能砍掉约一半 GPU
-      // 预算；dpr 上限也从 2 降到 1.5，全屏片元着色器像素量减约 44%。
+      // 全平台限 30fps：背景光线是慢效果，30fps 视觉无差，却能砍掉约一半 GPU
+      // 预算；移动端 dpr 上限再从 2 降到 1.5，全屏片元着色器像素量再减约 44%。
       const isMobile = document.documentElement.dataset.device === 'mobile';
       const maxDpr = isMobile ? 1.5 : 2;
-      const frameInterval = isMobile ? 33 : 0; // ms；0 = 每帧都渲染
+      const frameInterval = 33; // ms；30fps。iTime 用真实时间推进，动画速度不变
 
       const renderer = new Renderer({
         dpr: Math.min(window.devicePixelRatio, maxDpr),

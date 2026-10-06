@@ -634,9 +634,16 @@ function useDetailNavOnLight(isDetail) {
       }
     };
 
+    let scrollStopTimer = 0;
     const onScroll = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(measure);
+      // 滚动过程中不做逐帧采样：measure 内含 22 次 drawImage+getImageData，
+      // 每帧强制大图同步回读，是三级页滚动卡顿的主因。改为滚动停止 ~160ms 后
+      // 采一次——导航条是固定的，视觉无差，主线程立即释放。
+      if (scrollStopTimer) window.clearTimeout(scrollStopTimer);
+      scrollStopTimer = window.setTimeout(() => {
+        if (frame) return;
+        frame = window.requestAnimationFrame(measure);
+      }, 160);
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -651,6 +658,7 @@ function useDetailNavOnLight(isDetail) {
       window.removeEventListener('resize', onScroll);
       window.removeEventListener('load', onScroll, true);
       timers.forEach((t) => window.clearTimeout(t));
+      if (scrollStopTimer) window.clearTimeout(scrollStopTimer);
       if (frame) window.cancelAnimationFrame(frame);
       document.body.classList.remove('nav-on-light');
     };
@@ -823,8 +831,13 @@ function App() {
     }
     const handleResize = () => startTracking(900);
     const handleScroll = () => startTracking(900);
+    // 三级页导航胶囊固定在顶栏，内容滚动不会移动它，无需逐滚动帧重追锚点
+    // （否则每次滚动都开启一个 ~900ms 的 rAF 重追循环，加剧滚动卡顿）。
+    // 仅在 works（分类行指示器可能平移）保留滚动重追。
+    if (route.page !== 'detail') {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
     window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       disposed = true;
       window.cancelAnimationFrame(frame);
@@ -2523,6 +2536,19 @@ function MobileWaveHeading() {
 
    变化时（字号 clamp 随 vw 变、字体加载完、窗口 resize）重新测量，
    但**跳过过渡进行中**的时段，避免把动画中途的值又写回 CSS 造成抖动。 */
+/* HomePage is kept mounted but hidden with display:none when works/detail is open.
+   ResizeObserver pauses while hidden, but our own hashchange retry fires at fixed
+   delays and can catch the layer mid-hide (or before it re-appears), measuring 0
+   and permanently pinning --mob-w to 0px. Skip measurement when any target is
+   inside a display:none ancestor; the next visible retry will recover. */
+const isRendered = (el) => {
+  while (el) {
+    if (getComputedStyle(el).display === 'none') return false;
+    el = el.parentElement;
+  }
+  return true;
+};
+
 function useMeasuredWidths(selector, count, deps, measureWidth) {
   const [widths, setWidths] = useState(null);
 
@@ -2531,6 +2557,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
     const measure = () => {
       const nodes = [...document.querySelectorAll(selector)];
       if (nodes.length !== count) return;
+      if (nodes.some((n) => !isRendered(n))) return;
       /* 正在 dock 形变中就别量：此刻的宽度是动画中间值，写回 CSS 会自激。 */
       const row = nodes[0].parentElement;
       if (row && row.classList.contains('is-docked')) return;
@@ -2695,6 +2722,7 @@ function useMeasuredMaxCardHeight(infoRef) {
     const root = infoRef.current;
     if (!root) return;
     const measure = () => {
+      if (!isRendered(root)) return;
       ['stat', 'skill'].forEach((group) => {
         const nodes = root.querySelectorAll(
           `.mob-card-measure[data-group="${group}"] .mob-profile-card-box`
@@ -3897,8 +3925,13 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       base.dataset.recoveryCount = String(recoveryCount);
       base.dataset.recoveryReason = reason;
     };
+    let heroInView = true;      // hero 是否在视口内（交叉观察器维护）
+    let visibilityObserver = null;
+
     const checkForStall = () => {
       if (disposed) return;
+      // 因滚动出屏而被我们主动暂停时，别把"暂停"误判成"卡死"再拉起来。
+      if (!heroInView) { stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS); return; }
       const now = performance.now();
       if (now < recoveryIgnoreUntil) {
         stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
@@ -3921,6 +3954,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
     };
     const onMediaError = () => {
+      if (!heroInView) return;
       if (assetMode === 'hevc') {
         baseCanvas.dataset.fallbackReason = 'hevc-media-error';
         setAssetMode('fallback');
@@ -3938,6 +3972,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       }
     };
     const onWaiting = () => {
+      if (!heroInView) return;
       window.setTimeout(() => {
         if (!disposed && (!base.paused || !alpha.paused)) checkForStall();
       }, STALL_CHECK_MS);
@@ -3986,27 +4021,53 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       window.addEventListener('resize', redrawVisiblePair);
     }
 
+    // 暂停：停时钟 + 丢帧配对 + 取消 rVFC 合成循环（同时停掉兜底 rAF）。
+    const pauseHidden = () => {
+      try { base.pause(); } catch {}
+      try { alpha.pause(); } catch {}
+      cancelVideoFrameCallbacks();
+      if (fallbackRaf) { window.cancelAnimationFrame(fallbackRaf); fallbackRaf = 0; }
+    };
+    // 恢复：仅在还没跑到时重新起播并重启合成循环，避免重复启动。
+    const resumeVisible = () => {
+      if (!active) return;
+      if (base.paused || alpha.paused) {
+        safePlay(base);
+        safePlay(alpha);
+      }
+      if (typeof base.requestVideoFrameCallback === 'function' && typeof alpha.requestVideoFrameCallback === 'function') {
+        if (!callbackIds.base && !callbackIds.alpha) startBothVideoFrameCallbacks();
+      } else if (!fallbackRaf) {
+        fallbackRaf = window.requestAnimationFrame(fallbackTick);
+      }
+    };
+
     if (!active) {
       // The home layer is kept mounted but hidden while another page is open.
       // Pause the clocks and drop the frame pairing so the decoder and the
       // stall watchdog stop; the watchdog would otherwise read the pause as a
       // stall and restart playback nobody can see.
-      try { base.pause(); } catch {}
-      try { alpha.pause(); } catch {}
-      cancelVideoFrameCallbacks();
-    } else if (typeof base.requestVideoFrameCallback === 'function' && typeof alpha.requestVideoFrameCallback === 'function') {
-      startBothVideoFrameCallbacks();
+      pauseHidden();
     } else {
-      fallbackRaf = window.requestAnimationFrame(fallbackTick);
-    }
-    if (active) {
-      safePlay(base);
-      safePlay(alpha);
+      resumeVisible();
       stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
     }
 
+    // 滚动出屏即暂停首屏视频：hero 是首页第一屏内容，翻到尾屏 / 滑离视口后继续
+    // 解码并逐帧合成画面纯属浪费（主线程 + GPU 同时被吃）。用交叉观察器监听 hero
+    // 是否真在视口内，离开即 pause 视频并停掉 rVFC 合成循环，回屏再恢复。
+    const heroSection = base.closest('.hero-video-stage');
+    visibilityObserver = new IntersectionObserver((entries) => {
+      const inView = entries[0] ? entries[0].isIntersecting : true;
+      heroInView = inView;
+      if (!inView) pauseHidden();
+      else resumeVisible();
+    }, { threshold: 0 });
+    if (heroSection) visibilityObserver.observe(heroSection);
+
     return () => {
       disposed = true;
+      if (visibilityObserver) visibilityObserver.disconnect();
       if (stallTimer) window.clearTimeout(stallTimer);
       base.removeEventListener('play', startBothVideoFrameCallbacks);
       alpha.removeEventListener('play', startBothVideoFrameCallbacks);
@@ -4318,6 +4379,19 @@ function HomePage({ openWorks, paging, active = true }) {
   }, [heroVideoReady]);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
+  const [contactPreload, setContactPreload] = useState(false);
+  useEffect(() => {
+    const el = contactRef.current;
+    if (!el) return undefined;
+    // 临近视口才预挂载尾屏 iframe：提前 ~1.5 屏触发，既留出 INTRO_BURN_MS(3.2s)
+    // 烧录灯光 intro 的余量，又不会在用户停首屏看视频时白白占用一个 WebGL 上下文。
+    const io = new IntersectionObserver(
+      ([entry]) => setContactPreload(entry.isIntersecting),
+      { root: null, rootMargin: '150% 0px 150% 0px', threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   // Mobile shows the three-card poker stack; desktop keeps the hover-fan deck.
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
@@ -4765,7 +4839,7 @@ function HomePage({ openWorks, paging, active = true }) {
             （到尾屏才挂载），无回归。 */}
         <ContactStreet
           active={active && contactVisible}
-          preload={active && heroVideoReady}
+          preload={active && heroVideoReady && contactPreload}
         />
       </section>
       </div>
