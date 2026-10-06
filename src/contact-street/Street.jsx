@@ -93,6 +93,46 @@ const HOST_JS = `
   var FLICK_V = 0.25;    // px/ms,纵向瞬时速度阈值
   var AXIS_D = 10;       // px,判定主轴所需的位移
   var tMode = 'pending'; // pending | swipe | cam
+
+  // 相机模式合成的鼠标事件。demo 产物里的旋转门槛是
+  //   pointermove: $d && (e.pointerType==='mouse' || mode!=='overview')
+  //   pointerdown: e.isTrusted && (e.pointerType==='mouse' || t) && setPointerCapture
+  // 也就是说【概览模式下 demo 只认鼠标】,手指的原生 pointer 事件 pointerType='touch'
+  // 一律被挡在门外 —— 这是 demo 自己的既定行为(它为桌面设计),实测触摸拖动
+  // pointerdown/pointermove 各派发 1/14 次但 yaw 恒为 0,同一拖动鼠标 yaw=-0.1186。
+  // pointerType / isTrusted 都不可伪造,所以宿主侧只能**自己合成** mouse 事件喂给
+  // #scene,让它走和 PC 拖拽完全相同的那条代码路径。
+  //
+  // ⚠ pointerId 必须沿用触摸那一次原生 pointerdown 的真实 id：demo 的 pointermove
+  //   第一道门是ef && e.pointerId === ef.id,ef 是原生 pointerdown 建的,里面记着
+  //   真实 pointerId。早期用固定 99 合成,事件确实派发到了 #scene(types 里能看到
+  //   mouse),但整段仍被这道门跳过 —— yaw 恒 0。所以这里从原生 pointerdown 上"偷" id。
+  var camPid = -1;
+  var camMove = function (x, y) {
+    var scene = document.getElementById('scene');
+    if (!scene || camPid < 0) return;
+    try {
+      scene.dispatchEvent(new PointerEvent('pointermove', {
+        pointerId: camPid, pointerType: 'mouse', isPrimary: true, bubbles: true, cancelable: true,
+        clientX: x, clientY: y, button: 0, buttons: 1,
+      }));
+    } catch (_) {}
+  };
+  var camUp = function (x, y) {
+    var scene = document.getElementById('scene');
+    if (!scene || camPid < 0) return;
+    try {
+      scene.dispatchEvent(new PointerEvent('pointerup', {
+        pointerId: camPid, pointerType: 'mouse', isPrimary: true, bubbles: true, cancelable: true,
+        clientX: x, clientY: y, button: 0, buttons: 0,
+      }));
+    } catch (_) {}
+    camPid = -1;
+  };
+  // 记住原生 pointerdown 的 pointerId（不 stopPropagation，demo 仍能收到它）。
+  window.addEventListener('pointerdown', function (ev) {
+    if (ev.pointerType === 'touch') camPid = ev.pointerId;
+  }, { passive: true, capture: true });
   window.addEventListener('touchstart', function (ev) {
     if (ev.touches.length !== 1) { tId = -1; return; }
     var t = ev.touches[0];
@@ -127,8 +167,14 @@ const HOST_JS = `
     if (tMode !== 'swipe') { if (tMode === 'cam') camMove(x, y); return; }
     if (Math.abs(dy) >= 1) post(-dy, x, y);        // 取负 → 上滑 = 下一屏
   }, { passive: false, capture: true });
-  window.addEventListener('touchend', function () { tId = -1; tMode = 'pending'; }, { passive: true, capture: true });
-  window.addEventListener('touchcancel', function () { tId = -1; tMode = 'pending'; }, { passive: true, capture: true });
+  window.addEventListener('touchend', function () {
+    if (tMode === 'cam') camUp(lastX, lastY);
+    tId = -1; tMode = 'pending';
+  }, { passive: true, capture: true });
+  window.addEventListener('touchcancel', function () {
+    if (tMode === 'cam') camUp(lastX, lastY);
+    tId = -1; tMode = 'pending';
+  }, { passive: true, capture: true });
   // 冷启动期间若因任何原因产生了位移，归零，保证相机停在 overview 起始机位。
   window.scrollTo(0, 0);
 })();
