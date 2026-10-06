@@ -67,28 +67,40 @@ const HOST_JS = `
     ev.preventDefault();                            // iframe 自己不滚 → demo 相机不动
     post(ev.deltaY, ev.clientX, ev.clientY);
   }, { passive: false, capture: true });
-  // 触摸端:区分「滑动切页」与「长按拖拽镜头」(2026-10-04)。
-  //  - 手指落下后 280ms 内移动超过 12px → 判定为滑动:纵向位移转交父页面翻页
-  //    (上滑 = 回上一屏,与页面栈方向一致);
-  //  - 静置 280ms(长按)后才拖动 → 相机模式:不再转发翻页,交给 demo 自带的
-  //    pointer 拖拽旋转镜头(与 PC 的拖拽镜头一致);
-  //  - 两种模式全程 preventDefault,iframe 自身永不滚动,互不打断。
+  // 触摸端:区分「滑动切页」与「拖拽镜头」(2026-10-06 重写)。
+  //
+  // ① 方向约定(踩过的坑):iframe 直接把手指位移 dy 当 deltaY 转发,而父页 pager 的
+  //    onWheel 是 step(deltaY > 0 ? 1 : -1) —— 手指上滑(dy<0)会被判成"上一屏",
+  //    与移动端通行约定(上滑=下一屏)、也与父页自身 onTouchMove 的
+  //    step(deltaY < 0 ? 1 : -1) 全部相反。实测探针(移动端触摸模拟)确认:
+  //    上滑退到作品屏、下滑锁在尾屏。所以触摸路径统一取 -dy,**滚轮路径不动**
+  //    (鼠标滚轮 deltaY<0 = 往回滚 = 上一屏,那个本来就是对的)。
+  //
+  // ② 为什么不再用「长按 280ms → 相机模式」(旧实现):
+  //    旧逻辑只靠一个 280ms 定时器,手指落下后停顿超过它就永久切到相机模式,
+  //    touchmove 直接 return —— 既不转发也不翻页。真人上滑几乎都是"慢起步":
+  //    先悬停几百毫秒再划,必中此坑(实测 344ms / 452ms 静置 → 转发 0 条)。
+  //
+  // ③ 现在的双判(位移+速度,无定时器):
+  //    · 纵向为主 → 翻页。慢速快速都翻,永不被误判成相机。
+  //    · 横向为主 → 转镜头(demo 的 yaw/pitch 拖拽)。
+  //    · 快速纵向划(瞬时速度 ≥ FLICK_V)→ 翻页,即便此前已静止很久。
+  //    · 完全静止不动 → 什么都不判定,不会"看一眼就进相机模式"。
   //  ⚠ demo 的镜头拖拽绑定在 host=#scene 的 pointer 事件上,触摸会派生
   //    pointer 事件,所以相机模式里只要我们不转发、不 stopPropagation,
   //    demo 就能照常收到 pointermove 完成旋转。
-  var tY = 0, tId = -1, tStartX = 0, tStartY = 0;
-  var camMode = false, swiped = false, pressTimer = 0;
+  var tId = -1, tStartX = 0, tStartY = 0, lastX = 0, lastY = 0, lastT = 0;
+  var FLICK_V = 0.25;    // px/ms,纵向瞬时速度阈值
+  var AXIS_D = 10;       // px,判定主轴所需的位移
+  var tMode = 'pending'; // pending | swipe | cam
   window.addEventListener('touchstart', function (ev) {
-    if (ev.touches.length !== 1) { tId = -1; clearTimeout(pressTimer); return; }
-    tId = ev.touches[0].identifier;
-    tY = ev.touches[0].clientY;
-    tStartX = ev.touches[0].clientX;
-    tStartY = ev.touches[0].clientY;
-    camMode = false; swiped = false;
-    clearTimeout(pressTimer);
-    pressTimer = setTimeout(function () {
-      if (tId >= 0 && !swiped) camMode = true;   // 长按 280ms 未滑动 → 相机模式
-    }, 280);
+    if (ev.touches.length !== 1) { tId = -1; return; }
+    var t = ev.touches[0];
+    tId = t.identifier;
+    tStartX = lastX = t.clientX;
+    tStartY = lastY = t.clientY;
+    lastT = performance.now();
+    tMode = 'pending';
   }, { passive: true, capture: true });
   window.addEventListener('touchmove', function (ev) {
     if (tId < 0) return;
@@ -97,16 +109,26 @@ const HOST_JS = `
     if (i < 0) { tId = -1; return; }
     var x = ev.touches[i].clientX;
     var y = ev.touches[i].clientY;
-    var dy = y - tY;
-    var dx = x - tStartX;
-    var dyy = y - tStartY;
+    var dy = y - lastY;
+    var ddx = x - tStartX;
+    var ddy = y - tStartY;
+    var now = performance.now();
+    var dt = Math.max(1, now - lastT);
+    var vy = dy / dt;
     ev.preventDefault();                           // iframe 自身永不滚
-    if (!camMode && !swiped && Math.sqrt(dx * dx + dyy * dyy) >= 12) swiped = true;
-    if (camMode) return;                           // 相机模式:demo 自己转镜头
-    if (swiped && Math.abs(dy) >= 2) { tY = y; post(dy, x, y); }   // 滑动 → 翻页
+    if (tMode === 'pending') {
+      var ax = Math.abs(ddx), ay = Math.abs(ddy);
+      var flick = Math.abs(vy) >= FLICK_V && ay >= 6;
+      if (flick) tMode = 'swipe';                  // 快速纵向划 → 永远翻页
+      else if (ay > ax && ay >= AXIS_D) tMode = 'swipe';   // 纵向为主 → 翻页
+      else if (ax >= AXIS_D) tMode = 'cam';               // 横向为主 → 转镜头
+    }
+    lastX = x; lastY = y; lastT = now;
+    if (tMode !== 'swipe') { if (tMode === 'cam') camMove(x, y); return; }
+    if (Math.abs(dy) >= 1) post(-dy, x, y);        // 取负 → 上滑 = 下一屏
   }, { passive: false, capture: true });
-  window.addEventListener('touchend', function () { tId = -1; clearTimeout(pressTimer); camMode = false; }, { passive: true, capture: true });
-  window.addEventListener('touchcancel', function () { tId = -1; clearTimeout(pressTimer); camMode = false; }, { passive: true, capture: true });
+  window.addEventListener('touchend', function () { tId = -1; tMode = 'pending'; }, { passive: true, capture: true });
+  window.addEventListener('touchcancel', function () { tId = -1; tMode = 'pending'; }, { passive: true, capture: true });
   // 冷启动期间若因任何原因产生了位移，归零，保证相机停在 overview 起始机位。
   window.scrollTo(0, 0);
 })();
