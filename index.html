@@ -241,21 +241,65 @@
         frame.setAttribute('tabindex', '-1');
         frame.setAttribute('aria-hidden', 'true');
         frame.src = '/loading/typing-cat-v1.1.html?embed';
-        // ② 进度读数
-        var readout = document.createElement('div');
-        readout.className = 'app-loader-progress';
-        readout.setAttribute('aria-hidden', 'true');
-        var bar = document.createElement('div');
-        bar.className = 'app-loader-bar';
-        var fill = document.createElement('i');
-        bar.appendChild(fill);
-        var num = document.createElement('span');
-        num.className = 'app-loader-num';
-        num.textContent = '0%';
-        readout.appendChild(bar);
-        readout.appendChild(num);
+        // ② 真实进度读数。节点先建好，正常情况会在 iframe load 后搬进 demo，
+        //    替换掉 demo 自带那条假进度条、坐在动画正下方；拿不到 iframe 文档时
+        //    才退回遮罩底部（降级），两种情况下都只有一个条。
+        var progress = (function () {
+          var wrap = document.createElement('div');
+          wrap.className = 'app-loader-progress';
+          wrap.setAttribute('aria-hidden', 'true');
+          var barEl = document.createElement('div');
+          barEl.className = 'app-loader-bar';
+          var fillEl = document.createElement('i');
+          barEl.appendChild(fillEl);
+          var numEl = document.createElement('span');
+          numEl.className = 'app-loader-num';
+          numEl.textContent = '0%';
+          wrap.appendChild(barEl);
+          wrap.appendChild(numEl);
+          return { root: wrap, fill: fillEl, num: numEl };
+        })();
+        var fill = progress.fill;
+        var num = progress.num;
         el.appendChild(frame);
-        el.appendChild(readout);
+
+        // demo 自带的 .rail 是一条 2.6s 无限往返的假动画条，跟真实加载量毫无关系。
+        // 这里整条摘掉，把真实进度条插到它原来的位置（动画正下方、居中）；排版
+        // 参数抄 demo（rail 底色 / 2px 高 / #8b9eaf / #8291a0 小字），看上去就是
+        // 长在里面的。demo 源文件保持字节不变 —— 这是运行时的同域替换，不是改源码。
+        var placed = false;
+        var placeIntoDemo = function () {
+          if (placed) return;
+          var doc = null;
+          try { doc = frame.contentDocument; } catch (_) { return; }
+          if (!doc) return;
+          var rail = doc.querySelector('.rail');
+          if (!rail || !rail.parentNode) return;
+          var style = doc.createElement('style');
+          style.textContent = '.app-loader-progress{margin:17px auto 0;width:fit-content;display:flex;align-items:center;gap:12px}.app-loader-bar{position:relative;width:140px;height:2px;background:rgba(185,203,213,0.09);overflow:hidden}.app-loader-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:#8b9eaf;transition:width .28s ease}.app-loader-num{font:10px/1 "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:1px;color:#8291a0;font-variant-numeric:tabular-nums}@media(prefers-reduced-motion:reduce){.app-loader-bar>i{transition:none}}';
+          doc.head.appendChild(style);
+          rail.parentNode.replaceChild(progress.root, rail);
+          placed = true;
+          window.clearTimeout(fallbackTimer);
+        };
+        frame.addEventListener('load', placeIntoDemo);
+        // 命中缓存时 load 有可能在监听之前就已经触发，补两次机会。
+        window.setTimeout(placeIntoDemo, 0);
+        window.setTimeout(placeIntoDemo, 400);
+        // 降级：iframe 文档拿不到时退回遮罩底部那一条，并顺手把 demo 里的假条
+        // 隐藏掉 —— 无论如何不能同时出现两条。
+        var fallbackTimer = window.setTimeout(function () {
+          if (placed) return;
+          el.appendChild(progress.root);
+          try {
+            var d = frame.contentDocument;
+            if (d && d.head) {
+              var s = d.createElement('style');
+              s.textContent = '.rail{display:none}';
+              d.head.appendChild(s);
+            }
+          } catch (_) { /* noop */ }
+        }, 600);
 
         // ---- 真实进度：每项都是一个 0..1 的探针，按权重加权 ----
         // 只有能真正观测到的量才计入，凑不出来的就不假装：
@@ -264,17 +308,19 @@
         //     拿不到就退回"资源条目完成"这种 0/1 判定；
         //   · React 首屏就绪：由 app:ready 事件给出。
         var tasks = [];
-        var addEntryTask = function (href, weight) {
+        var addEntryTask = function (href, weight, cap) {
           tasks.push({
             weight: weight,
             read: function () {
+              var value = 0;
               try {
                 var abs = new URL(href, location.href).href;
                 var entries = performance.getEntriesByName(abs, 'resource');
                 if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
-                if (entries.length && entries[entries.length - 1].responseEnd > 0) return 1;
+                if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
               } catch (_) { /* noop */ }
-              return 0;
+              // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
+              return cap ? Math.min(cap, value) : value;
             }
           });
         };
@@ -297,7 +343,7 @@
         (window.__bootAssets || []).forEach(function (asset) {
           // 视频是首屏字节大头（~1.9MB），权重给高，进度才不会"一上来就 90%"。
           var weight = asset.kind === 'video' ? 4 : 1;
-          addEntryTask(asset.href, weight);
+          addEntryTask(asset.href, weight, asset.kind === 'video' ? 0.92 : 0);
           if (asset.kind === 'video') {
             tasks.push({
               weight: weight,
@@ -311,7 +357,9 @@
                   if (!entries.length) entries = performance.getEntriesByName(asset.href, 'resource');
                   if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
                 } catch (_) { /* noop */ }
-                return Math.max(buffered, done);
+                // 下载完只算到 92%：剩下的 8% 必须由「视频真的能连续播」来补
+                // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
+                return Math.min(0.92, Math.max(buffered, done));
               }
             });
           }
@@ -368,11 +416,22 @@
           if (hidden || !el) return;
           hidden = true;
           ready = true;
+          window.clearInterval(timer);
           // 只有"真的加载完了"才补满 100%；触发硬超时说明没等到就绪，
           // 这时假装 100% 就是假进度，条子停在原处直接淡出。
-          if (finished) paint(1);
           var wait = Math.max(0, MIN_SHOW - (Date.now() - startedAt));
+          // 补满也要补得像真的：不是瞬间跳到 100%，而是让读数在剩下的等待时间里
+          // 一段段爬上去，跟条子 0.28s 的宽度过渡同步（否则数字会先蹦到 100%，
+          // 条子还在后面追，看着就像假进度）。
+          var ramp = window.setInterval(function () {
+            if (!finished) { window.clearInterval(ramp); return; }
+            var pct = parseInt(num.textContent, 10) || 0;
+            if (pct >= 100) { window.clearInterval(ramp); return; }
+            num.textContent = Math.min(100, pct + 9) + '%';
+          }, 40);
           window.setTimeout(function () {
+            window.clearInterval(ramp);
+            if (finished) paint(1);
             el.classList.add('is-gone');
             window.setTimeout(function () {
               el.classList.add('is-off');

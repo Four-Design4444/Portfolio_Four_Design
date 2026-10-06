@@ -5443,5 +5443,10 @@ html[data-paging="on"] .contact-page {
   .works-orbit-rail-card,
   .works-orbit-floor-mirror { animation: none; translate: none; }
   .works-orbit-floor-mirror { transform: scaleY(-1); }
+  /* 2026-10-06 移动端:翻页动效降级为直接切换,内容照常可达 */
+  html[data-device="mobile"] .work-detail-page.mw-flip-enter,
+  html[data-device="mobile"] .work-detail-page.mw-flip-exit { animation: none; }
+  html[data-device="mobile"] .mw-hint { animation: none; }
+  html[data-device="mobile"] .mw-slide { transition: none; }
 }
 

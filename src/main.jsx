@@ -517,6 +517,9 @@ function LogoMark({ large = false }) {
   return <img className={large ? 'four-logo four-logo-large' : 'four-logo'} src={fourLogo} alt="FOUR" />;
 }
 
+// 设备形态只由 index.html 头部脚本判定一次(data-device),渲染期内不变
+const isMobileDevice = () => document.documentElement.getAttribute('data-device') === 'mobile';
+
 function parseRoute() {
   const hash = window.location.hash;
   if (hash.startsWith('#/hero-motion-demo')) {
@@ -528,7 +531,9 @@ function parseRoute() {
   }
   if (hash.startsWith('#/works')) {
     const params = new URLSearchParams(hash.split('?')[1] ?? '');
-    return { page: 'works', category: params.get('category') ?? 'ui', workId: '' };
+    // 2026-10-06: 移动端二级页改为单屏卡组,首页点卡进入时携带 work,
+    // 让被点的项目直接成为当前卡(放大动效的落点)。
+    return { page: 'works', category: params.get('category') ?? 'ui', workId: params.get('work') ?? '' };
   }
   return { page: 'home', category: 'ui', workId: '' };
 }
@@ -678,6 +683,22 @@ function App() {
   sharedImageRef.current = sharedImage;
   const [worksActiveLocked, setWorksActiveLocked] = useState(false);
   const previousPageRef = useRef(route.page);
+  /* 2026-10-06 移动端二级/三级交互合并:
+     - mobileFlip = 'enter' 详情页正从顶部下滑翻入(works 保持在底下可见)
+                  = 'cover' 详情页已落定(works 隐藏但保持挂载)
+                  = 'exit'  详情页整体上滑翻回 works(不重置内滚)
+     - exitDetail 保存退出翻页期间的 {category, work},防止 route 先切回 works
+       时 WorkDetailPage 拿到错误的 work 而闪帧。 */
+  const [mobileFlip, setMobileFlip] = useState(null);
+  const [exitDetail, setExitDetail] = useState(null);
+  const mobileFlipTimerRef = useRef(0);
+  const scheduleMobileFlipClear = () => {
+    window.clearTimeout(mobileFlipTimerRef.current);
+    mobileFlipTimerRef.current = window.setTimeout(() => {
+      setMobileFlip(null);
+      setExitDetail(null);
+    }, 720);
+  };
 
   useEffect(() => {
     const onHashChange = () => setRoute(parseRoute());
@@ -923,6 +944,68 @@ function App() {
     };
   }, [route.page, sharedImage?.workId]);
 
+  /* 2026-10-06 移动端:首页卡片 → 二级页的放大落点追踪。
+     与上面 detail 的追踪同构,目标是二级页当前主卡里的封面 img
+     ([data-work-image]),位图就绪后把 toRect 补给 SharedImageTransition,
+     并把圆角从首页卡组的 20px 过渡到二级主卡的圆角。 */
+  useLayoutEffect(() => {
+    if (route.page !== 'works' || !sharedImageRef.current) return undefined;
+    const workId = sharedImageRef.current.workId;
+    if (!workId) return undefined;
+
+    let frame = 0;
+    let disposed = false;
+    let attempts = 0;
+    let hasTarget = false;
+    let trackedFrames = 0;
+    const selector = `[data-work-image="${workId}"]`;
+
+    const apply = (rect) => {
+      setSharedImage((current) => {
+        if (!current) return current;
+        const prev = current.toRect;
+        if (
+          prev &&
+          Math.abs(prev.x - rect.x) < 0.5 &&
+          Math.abs(prev.y - rect.y) < 0.5 &&
+          Math.abs(prev.width - rect.width) < 0.5 &&
+          Math.abs(prev.height - rect.height) < 0.5
+        ) return current;
+        return { ...current, toRect: rect };
+      });
+      hasTarget = true;
+    };
+
+    const updateImageTarget = () => {
+      if (disposed || !sharedImageRef.current) return;
+      attempts += 1;
+      const img = document.querySelector(selector);
+      const card = img ? img.closest('.mw-card') : null;
+      const rect = img && card ? readNavRect(selector) : null;
+      const ready = Boolean(img && img.complete && img.naturalWidth > 0);
+      if (rect && card && rect.width > 0 && rect.height > 0 && ready) {
+        rect.radius = getComputedStyle(card).borderRadius;
+        apply(rect);
+        trackedFrames += 1;
+      } else if (!hasTarget && attempts >= 260) {
+        setSharedImage(null);
+        return;
+      }
+      if (!hasTarget || trackedFrames < 90) {
+        frame = window.requestAnimationFrame(updateImageTarget);
+      }
+    };
+
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(updateImageTarget);
+    });
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [route.page, sharedImage?.workId]);
+
   const restoreScroll = (key, fallback) => {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
@@ -948,9 +1031,21 @@ function App() {
     restoreScroll('portfolioHomeScrollY', homeScrollY);
   };
 
-  const goWorks = (category = route.category, restore = false) => {
+  const goWorks = (category = route.category, restore = false, opts = null) => {
     if (route.page === 'home') {
       setNavMotion('home-to-works');
+      // 2026-10-06 移动端:首页点卡 → 二级页,卡片放大无缝接入。
+      // 复用 SharedImageTransition:from = 首页卡组卡片,to = 二级页当前主卡
+      // (由下方 route.page==='works' 的追踪 effect 补 toRect)。
+      if (opts?.rect && opts?.src) {
+        setSharedImage({
+          src: opts.src,
+          fromRect: opts.rect,
+          fromRadius: '20px',
+          toRect: null,
+          workId: opts.workId ?? ''
+        });
+      }
     } else if (route.page !== 'detail') {
       setNavMotion('');
       setWorksActiveLocked(false);
@@ -972,8 +1067,9 @@ function App() {
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
     window.scrollTo(0, 0);
-    window.location.hash = `/works?category=${category}`;
-    setRoute({ page: 'works', category, workId: '' });
+    const workId = opts?.workId ?? '';
+    window.location.hash = `/works?category=${category}${workId ? `&work=${workId}` : ''}`;
+    setRoute({ page: 'works', category, workId });
     if (restore) {
       restoreScroll('portfolioWorksScrollY', worksScrollY);
     } else {
@@ -986,7 +1082,7 @@ function App() {
     if (fromRect) {
       setSharedPill({ rect: fromRect, title: categories.find((item) => item.id === category)?.title ?? activeCategory.title, mode: 'works' });
     }
-    if (transitionImage?.rect && transitionImage?.src) {
+    if (transitionImage?.rect && transitionImage?.src && !isMobileDevice()) {
       setSharedImage({
         src: transitionImage.src,
         fromRect: transitionImage.rect,
@@ -999,6 +1095,13 @@ function App() {
     }
     setWorksActiveLocked(false);
     setNavMotion('to-detail');
+    // 2026-10-06 移动端:进入详情改为「下滑翻页」——详情层从顶部滑入盖住二级页,
+    // 导航 morph(works→detail)照旧由路由驱动,这里只负责层的入场。
+    if (isMobileDevice()) {
+      window.clearTimeout(mobileFlipTimerRef.current);
+      setMobileFlip('enter');
+      scheduleMobileFlipClear();
+    }
     setWorksScrollY(window.scrollY);
     window.sessionStorage.setItem('portfolioWorksScrollY', String(window.scrollY));
     window.sessionStorage.setItem('portfolioDetailEntryCategory', category);
@@ -1046,6 +1149,17 @@ function App() {
     setWorksActiveLocked(true);
     window.setTimeout(() => setWorksActiveLocked(false), 860);
     setNavMotion('to-works');
+    if (isMobileDevice()) {
+      // 2026-10-06 移动端返回 = 上滑翻页:详情层(内滚停在原处,不回卷到 0)
+      // 整体向上滑出,露出底下的二级页。route 先切 works 让导航同时开始
+      // detail→works 的 morph;WorkDetailPage 借 exitDetail 保持挂载 720ms。
+      window.clearTimeout(mobileFlipTimerRef.current);
+      setExitDetail({ category: activeCategory, work: activeWork, workId: activeWork?.id ?? '' });
+      setMobileFlip('exit');
+      scheduleMobileFlipClear();
+      goWorks(route.category, false, { workId: activeWork?.id ?? '' });
+      return;
+    }
     goWorks(route.category, shouldRestore);
   };
 
@@ -1092,10 +1206,38 @@ function App() {
                 active={route.page === 'home'}
               />
             </div>
+            {/* 2026-10-06 移动端:详情页在底下时二级页保持挂载(翻页动效的底层),
+                enter 期间可见(详情层还没盖满)、落定后 visibility 隐藏但不卸载,
+                返回翻页时立刻可见。PC 端维持原样(只有 works 才挂载)。 */}
             {route.page === 'works' ? (
-              <WorksPage activeCategory={activeCategory} goDetail={goDetail} />
-            ) : route.page === 'detail' ? (
-              <WorkDetailPage activeCategory={activeCategory} work={activeWork} imageTransitionActive={Boolean(sharedImage && sharedImage.workId === activeWork?.id)} />
+              <WorksPage
+                activeCategory={activeCategory}
+                goDetail={goDetail}
+                workId={route.workId}
+                arriving={Boolean(sharedImage && sharedImage.workId)}
+              />
+            ) : route.page === 'detail' && isMobileDevice() ? (
+              <div
+                className={`mw-under${mobileFlip === 'enter' ? '' : ' is-covered'}`}
+                aria-hidden="true"
+              >
+                {/* workId 跟随路由:详情翻入的 640ms 里,底下露出的必须是
+                    用户刚点进来的那张卡,而不是回落到第 0 张 */}
+                <WorksPage activeCategory={activeCategory} goDetail={goDetail} workId={route.workId} />
+              </div>
+            ) : null}
+            {route.page === 'detail' || exitDetail ? (
+              <WorkDetailPage
+                activeCategory={exitDetail ? exitDetail.category : activeCategory}
+                work={exitDetail ? exitDetail.work : activeWork}
+                imageTransitionActive={!exitDetail && Boolean(sharedImage && sharedImage.workId === activeWork?.id)}
+                flip={mobileFlip}
+                onSwipeProject={
+                  !exitDetail && isMobileDevice() && works.length > 1
+                    ? (dir) => goDetailByIndex(activeIndex + dir)
+                    : null
+                }
+              />
             ) : null}
           </>
         )}
@@ -2213,7 +2355,17 @@ function MobileShowcaseDeck({ items, openWorks }) {
     if (!s.moved) {
       if (s.downIdx === s.active) {
         const item = ctxRef.current.items[s.active];
-        if (item) ctxRef.current.openWorks(item.project.category);
+        if (item) {
+          // 2026-10-06 移动端:带上卡片几何与封面,二级页用 SharedImageTransition
+          // 做放大无缝接入(卡片从首页原位放大成二级页主卡)。
+          const cardEl = cardRefs.current[s.downIdx];
+          const rect = cardEl ? cardEl.getBoundingClientRect() : null;
+          ctxRef.current.openWorks(item.project.category, false, {
+            workId: item.project.id,
+            rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+            src: item.cover
+          });
+        }
       } else {
         goToRef.current(s.downIdx);
       }
@@ -2554,6 +2706,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
 
   useEffect(() => {
     let ro = null;
+    let roTimer = 0; /* RO 回调防抖句柄(此前未声明,RO 一触发就抛 ReferenceError) */
     const measure = () => {
       const nodes = [...document.querySelectorAll(selector)];
       if (nodes.length !== count) return;
@@ -3321,6 +3474,14 @@ function ProfileContentPC() {
 // 首屏视频优先级绝对最高 —— 尾屏的 WebGL 编译绝不能抢在它前面，所以预挂载
 // 必须等这个信号之后才允许发生。判定用 playing 事件（而非 canplay，因为
 // canplay 只代表数据够了，实际首帧还没上屏），并要求 readyState >= 3。
+// 揭幕判据已升级为「能连续播」而非「能播」：只按 readyState>=3 揭幕会出现进度条刚
+// 到 100% 视频却还卡着不动。下面两个常量就是这条判据的阈值，细节见文件内使用处。
+// 缓冲余量：短视频取「片长的一半」，长片最多等 1.5s，避免为一条几十秒的片子干等。
+const HERO_SMOOTH_AHEAD_SEC = 1.5;
+// 兜底：视频报错 / 极慢网络 / 自动播放被拦时永远等不到「能连续播」，不能把首屏永久
+// 扣在遮罩后面，到点直接放行。要小于 index.html 的 HARD_CAP，这样揭幕时进度条是补
+// 满 100% 的，而不是硬超时那种「停在原处淡出」。
+const HERO_SMOOTH_FAILSAFE_MS = 4500;
 function HeroSection({ active = true, onVideoReady }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
   const [assetMode, setAssetMode] = useState(() => {
@@ -3487,20 +3648,65 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       document.body.appendChild(overlay);
     }
     const pickVideo = () => document.querySelector('video.hero-mobile-video, video.hero-video-base');
-    // 视频就绪广播：base 视频真正开始播放（playing）且 readyState>=3 时触发一次。
-    // 只用原生 <video> 路径（PC + 非微信移动）；微信走 canvas 解码，没有 video 元素，
-    // 由下面的轮询兜底。
+    // 视频就绪广播：不只要「能播」（readyState>=3），还要「能连续播」—— 缓冲里
+    // 从当前播放点往前仍有余量，且 base + alpha 两条轨都满足。否则会出现进度条
+    // 刚满 100% 视频却卡着不动，那正是 Loading 该挡住的情况。
+    // 只用原生 <video> 路径（PC + 非微信移动）；微信走 canvas 解码，没有 video
+    // 元素，由下面的轮询兜底。
+    let stopReadyWatch = null;
     if (onVideoReady && !videoReadyRef.current) {
       const v = document.querySelector('video.hero-video-base') || document.querySelector('video.hero-mobile-video');
       if (v) {
-        const mark = () => {
+        const bufferedAhead = (node) => {
+          if (!node || !isFinite(node.duration) || !node.duration) return 0;
+          const at = node.currentTime || 0;
+          let ahead = 0;
+          try {
+            for (let i = 0; i < node.buffered.length; i += 1) {
+              const start = node.buffered.start(i);
+              const end = node.buffered.end(i);
+              if (at + 0.05 >= start && at <= end) ahead = Math.max(ahead, end - at);
+            }
+          } catch (_) { return 0; }
+          return ahead;
+        };
+        const smooth = (node) => {
+          if (!node) return false;
+          if (node.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
+          // 真的在动才算：缓冲够了但被自动播放策略摁住的，交给兜底放行。
+          if (node.paused && (node.currentTime || 0) <= 0.05) return false;
+          const need = isFinite(node.duration) && node.duration
+            ? Math.min(HERO_SMOOTH_AHEAD_SEC, node.duration * 0.5)
+            : HERO_SMOOTH_AHEAD_SEC;
+          return bufferedAhead(node) >= need;
+        };
+        const heroSmooth = () => {
+          const list = [v];
+          document.querySelectorAll('video.hero-video-alpha').forEach((extra) => list.push(extra));
+          return list.every(smooth);
+        };
+        const mark = (force) => {
           if (videoReadyRef.current) return;
-          if (v.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+          if (!force && !heroSmooth()) return;
           videoReadyRef.current = true;
+          if (stopReadyWatch) { stopReadyWatch(); stopReadyWatch = null; }
           try { onVideoReady(); } catch (_) { /* noop */ }
         };
-        v.addEventListener('playing', mark, { once: true });
-        v.addEventListener('canplay', mark, { once: true });
+        const onProgress = () => mark(false);
+        v.addEventListener('playing', onProgress);
+        v.addEventListener('canplay', onProgress);
+        v.addEventListener('progress', onProgress);
+        v.addEventListener('timeupdate', onProgress);
+        const smoothPoll = window.setInterval(onProgress, 200);
+        const smoothFailSafe = window.setTimeout(() => mark(true), HERO_SMOOTH_FAILSAFE_MS);
+        stopReadyWatch = () => {
+          window.clearInterval(smoothPoll);
+          window.clearTimeout(smoothFailSafe);
+          v.removeEventListener('playing', onProgress);
+          v.removeEventListener('canplay', onProgress);
+          v.removeEventListener('progress', onProgress);
+          v.removeEventListener('timeupdate', onProgress);
+        };
       }
     }
     const kick = () => {
@@ -3557,6 +3763,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       document.removeEventListener('WeixinJSBridgeReady', onBridgeReady);
       disarm();
       if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (stopReadyWatch) { stopReadyWatch(); stopReadyWatch = null; }
     };
   }, [assetMode, isMobile, useJsmpeg]);
   const pointerRef = useRef({ x: 0.5, y: 0.5 });
@@ -4856,10 +5063,13 @@ function HomePage({ openWorks, paging, active = true }) {
    确认后整块删除该 nav 节点即可。 */
 const ORBIT_AUTO_DELAY = 4000;
 
-function WorksPage({ activeCategory, goDetail }) {
+function WorksPage({ activeCategory, goDetail, workId = '', arriving = false }) {
   const works = worksByCategory[activeCategory.id] ?? [];
-  const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
-  const [activeIndex, setActiveIndex] = useState(0);
+  const isMobile = isMobileDevice();
+  const [activeIndex, setActiveIndex] = useState(() => {
+    const i = works.findIndex((w) => w.id === workId);
+    return i >= 0 ? i : 0;
+  });
   const stageRef = useRef(null);
   const orbitRef = useRef(null);
   const railHoverRef = useRef(false);
@@ -4868,6 +5078,13 @@ function WorksPage({ activeCategory, goDetail }) {
   const current = works[index];
 
   const openDetail = (work) => {
+    if (!work) return;
+    // 2026-10-06 移动端:进详情改为「下滑翻页」,不再做卡片→hero 的图片 morph
+    // (整页翻页动效取代之);PC 端保留原 morph。
+    if (isMobile) {
+      goDetail(activeCategory.id, work.id, null);
+      return;
+    }
     const image = document.querySelector(`[data-work-image="${work.id}"]`);
     const rect = image ? readNavRect(`[data-work-image="${work.id}"]`) : null;
     goDetail(activeCategory.id, work.id, {
@@ -4899,8 +5116,10 @@ function WorksPage({ activeCategory, goDetail }) {
     return stopAuto;
   }, [startAuto, stopAuto, index, activeCategory.id]);
   useEffect(() => {
-    setActiveIndex(0);
-  }, [activeCategory.id]);
+    // workId 优先(首页点卡 / 返回翻页时定位到来源项目),无 workId 回落 0
+    const i = works.findIndex((w) => w.id === workId);
+    setActiveIndex(i >= 0 ? i : 0);
+  }, [workId, activeCategory.id]);
 
   // demo fitGallery 的 orbit 分支：主卡封面 16:9，用 stage 剩余高度反推画廊总宽
   //（上限 1140），保证一屏内高度刚好占满、间距与 demo 一致。
@@ -4933,6 +5152,121 @@ function WorksPage({ activeCategory, goDetail }) {
   }, [fitOrbit, index, activeCategory.id, works.length]);
 
   const step = (delta) => setActiveIndex((i) => (i + delta + works.length) % works.length);
+
+  /* ---- 移动端单屏卡组手势(2026-10-06)----
+     横滑 = 切换分类内项目(到位吸附,边缘有阻尼);下滑 = 进详情(整页翻页);
+     点侧卡 = 切到该卡;点主卡 = 进详情。轴锁定:位移超过 10px 才判定主轴,
+     之后本手势只沿主轴走。指针捕获挂在舞台上,用 elementFromPoint 还原
+     点击命中的卡(pointer capture 会把 pointerup 重定向到舞台)。 */
+  const trackRef = useRef(null);
+  const mwDragRef = useRef({ down: false, axis: null, startX: 0, startY: 0, dx: 0, dy: 0, lastDX: 0, vel: 0, moved: false, pointerId: null });
+  const mwIndexRef = useRef(index);
+  mwIndexRef.current = index;
+  const mwFirstPaintRef = useRef(true);
+
+  const mwGeom = useCallback(() => {
+    const stage = stageRef.current;
+    const track = trackRef.current;
+    const slide = track ? track.children[0] : null;
+    if (!stage || !track || !slide) return null;
+    const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+    // ⚠ 用布局尺寸 offsetWidth:getBoundingClientRect 会带上 .mw-slide 的
+    // scale(0.94) —— 重挂载瞬间首卡是非当前态,量出来 273.4 而非 290.8,
+    // 吸附基准整体偏 26px(探针实测 currentRect x=77.3,应为 51.1)。
+    const slideW = slide.offsetWidth + gap;
+    return { stageW: stage.clientWidth, slideW, cardW: slideW - gap };
+  }, []);
+
+  const mwApply = useCallback((dx, dy, animate) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const g = mwGeom();
+    const base = g ? (g.stageW - g.cardW) / 2 - mwIndexRef.current * g.slideW : 0;
+    track.style.transition = animate ? 'transform 560ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+    track.style.transform = `translate3d(${base + dx}px, ${dy * 0.3}px, 0)`;
+  }, [mwGeom]);
+
+  useLayoutEffect(() => {
+    if (!isMobile) return;
+    mwApply(0, 0, !mwFirstPaintRef.current);
+    mwFirstPaintRef.current = false;
+  }, [index, works.length, isMobile, mwApply]);
+
+  // ⚠ 首帧吸附可能跑在样式/字体就绪之前(--mw-card-* 还没生效,量出 auto 宽),
+  //   之后没人再写 transform 就一直停在错位上(探针实测卡片偏出右缘 73px)。
+  //   落定后按 80/300/700ms 各重吸一次 + 字体就绪 + resize,无过渡直接归位。
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const reapply = () => mwApply(0, 0, false);
+    const timers = [80, 300, 700].map((t) => window.setTimeout(reapply, t));
+    if (document.fonts?.ready) document.fonts.ready.then(reapply).catch(() => {});
+    window.addEventListener('resize', reapply);
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.removeEventListener('resize', reapply);
+    };
+  }, [isMobile, mwApply, activeCategory.id, arriving]);
+
+  const mwDown = (e) => {
+    const d = mwDragRef.current;
+    d.down = true; d.axis = null; d.moved = false;
+    d.startX = e.clientX; d.startY = e.clientY;
+    d.dx = 0; d.dy = 0; d.lastDX = 0; d.vel = 0; d.pointerId = e.pointerId;
+    const stage = stageRef.current;
+    if (stage?.setPointerCapture) { try { stage.setPointerCapture(e.pointerId); } catch (_) {} }
+  };
+  const mwMove = (e) => {
+    const d = mwDragRef.current;
+    if (!d.down) return;
+    const rawDx = e.clientX - d.startX;
+    const rawDy = e.clientY - d.startY;
+    if (!d.axis) {
+      if (Math.abs(rawDx) < 10 && Math.abs(rawDy) < 10) return;
+      d.axis = Math.abs(rawDx) > Math.abs(rawDy) ? 'x' : 'y';
+    }
+    if (d.axis === 'x') {
+      let dx = rawDx;
+      // 两端阻尼:第一张往右/最后一张往左,拖出 35% 手感
+      if ((mwIndexRef.current === 0 && dx > 0) || (mwIndexRef.current === works.length - 1 && dx < 0)) dx *= 0.35;
+      d.vel = dx - d.lastDX; d.lastDX = dx; d.dx = dx;
+      if (Math.abs(dx) > 8) d.moved = true;
+      mwApply(dx, 0, false);
+    } else if (rawDy > 0) {
+      d.dy = rawDy;
+      if (rawDy > 8) d.moved = true;
+      mwApply(0, rawDy, false);
+    }
+  };
+  const mwUp = (e) => {
+    const d = mwDragRef.current;
+    if (!d.down) return;
+    d.down = false;
+    const stage = stageRef.current;
+    if (stage?.releasePointerCapture) { try { stage.releasePointerCapture(d.pointerId); } catch (_) {} }
+    if (!d.moved) {
+      // 点击:命中侧卡 → 切到它;命中主卡 → 进详情
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const slide = el ? el.closest('.mw-slide') : null;
+      const idx = slide && trackRef.current ? Array.prototype.indexOf.call(trackRef.current.children, slide) : -1;
+      if (idx >= 0 && idx !== mwIndexRef.current) setActiveIndex(idx);
+      else openDetail(works[mwIndexRef.current]);
+      return;
+    }
+    if (d.axis === 'x' && (Math.abs(d.dx) > 62 || Math.abs(d.vel) > 0.45)) {
+      setActiveIndex((i) => Math.min(works.length - 1, Math.max(0, i + (d.dx < 0 ? 1 : -1))));
+    } else if (d.axis === 'y' && d.dy > 72) {
+      openDetail(works[mwIndexRef.current]);
+    } else {
+      mwApply(0, 0, true);
+    }
+    d.dx = 0; d.dy = 0; d.axis = null;
+  };
+  const mwCancel = () => {
+    const d = mwDragRef.current;
+    if (!d.down) return;
+    d.down = false; d.dx = 0; d.dy = 0; d.axis = null;
+    mwApply(0, 0, true);
+  };
 
   // 指针视差：只写 CSS 变量，动效交给 CSS transition。
   // 倾斜/位移变量写在共同父级 .works-orbit-focus 上,卡片与镜面倒影同时继承,
@@ -4975,8 +5309,11 @@ function WorksPage({ activeCategory, goDetail }) {
   );
 
   if (isMobile) {
+    // 2026-10-06 单屏卡组:一屏展示、横滑切项目、下滑/点卡进详情。
+    // 环境光(SideRays)保留;卡片 3:5 + 20px 圆角与首页卡组同形,
+    // 首页点卡进来的放大动效(SharedImageTransition)落点即当前主卡。
     return (
-      <section className="works-index-page">
+      <section className={`works-index-page${arriving ? ' mw-is-arriving' : ''}`}>
         <SideRays
           className="works-side-rays"
           speed={2.5}
@@ -4991,31 +5328,39 @@ function WorksPage({ activeCategory, goDetail }) {
           falloff={1.6}
           opacity={1}
         />
-        <div className="works-container">
-          <div className="works-showcase-list">
-            {works.map((work) => (
-              <article className="showcase-item" key={work.id}>
-                <button className="showcase-main-img" type="button" onClick={() => openDetail(work)}>
-                  <LazyImage data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
+        <div
+          className="mw-stage"
+          ref={stageRef}
+          onPointerDown={mwDown}
+          onPointerMove={mwMove}
+          onPointerUp={mwUp}
+          onPointerCancel={mwCancel}
+        >
+          <div className="mw-track" ref={trackRef}>
+            {works.map((work, i) => (
+              <div className={`mw-slide${i === index ? ' is-current' : ''}`} key={work.id}>
+                <button
+                  type="button"
+                  className="mw-card"
+                  aria-label={`${work.title} — 下滑或点按查看设计详情`}
+                >
+                  <LazyImage className="mw-card-img" data-work-image={work.id} src={work.detailHero ?? work.image} alt={work.title} />
+                  <span className="mw-card-veil" aria-hidden="true" />
+                  <span className="mw-card-copy" aria-hidden="true">
+                    <strong>{work.title}</strong>
+                    <b>{work.subtitle}</b>
+                  </span>
                 </button>
-                <div className="showcase-copy">
-                  {/* 左下两行文字(标题+副标题)整体可点,同样进入三级详情页
-                      (2026-10-03 用户要求)。包裹按钮在桌面/移动两端都有中和样式,
-                      不改变原排版。 */}
-                  <button
-                    type="button"
-                    className="showcase-copy-text"
-                    onClick={() => openDetail(work)}
-                  >
-                    <h2>{work.title}</h2>
-                    <p>{work.subtitle}</p>
-                  </button>
-                  <button type="button" className="showcase-more" onClick={() => openDetail(work)}>查看设计详情</button>
-                </div>
-              </article>
+              </div>
             ))}
           </div>
         </div>
+        <button type="button" className="mw-hint" aria-label="下滑查看设计详情" onClick={() => openDetail(works[index])}>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 6.5l6 6 6-6" />
+            <path d="M6 12.5l6 6 6-6" />
+          </svg>
+        </button>
       </section>
     );
   }
@@ -5211,7 +5556,67 @@ function DetailScroll({ workId, fallbackImages }) {
   );
 }
 
-function WorkDetailPage({ activeCategory, work, imageTransitionActive = false }) {
+function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, flip = '', onSwipeProject = null }) {
+  const pageRef = useRef(null);
+  const swipeRef = useRef({ down: false, startX: 0, dx: 0, lastDX: 0, vel: 0, moved: false });
+
+  // 内滚归位:每次切换作品(Last/Next、分类下拉、二级页进入)都回到顶部。
+  // ⚠ 返回翻页期间组件**不重挂**、work.id 不变,这个 effect 不会跑 ——
+  // 用户停在 50% 的滚动位置得以保持,上滑翻页直接在原地执行(业主明确要求)。
+  useEffect(() => {
+    const el = pageRef.current;
+    if (el) el.scrollTop = 0;
+  }, [work?.id]);
+
+  /* 横滑切换项目(移动端,对应设计稿图二的左右滑)。
+     层是 touch-action: pan-y 的内滚容器:竖向滚动交给浏览器原生处理,
+     横向位移以 pointer 事件进来 —— 轴锁定后只跟横轴,跟手位移 18%,
+     提交阈值 72px 或 flick。翻页动效期间(onSwipeProject 为 null)不挂。 */
+  const swipeDown = (e) => {
+    const s = swipeRef.current;
+    s.down = true; s.moved = false; s.axis = null;
+    s.startX = e.clientX; s.dx = 0; s.lastDX = 0; s.vel = 0;
+  };
+  const swipeMove = (e) => {
+    const s = swipeRef.current;
+    if (!s.down) return;
+    const dx = e.clientX - s.startX;
+    if (Math.abs(dx) < 12) return;
+    s.vel = dx - s.lastDX; s.lastDX = dx; s.dx = dx; s.moved = true;
+    const el = pageRef.current;
+    if (el) {
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${dx * 0.18}px)`;
+    }
+  };
+  const swipeSettle = (commit) => {
+    const el = pageRef.current;
+    if (el) {
+      el.style.transition = 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)';
+      el.style.transform = 'translateX(0px)';
+      window.setTimeout(() => { el.style.transition = ''; el.style.transform = ''; }, 340);
+    }
+    if (commit) onSwipeProject?.(swipeRef.current.dx < 0 ? 1 : -1);
+  };
+  const swipeUp = () => {
+    const s = swipeRef.current;
+    if (!s.down) return;
+    s.down = false;
+    swipeSettle(s.moved && (Math.abs(s.dx) > 72 || Math.abs(s.vel) > 0.5));
+  };
+  const swipeCancel = () => {
+    const s = swipeRef.current;
+    if (!s.down) return;
+    s.down = false;
+    swipeSettle(false);
+  };
+  const swipeHandlers = onSwipeProject ? {
+    onPointerDown: swipeDown,
+    onPointerMove: swipeMove,
+    onPointerUp: swipeUp,
+    onPointerCancel: swipeCancel
+  } : {};
+
   if (!work) return null;
 
   const detailImages = work.detailImages ?? [
@@ -5222,7 +5627,11 @@ function WorkDetailPage({ activeCategory, work, imageTransitionActive = false })
   ];
 
   return (
-    <section className="work-detail-page">
+    <section
+      ref={pageRef}
+      className={`work-detail-page${flip === 'enter' ? ' mw-flip-enter' : ''}${flip === 'exit' ? ' mw-flip-exit' : ''}`}
+      {...swipeHandlers}
+    >
       <div className="detail-hero">
         <LazyImage className={imageTransitionActive ? 'is-transitioning' : ''} data-detail-hero-image="true" src={work.detailHero} alt={work.title} />
         {work.detailOverlay && (

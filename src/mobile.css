@@ -1144,126 +1144,194 @@ html[data-device="mobile"] .mob-thumb.on {
   transform: translateY(-3px);
 }
 
-/* --- 5. Works index ----------------------------------------------------- */
+/* --- 5. Works index(2026-10-06 重构:单屏滑动卡组)---------------------- */
 
+/* 单屏固定层:一屏展示、不产生滚动(溢出内容不存在,页面高度由层自己管)。 */
 html[data-device="mobile"] .works-index-page {
-  padding: 104px 0 76px;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-html[data-device="mobile"] .works-container {
-  width: auto;
-  margin-left: max(20px, env(safe-area-inset-left));
-  margin-right: max(20px, env(safe-area-inset-right));
+/* 卡组舞台:flex:1 吃掉整屏(卡片垂直居中,顶部自然让出导航带);
+   touch-action:none 把横滑/下滑的手势全量交给 JS 指针逻辑。 */
+html[data-device="mobile"] .mw-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  /* 卡片几何:高度主导(58vh),宽 = 高 × 3/5,同时不超过 74vw。
+     3:5 与 20px 圆角和首页卡组完全同形 —— 首页点卡的放大动效才能无缝衔接。 */
+  --mw-card-h: min(58vh, 500px, calc(74vw * 5 / 3));
+  --mw-card-w: calc(var(--mw-card-h) * 0.6);
+  --mw-gap: 14px;
 }
 
-html[data-device="mobile"] .works-showcase-list {
-  gap: 32px;
-  margin-top: 0;
+html[data-device="mobile"] .mw-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--mw-gap);
+  will-change: transform;
 }
 
-/* Overlay entry card: one full-bleed image per work, copy pinned to the
-   bottom-left over a darkening gradient, text-link entry bottom-right. */
-html[data-device="mobile"] .showcase-item {
+/* 非当前卡:缩小 + 压暗,读出"队列里还有下一张";右侧露边即设计稿的 peek。 */
+html[data-device="mobile"] .mw-slide {
+  flex: none;
+  width: var(--mw-card-w);
+  display: flex;
+  justify-content: center;
+  transform: scale(0.94);
+  filter: brightness(0.55);
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), filter 520ms ease;
+}
+
+html[data-device="mobile"] .mw-slide.is-current {
+  transform: none;
+  filter: none;
+}
+
+html[data-device="mobile"] .mw-card {
   position: relative;
   display: block;
-  aspect-ratio: 5 / 3;
-  border-radius: 18px;
-  overflow: hidden;
-  background: #1d1d1d;
-}
-
-html[data-device="mobile"] .showcase-item::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0) 46%,
-    rgba(0, 0, 0, 0.38) 76%,
-    rgba(0, 0, 0, 0.62) 100%
-  );
-  pointer-events: none;
-}
-
-html[data-device="mobile"] .showcase-main-img {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  aspect-ratio: auto;
-  height: 100%;
-  border-radius: 0;
-}
-
-html[data-device="mobile"] .showcase-copy {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-flow: row wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px 14px;
-  padding: 0 clamp(14px, 4.4vw, 18px) clamp(13px, 4vw, 17px);
-}
-
-html[data-device="mobile"] .showcase-copy h2 {
-  flex: 1 0 100%;
-  margin: 0;
-  font-size: clamp(21px, 6.2vw, 25px);
-  line-height: 1.25;
-  font-weight: 700;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
-}
-
-html[data-device="mobile"] .showcase-copy p {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.82);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
-}
-
-html[data-device="mobile"] .showcase-copy button {
-  flex: 0 0 auto;
-  width: auto;
-  height: auto;
-  margin: 0;
+  width: var(--mw-card-w);
+  height: var(--mw-card-h);
   padding: 0;
   border: 0;
-  background: transparent;
-  color: #ffffff;
-  /* 12.5 → 11(2026-10-03 用户要求右下角入口文字小一档) */
-  font-size: 11px;
-  line-height: 1.5;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
-}
-
-/* 左下两行文字的可点包裹按钮(进入三级详情,见 WorksPage):占行内左侧,
-   h2/p 在其中自然堆叠,视觉与原排版一致。 */
-html[data-device="mobile"] .showcase-copy .showcase-copy-text {
-  flex: 0 1 auto;
-  display: block;
-  text-align: left;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #11131a;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+  -webkit-tap-highlight-color: transparent;
   cursor: pointer;
 }
 
-/* 「查看设计详情」保持右下角:换行独占一行时靠 margin-left:auto 顶到右侧。 */
-html[data-device="mobile"] .showcase-copy .showcase-more {
-  margin-left: auto;
+html[data-device="mobile"] .mw-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-html[data-device="mobile"] .showcase-copy button.showcase-more::after {
-  content: " >";
-  font-size: 10.5px;
+html[data-device="mobile"] .mw-card-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 9, 13, 0.2) 0%, rgba(8, 9, 13, 0) 30%, rgba(8, 9, 13, 0) 55%, rgba(8, 9, 13, 0.72) 100%);
 }
 
-/* --- 6. Work detail ----------------------------------------------------- */
+html[data-device="mobile"] .mw-card-copy {
+  position: absolute;
+  left: 20px;
+  right: 16px;
+  bottom: 18px;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: #ffffff;
+  transition: opacity 420ms ease 80ms;
+}
 
+html[data-device="mobile"] .mw-card-copy strong {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
+}
+
+html[data-device="mobile"] .mw-card-copy b {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* 放大动效到达前:文案与压暗先藏住(飞行中的封面图不带文字,避免双影),
+   落点(SharedImageTransition onDone)到达后随 sharedImage 清空一起淡入。 */
+html[data-device="mobile"] .mw-is-arriving .mw-card-copy { opacity: 0; transition: none; }
+html[data-device="mobile"] .mw-is-arriving .mw-card-veil { opacity: 0; }
+html[data-device="mobile"] .mw-is-arriving .mw-stage { pointer-events: none; }
+
+/* 底部下滑提示:双 V,慢速上下浮动 */
+html[data-device="mobile"] .mw-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  width: 48px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  animation: mwHintBob 2.1s ease-in-out infinite;
+}
+
+@keyframes mwHintBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.7; }
+  50% { transform: translateX(-50%) translateY(6px); opacity: 1; }
+}
+
+/* 详情页在底下时的二级页宿主:enter 期间可见(详情层从顶部滑入尚未盖满),
+   落定后 visibility 隐藏但**保持挂载**(返回翻页要立刻露出来,且不重跑入场)。 */
+html[data-device="mobile"] .mw-under {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+
+html[data-device="mobile"] .mw-under.is-covered { visibility: hidden; }
+
+/* --- 6. Work detail(2026-10-06:固定层 + 内滚 + 下滑/上滑翻页)----------- */
+
+/* 详情页改为全屏固定层,滚动改为层内滚动:
+   - 下滑翻页进入 / 上滑翻页返回,都是整层 transform,层内 scrollTop 不动,
+     所以「在 50% 位置点返回」就是原地 50% 的内容整体上滑,不回卷到 0。
+   - z-index 20 < 导航 40:导航 morph 照常浮在翻页层之上,动效不受影响。 */
 html[data-device="mobile"] .work-detail-page {
-  min-height: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* 竖向滚动交给浏览器原生;横向位移以 pointer 事件进来(横滑切项目) */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  min-height: 100%;
+  background: #000000;
+}
+
+@keyframes mwFlipDown {
+  from { transform: translateY(-100vh); }
+  to { transform: translateY(0); }
+}
+
+@keyframes mwFlipUp {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100vh); }
+}
+
+/* 下滑翻页进入(曲线与导航 morph 的 620ms 家族一致) */
+html[data-device="mobile"] .work-detail-page.mw-flip-enter {
+  animation: mwFlipDown 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 上滑翻页返回:离场用略快的 ease-in,读出"被推走"的方向感 */
+html[data-device="mobile"] .work-detail-page.mw-flip-exit {
+  animation: mwFlipUp 600ms cubic-bezier(0.5, 0.08, 0.72, 0.2) both;
+  will-change: transform;
 }
 
 html[data-device="mobile"] .detail-hero {
