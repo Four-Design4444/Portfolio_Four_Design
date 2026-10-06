@@ -1215,10 +1215,11 @@ function App() {
                 goDetail={goDetail}
                 workId={route.workId}
                 arriving={Boolean(sharedImage && sharedImage.workId)}
+                returning={mobileFlip === 'exit'}
               />
             ) : route.page === 'detail' && isMobileDevice() ? (
               <div
-                className={`mw-under${mobileFlip === 'enter' ? '' : ' is-covered'}`}
+                className={`mw-under${mobileFlip === 'enter' ? ' mw-under-exit-down' : ' is-covered'}`}
                 aria-hidden="true"
               >
                 {/* workId 跟随路由:详情翻入的 640ms 里,底下露出的必须是
@@ -5063,13 +5064,28 @@ function HomePage({ openWorks, paging, active = true }) {
    确认后整块删除该 nav 节点即可。 */
 const ORBIT_AUTO_DELAY = 4000;
 
-function WorksPage({ activeCategory, goDetail, workId = '', arriving = false }) {
+function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, returning = false }) {
   const works = worksByCategory[activeCategory.id] ?? [];
   const isMobile = isMobileDevice();
   const [activeIndex, setActiveIndex] = useState(() => {
     const i = works.findIndex((w) => w.id === workId);
     return i >= 0 ? i : 0;
   });
+  // 2026-10-07 首页放大接入的「落地余韵」:覆盖层飞行期间二级页整体留空
+  // (mw-is-arriving 隐藏轨道与提示),覆盖层落位摘除的这一刻主卡无感接班,
+  // 两侧卡 / 文案 / 下滑提示才依次淡入(mw-just-landed),随后恢复常态。
+  const [landed, setLanded] = useState(false);
+  const prevArrivingRef = useRef(arriving);
+  useEffect(() => {
+    const was = prevArrivingRef.current;
+    prevArrivingRef.current = arriving;
+    if (was && !arriving) {
+      setLanded(true);
+      const timer = window.setTimeout(() => setLanded(false), 1300);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [arriving]);
   const stageRef = useRef(null);
   const orbitRef = useRef(null);
   const railHoverRef = useRef(false);
@@ -5312,8 +5328,12 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false }) 
     // 2026-10-06 单屏卡组:一屏展示、横滑切项目、下滑/点卡进详情。
     // 环境光(SideRays)保留;卡片 3:5 + 20px 圆角与首页卡组同形,
     // 首页点卡进来的放大动效(SharedImageTransition)落点即当前主卡。
+    // 2026-10-07 returning:返回翻页(上滑)时,二级页从屏幕底部同步升回,
+    // 与详情层的上滑离场构成「相机上移」的整屏翻页(mw-under-return)。
     return (
-      <section className={`works-index-page${arriving ? ' mw-is-arriving' : ''}`}>
+      <section
+        className={`works-index-page${arriving ? ' mw-is-arriving' : ''}${landed ? ' mw-just-landed' : ''}${returning ? ' mw-under-return' : ''}`}
+      >
         <SideRays
           className="works-side-rays"
           speed={2.5}

@@ -1255,11 +1255,46 @@ html[data-device="mobile"] .mw-card-copy b {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* 放大动效到达前:文案与压暗先藏住(飞行中的封面图不带文字,避免双影),
-   落点(SharedImageTransition onDone)到达后随 sharedImage 清空一起淡入。 */
-html[data-device="mobile"] .mw-is-arriving .mw-card-copy { opacity: 0; transition: none; }
-html[data-device="mobile"] .mw-is-arriving .mw-card-veil { opacity: 0; }
-html[data-device="mobile"] .mw-is-arriving .mw-stage { pointer-events: none; }
+/* 放大动效到达前:二级页整体留空(2026-10-07 用户要求「二级页面默认情况下
+   是没有内容的」)——轨道(含主卡)与下滑提示全部不可见,屏幕上只有飞行中的
+   封面覆盖层;落位(onDone 摘除覆盖层)瞬间主卡无感接班。 */
+html[data-device="mobile"] .mw-is-arriving .mw-track,
+html[data-device="mobile"] .mw-is-arriving .mw-hint { opacity: 0; }
+/* ⚠ .mw-hint 的 bob keyframes 里写了 opacity(0.7~1),动画值会覆盖上面的
+   静态 opacity:0 —— 到达期间必须连 bob 一起停掉,提示才真的不可见。 */
+html[data-device="mobile"] .mw-is-arriving .mw-hint { animation: none; }
+html[data-device="mobile"] .mw-is-arriving .mw-stage,
+html[data-device="mobile"] .mw-is-arriving .mw-hint { pointer-events: none; }
+
+/* 落地余韵:主卡已在落点(覆盖层接班,无需动画),两侧卡、文案与压暗、
+   下滑提示依次淡入。keyframes 只定义 from,动画到元素自身的静止值,
+   不会在结束帧跳变(veil/copy 自带的透明度不受影响)。 */
+html[data-device="mobile"] .mw-just-landed .mw-slide:not(.is-current) {
+  animation: mwFadeIn 680ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+}
+html[data-device="mobile"] .mw-just-landed .mw-card-copy,
+html[data-device="mobile"] .mw-just-landed .mw-card-veil {
+  animation: mwFadeIn 620ms ease 320ms backwards;
+}
+html[data-device="mobile"] .mw-just-landed .mw-hint {
+  /* 提示自带 bob 动画(含 translateX 居中),淡入必须用专属 keyframes:
+     终态对齐 bob 的 0% 相位(ty0/opacity .7),结束后 bob 无缝接管。 */
+  animation: mwHintIn 620ms ease 480ms backwards;
+}
+
+@keyframes mwHintIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to { opacity: 0.7; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes mwFadeIn {
+  from { opacity: 0; }
+}
+
+/* 覆盖层飞行放慢(2026-10-07 用户要求:一级→二级的卡片过渡慢一点) */
+html[data-device="mobile"] .shared-image-transition {
+  transition-duration: 1050ms;
+}
 
 /* 底部下滑提示:双 V,慢速上下浮动 */
 html[data-device="mobile"] .mw-hint {
@@ -1331,6 +1366,32 @@ html[data-device="mobile"] .work-detail-page.mw-flip-enter {
 /* 上滑翻页返回:离场用略快的 ease-in,读出"被推走"的方向感 */
 html[data-device="mobile"] .work-detail-page.mw-flip-exit {
   animation: mwFlipUp 600ms cubic-bezier(0.5, 0.08, 0.72, 0.2) both;
+  will-change: transform;
+}
+
+/* 真正的「翻屏」(2026-10-07):不是详情层单独压下来,而是
+   [详情页 | 二级页] 这条纵向胶片整体平移 —— 进入(下滑)时二级页向屏幕
+   下方滑出、详情页从顶部等速补位;返回(上滑)反向。两层曲线/时长必须
+   与 mwFlipDown/mwFlipUp 完全一致,中途才不会出现层间错缝或露底。 */
+@keyframes mwUnderDown {
+  from { transform: translateY(0); }
+  to { transform: translateY(100vh); }
+}
+
+html[data-device="mobile"] .mw-under.mw-under-exit-down {
+  animation: mwUnderDown 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
+}
+
+@keyframes mwUnderUp {
+  from { transform: translateY(100vh); }
+  to { transform: translateY(0); }
+}
+
+/* 返回时二级页(此时已回到常规文档流)从屏幕底部同步升回;
+   动画落点 = 静止位,类名摘除后无跳变。 */
+html[data-device="mobile"] .mw-under-return {
+  animation: mwUnderUp 600ms cubic-bezier(0.5, 0.08, 0.72, 0.2) both;
   will-change: transform;
 }
 
