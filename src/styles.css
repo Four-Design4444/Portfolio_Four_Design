@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color: #ffffff;
   background: #000000;
   font-family: "PingFang SC", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1102,12 +1102,10 @@ body.nav-on-light .shared-active-pill-detail {
 .nav-detail .detail-nav-back,
 .nav-detail .detail-pager {
   opacity: 1;
-  /* 2026-10-04: 淡入延迟 520ms(等条栏落定)+ 时长拉到 1100ms,并换用
-     专用关键帧 detailNavFadeIn —— 共用的 detailTextFadeIn 带 28% 的
-     opacity:0 平台期(为 works pill 的时序设计),叠加延迟后文字要
-     ~680ms 才开始出现、上升段只剩 400ms,低帧率下就是"空白→突然全出"。
-     专用关键帧无平台期,480ms 起步、1100ms 缓慢浮现,任何帧率都读得出淡入。 */
-  animation: detailNavFadeIn 1100ms cubic-bezier(0.33, 0, 0.67, 1) 480ms both;
+  /* 2026-10-04: 淡入起点提前到切换开始(delay 480→0)—— 业主反馈 480ms
+     起步"入场太久";二稿:时长 1100→600ms,文字随条栏形变同步浮现,
+     条栏落定(620ms)时刚好淡入完成,干净利落。 */
+  animation: detailNavFadeIn 600ms cubic-bezier(0.33, 0, 0.67, 1) 0ms both;
 }
 
 .nav-detail.motion-to-detail .detail-nav-back,
@@ -1115,7 +1113,7 @@ body.nav-on-light .shared-active-pill-detail {
   opacity: 0;
   /* 与基础态同参数:类翻转不重启动画,motion 期间保持隐形,
      落定后由基础态的同一动画接管淡入。 */
-  animation: detailNavFadeIn 1100ms cubic-bezier(0.33, 0, 0.67, 1) 480ms both;
+  animation: detailNavFadeIn 600ms cubic-bezier(0.33, 0, 0.67, 1) 0ms both;
 }
 
 @keyframes detailNavFadeIn {

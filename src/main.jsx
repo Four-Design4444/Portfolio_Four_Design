@@ -1111,9 +1111,28 @@ function readNavRect(selector) {
   const element = document.querySelector(selector);
   if (!element) return null;
   const rect = element.getBoundingClientRect();
+  // 2026-10-06: 二级分类栏在三级页用 translateY(-8px) 退场,回程时它带着
+  // 240ms 过渡从 -8px 回到 0。浮层的锚点每帧读 getBoundingClientRect(),
+  // 那个 rect 是**含父级 transform 的**——采样若落在退场位移的过渡中途,
+  // 目标 y 会被读成"抬高 8px"的坐标,浮层于是先向上冲、再随栏归位回落。
+  // 实测:移动端回程出现 2.3~4.0px 的垂直上冲(幅度随主线程负载/帧率变化,
+  // PC 也会偶发),业主看到的就是"胶囊像是从右上角一点的地方横移过来"。
+  // 剥掉这层退场位移后,浮层目标恒等于分类栏**静止时**的坐标 → 回程是纯水平滑动,
+  // 起点依旧精确接在三级胶囊上。栏本身的退场/归位动效不受影响。
+  let shiftX = 0;
+  let shiftY = 0;
+  const row = element.closest('.works-nav-items');
+  if (row && typeof DOMMatrixReadOnly === 'function') {
+    const transform = getComputedStyle(row).transform;
+    if (transform && transform !== 'none') {
+      const matrix = new DOMMatrixReadOnly(transform);
+      shiftX = matrix.m41;
+      shiftY = matrix.m42;
+    }
+  }
   return {
-    x: rect.left,
-    y: rect.top,
+    x: rect.left - shiftX,
+    y: rect.top - shiftY,
     width: rect.width,
     height: rect.height
   };
@@ -2394,7 +2413,7 @@ function LazyImage({ src, alt = '', className, ...rest }) {
     io.observe(el);
     return () => io.disconnect();
   }, [src]);
-  return <img ref={ref} className={className} alt={alt} {...rest} />;
+  return <img ref={ref} className={className} alt={alt} decoding="async" {...rest} />;
 }
 
 /* ---------------------------------------------------------------------------
@@ -2508,6 +2527,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
   const [widths, setWidths] = useState(null);
 
   useEffect(() => {
+    let ro = null;
     const measure = () => {
       const nodes = [...document.querySelectorAll(selector)];
       if (nodes.length !== count) return;
@@ -2524,13 +2544,31 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
         if (old && old.length === next.length && old.every((v, i) => Math.abs(v - next[i]) < 0.5)) return old;
         return next;
       });
+      /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,首次量出的宽度
+         全为 0(芯片变成细条)且无人重测。RO 挂在每枚芯片上,但回调必须
+         防抖 120ms:dock 展开收起的 width 过渡期间芯片每帧都在变,逐帧测量
+         会把过渡中间值写回 CSS(实测停在 48px 的中间态);防抖后只在尺寸
+         稳定 120ms 后量一次,拿到的必然是落定的静止宽度。 */
+      if (!ro) {
+        ro = new ResizeObserver(() => {
+          clearTimeout(roTimer);
+          roTimer = setTimeout(measure, 120);
+        });
+        nodes.forEach((n) => ro.observe(n));
+      }
     };
     measure();
     /* 字体加载完 / 容器宽度变化都会改静止态宽度，各等一次。 */
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
     window.addEventListener('resize', measure);
     const t = setTimeout(measure, 400);
-    return () => { window.removeEventListener('resize', measure); clearTimeout(t); };
+    /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,挂载时量出的宽度
+       全为 0(芯片变细条)。RO 方案在预览面板冻结渲染下不可靠,改为确定性
+       方案:路由 hash 变化(返回一级)后按 200/600/1200ms 各重测一次,
+       此时首页必然已渲染,量到的是落定的静止宽度。 */
+    const onHash = () => { [200, 600, 1200].forEach((d) => setTimeout(measure, d)); };
+    window.addEventListener('hashchange', onHash);
+    return () => { window.removeEventListener('resize', measure); window.removeEventListener('hashchange', onHash); clearTimeout(t); clearTimeout(roTimer); if (ro) ro.disconnect(); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [selector, count, ...(deps || [])]);
 
@@ -2668,9 +2706,18 @@ function useMeasuredMaxCardHeight(infoRef) {
       });
     };
     measure();
+    /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页处于隐藏态,本组件挂载时
+       测量条高度全为 0,量出 --mob-exp-max: 0px 且无人重测 —— 返回一级后
+       经验/技能卡展开后高度为 0、无法正常显示。RO 在测量条
+       获得真实高度(首页变为可见)时自动重测,自愈;另配路由 hash 变化后的
+       200/600/1200ms 三次确定性重测(预览面板冻结渲染时 RO 不可靠)。 */
+    const ro = new ResizeObserver(() => measure());
+    root.querySelectorAll('.mob-card-measure').forEach((m) => ro.observe(m));
     window.addEventListener('resize', measure);
+    const onHash = () => { [200, 600, 1200].forEach((d) => setTimeout(measure, d)); };
+    window.addEventListener('hashchange', onHash);
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
-    return () => window.removeEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('hashchange', onHash); };
   }, []);
 }
 
@@ -2948,8 +2995,13 @@ function CopyContactLine({ icon: Icon, label, value }) {
       if (!copiedRef.current) rollerRef.current.style.width = widthsRef.current.main + 'px';
     };
     measure();
+    /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,首次量出 roller
+       宽度为 0 并钉死 —— 返回一级后联系方式只剩图标、文字被裁没。
+       RO 在文字行获得真实宽度时自动重测并重新钉宽,自愈。 */
+    const ro = new ResizeObserver(() => measure());
+    if (mainRef.current) ro.observe(mainRef.current);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
-    return () => clearTimeout(timerRef.current);
+    return () => { ro.disconnect(); clearTimeout(timerRef.current); };
   }, []);
 
   const copy = async () => {

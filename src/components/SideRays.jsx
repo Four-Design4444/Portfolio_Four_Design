@@ -79,8 +79,14 @@ function SideRays({
       await new Promise((resolve) => setTimeout(resolve, 10));
       if (!containerRef.current) return;
 
+      // 移动端降载：背景光线是慢效果，30fps 视觉无差，却能砍掉约一半 GPU
+      // 预算；dpr 上限也从 2 降到 1.5，全屏片元着色器像素量减约 44%。
+      const isMobile = document.documentElement.dataset.device === 'mobile';
+      const maxDpr = isMobile ? 1.5 : 2;
+      const frameInterval = isMobile ? 33 : 0; // ms；0 = 每帧都渲染
+
       const renderer = new Renderer({
-        dpr: Math.min(window.devicePixelRatio, 2),
+        dpr: Math.min(window.devicePixelRatio, maxDpr),
         alpha: true
       });
       rendererRef.current = renderer;
@@ -187,18 +193,25 @@ void main() {
 
       const updateSize = () => {
         if (!containerRef.current || !renderer) return;
-        renderer.dpr = Math.min(window.devicePixelRatio, 2);
+        renderer.dpr = Math.min(window.devicePixelRatio, maxDpr);
         const { clientWidth: w, clientHeight: h } = containerRef.current;
         renderer.setSize(w, h);
         uniforms.iResolution.value = [w * renderer.dpr, h * renderer.dpr];
       };
 
+      let lastRender = 0;
       const loop = (time) => {
         if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return;
+        // 先排下一帧：即便本帧跳过重绘，循环也不中断（保 WebGL 上下文 / shader）。
+        animationIdRef.current = requestAnimationFrame(loop);
+        // 标签页不可见时完全停渲，避免后台空转吃 CPU/GPU。
+        if (document.hidden) return;
+        // 移动端按 frameInterval 节流：iTime 用真实时间推进，动画速度不变。
+        if (frameInterval && time - lastRender < frameInterval) return;
+        lastRender = time;
         uniforms.iTime.value = time * 0.001;
         try {
           renderer.render({ scene: mesh });
-          animationIdRef.current = requestAnimationFrame(loop);
         } catch (error) {
           // WebGL contexts can be lost when the page is hidden.
         }

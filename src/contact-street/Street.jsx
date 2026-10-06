@@ -67,24 +67,46 @@ const HOST_JS = `
     ev.preventDefault();                            // iframe 自己不滚 → demo 相机不动
     post(ev.deltaY, ev.clientX, ev.clientY);
   }, { passive: false, capture: true });
-  // 触摸端同理：阻止 iframe 内滚动，把纵向位移交给父页面翻页。
-  var tY = 0, tId = -1;
+  // 触摸端:区分「滑动切页」与「长按拖拽镜头」(2026-10-04)。
+  //  - 手指落下后 280ms 内移动超过 12px → 判定为滑动:纵向位移转交父页面翻页
+  //    (上滑 = 回上一屏,与页面栈方向一致);
+  //  - 静置 280ms(长按)后才拖动 → 相机模式:不再转发翻页,交给 demo 自带的
+  //    pointer 拖拽旋转镜头(与 PC 的拖拽镜头一致);
+  //  - 两种模式全程 preventDefault,iframe 自身永不滚动,互不打断。
+  //  ⚠ demo 的镜头拖拽绑定在 host=#scene 的 pointer 事件上,触摸会派生
+  //    pointer 事件,所以相机模式里只要我们不转发、不 stopPropagation,
+  //    demo 就能照常收到 pointermove 完成旋转。
+  var tY = 0, tId = -1, tStartX = 0, tStartY = 0;
+  var camMode = false, swiped = false, pressTimer = 0;
   window.addEventListener('touchstart', function (ev) {
-    if (ev.touches.length !== 1) { tId = -1; return; }
-    tId = ev.touches[0].identifier; tY = ev.touches[0].clientY;
+    if (ev.touches.length !== 1) { tId = -1; clearTimeout(pressTimer); return; }
+    tId = ev.touches[0].identifier;
+    tY = ev.touches[0].clientY;
+    tStartX = ev.touches[0].clientX;
+    tStartY = ev.touches[0].clientY;
+    camMode = false; swiped = false;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(function () {
+      if (tId >= 0 && !swiped) camMode = true;   // 长按 280ms 未滑动 → 相机模式
+    }, 280);
   }, { passive: true, capture: true });
   window.addEventListener('touchmove', function (ev) {
     if (tId < 0) return;
     var i = -1;
     for (var k = 0; k < ev.touches.length; k += 1) if (ev.touches[k].identifier === tId) i = k;
     if (i < 0) { tId = -1; return; }
+    var x = ev.touches[i].clientX;
     var y = ev.touches[i].clientY;
     var dy = y - tY;
-    if (Math.abs(dy) >= 2) { tY = y; post(dy, ev.touches[i].clientX, y); }
-    ev.preventDefault();
+    var dx = x - tStartX;
+    var dyy = y - tStartY;
+    ev.preventDefault();                           // iframe 自身永不滚
+    if (!camMode && !swiped && Math.sqrt(dx * dx + dyy * dyy) >= 12) swiped = true;
+    if (camMode) return;                           // 相机模式:demo 自己转镜头
+    if (swiped && Math.abs(dy) >= 2) { tY = y; post(dy, x, y); }   // 滑动 → 翻页
   }, { passive: false, capture: true });
-  window.addEventListener('touchend', function () { tId = -1; }, { passive: true, capture: true });
-  window.addEventListener('touchcancel', function () { tId = -1; }, { passive: true, capture: true });
+  window.addEventListener('touchend', function () { tId = -1; clearTimeout(pressTimer); camMode = false; }, { passive: true, capture: true });
+  window.addEventListener('touchcancel', function () { tId = -1; clearTimeout(pressTimer); camMode = false; }, { passive: true, capture: true });
   // 冷启动期间若因任何原因产生了位移，归零，保证相机停在 overview 起始机位。
   window.scrollTo(0, 0);
 })();
