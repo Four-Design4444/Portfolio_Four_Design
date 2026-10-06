@@ -694,10 +694,12 @@ function App() {
   const mobileFlipTimerRef = useRef(0);
   const scheduleMobileFlipClear = () => {
     window.clearTimeout(mobileFlipTimerRef.current);
+    // 翻页动画 420ms(2026-10-07 提速),留 100ms 余量即可清理,别让
+    // exitDetail 多挂 300ms —— 那段时间详情层虽已翻出屏幕,但仍占着挂载。
     mobileFlipTimerRef.current = window.setTimeout(() => {
       setMobileFlip(null);
       setExitDetail(null);
-    }, 720);
+    }, 520);
   };
 
   useEffect(() => {
@@ -5076,7 +5078,11 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
   // 两侧卡 / 文案 / 下滑提示才依次淡入(mw-just-landed),随后恢复常态。
   const [landed, setLanded] = useState(false);
   const prevArrivingRef = useRef(arriving);
-  useEffect(() => {
+  // ⚠ 必须用 useLayoutEffect:覆盖层摘除那一帧 React 已经把 track 的 opacity
+  //   写回 1(卡片可见),如果这个 landed 状态晚一帧(useEffect 在绘制后),
+  //   浏览器会先画出"卡片全亮"的一帧,淡入动画再从 0 开始 —— 用户看到的就是
+  //   「跳帧入场」。布局阶段同步置位,淡入类在首次绘制前就挂上。
+  useLayoutEffect(() => {
     const was = prevArrivingRef.current;
     prevArrivingRef.current = arriving;
     if (was && !arriving) {
@@ -5170,8 +5176,8 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
   const step = (delta) => setActiveIndex((i) => (i + delta + works.length) % works.length);
 
   /* ---- 移动端单屏卡组手势(2026-10-06)----
-     横滑 = 切换分类内项目(到位吸附,边缘有阻尼);下滑 = 进详情(整页翻页);
-     点侧卡 = 切到该卡;点主卡 = 进详情。轴锁定:位移超过 10px 才判定主轴,
+     横滑 = 切换分类内项目(到位吸附,边缘有阻尼);竖滑 = 进详情(整页翻页,
+     上下都能触发,向上滑跟手);点侧卡 = 切到该卡;点主卡 = 进详情。轴锁定:位移超过 10px 才判定主轴,
      之后本手势只沿主轴走。指针捕获挂在舞台上,用 elementFromPoint 还原
      点击命中的卡(pointer capture 会把 pointerup 重定向到舞台)。 */
   const trackRef = useRef(null);
@@ -5247,10 +5253,14 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
       d.vel = dx - d.lastDX; d.lastDX = dx; d.dx = dx;
       if (Math.abs(dx) > 8) d.moved = true;
       mwApply(dx, 0, false);
-    } else if (rawDy > 0) {
+    } else {
       d.dy = rawDy;
-      if (rawDy > 8) d.moved = true;
-      mwApply(0, rawDy, false);
+      if (Math.abs(rawDy) > 8) d.moved = true;
+      // 2026-10-07 翻屏方向修正后,「下一屏在下方」= 屏幕上移:只有向上滑
+      // 才跟手(二级页随手指上移,与翻屏同向)。向下滑同样提交翻页(手势
+      // 方向容错,避免用户习惯性下滑没反应),但不反向跟手 —— 否则松手时
+      // 先回弹再上翻,中间多一次方向反转的顿挫。
+      mwApply(0, rawDy < 0 ? rawDy : 0, false);
     }
   };
   const mwUp = (e) => {
@@ -5270,7 +5280,7 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
     }
     if (d.axis === 'x' && (Math.abs(d.dx) > 62 || Math.abs(d.vel) > 0.45)) {
       setActiveIndex((i) => Math.min(works.length - 1, Math.max(0, i + (d.dx < 0 ? 1 : -1))));
-    } else if (d.axis === 'y' && d.dy > 72) {
+    } else if (d.axis === 'y' && Math.abs(d.dy) > 72) {
       openDetail(works[mwIndexRef.current]);
     } else {
       mwApply(0, 0, true);

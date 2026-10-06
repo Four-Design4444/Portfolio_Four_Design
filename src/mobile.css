@@ -1346,52 +1346,67 @@ html[data-device="mobile"] .work-detail-page {
   overscroll-behavior: contain;
   min-height: 100%;
   background: #000000;
+  /* 三级页不显示浏览器滚动条(2026-10-07):层内滚动照常,只是不画条 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-@keyframes mwFlipDown {
-  from { transform: translateY(-100vh); }
-  to { transform: translateY(0); }
+html[data-device="mobile"] .work-detail-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
-@keyframes mwFlipUp {
-  from { transform: translateY(0); }
-  to { transform: translateY(-100vh); }
-}
-
-/* 下滑翻页进入(曲线与导航 morph 的 620ms 家族一致) */
-html[data-device="mobile"] .work-detail-page.mw-flip-enter {
-  animation: mwFlipDown 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* 上滑翻页返回:离场用略快的 ease-in,读出"被推走"的方向感 */
-html[data-device="mobile"] .work-detail-page.mw-flip-exit {
-  animation: mwFlipUp 600ms cubic-bezier(0.5, 0.08, 0.72, 0.2) both;
-  will-change: transform;
-}
-
-/* 真正的「翻屏」(2026-10-07):不是详情层单独压下来,而是
-   [详情页 | 二级页] 这条纵向胶片整体平移 —— 进入(下滑)时二级页向屏幕
-   下方滑出、详情页从顶部等速补位;返回(上滑)反向。两层曲线/时长必须
-   与 mwFlipDown/mwFlipUp 完全一致,中途才不会出现层间错缝或露底。 */
-@keyframes mwUnderDown {
-  from { transform: translateY(0); }
-  to { transform: translateY(100vh); }
-}
-
-html[data-device="mobile"] .mw-under.mw-under-exit-down {
-  animation: mwUnderDown 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  will-change: transform;
-}
-
-@keyframes mwUnderUp {
+/* 翻屏方向(2026-10-07 修正):详情页是二级页的**下一屏**(在下方),
+   所以「往下翻屏」= 屏幕整体向上平移一屏:二级页滑出屏幕顶部,详情页从
+   屏幕底部升上来。返回 = 反向翻回上一屏(详情页向下退出、二级页从上方归位)。
+   ⚠ 两层时长/曲线必须完全一致,中途才不会错缝露底;
+   ⚠ 曲线不用 ease-in/ease-out(用户反馈"中间有停顿感"),直接匀速快速翻。 */
+@keyframes mwFlipNextIn {
   from { transform: translateY(100vh); }
   to { transform: translateY(0); }
 }
 
-/* 返回时二级页(此时已回到常规文档流)从屏幕底部同步升回;
+@keyframes mwFlipNextOut {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100vh); }
+}
+
+@keyframes mwFlipBackOut {
+  from { transform: translateY(0); }
+  to { transform: translateY(100vh); }
+}
+
+@keyframes mwFlipBackIn {
+  from { transform: translateY(-100vh); }
+  to { transform: translateY(0); }
+}
+
+/* 下滑翻页进入(下一屏从下方升上来) */
+html[data-device="mobile"] .work-detail-page.mw-flip-enter {
+  animation: mwFlipNextIn 420ms linear both;
+  will-change: transform;
+}
+
+/* 上滑翻页返回(详情页向下退出) */
+html[data-device="mobile"] .work-detail-page.mw-flip-exit {
+  animation: mwFlipBackOut 420ms linear both;
+  will-change: transform;
+}
+
+/* 真正的「翻屏」(2026-10-07):不是详情层单独压下来,而是
+   [二级页 | 详情页] 这条纵向胶片整体平移 —— 往下翻一屏时二级页滑出顶部、
+   详情页从底部等速补位;返回(往上一屏)反向。两层曲线/时长必须与
+   mwFlipNextIn / mwFlipBackOut 完全一致,中途才不会出现层间错缝或露底。 */
+html[data-device="mobile"] .mw-under.mw-under-exit-down {
+  animation: mwFlipNextOut 420ms linear both;
+  will-change: transform;
+}
+
+/* 返回时二级页(此时已回到常规文档流)从屏幕顶部同步归位;
    动画落点 = 静止位,类名摘除后无跳变。 */
 html[data-device="mobile"] .mw-under-return {
-  animation: mwUnderUp 600ms cubic-bezier(0.5, 0.08, 0.72, 0.2) both;
+  animation: mwFlipBackIn 420ms linear both;
   will-change: transform;
 }
 
