@@ -284,12 +284,8 @@
           if (!rail || !rail.parentNode) return;
           var style = doc.createElement('style');
           // 2026-10-07: 加载页背景整体换成参考版 outputs/typing-cat-04-mini.html 的做法,
-          // 两层:①底色 = 04 的 main 径向渐变(--bg #111719 + 3% --light 提亮的中心,
-          //   等价色 #161d1e);②猫咪身后的光 = 04 真正用的那套 SVG 光晕(渐变+椭圆),
-          //   不再用 CSS ::before 假光圈。位置按 v1.1 的 viewBox(1080x659)重新配比:
-          //   04 的光晕 rx162/ry144 对 420x340 画布里的猫(高约110),这里猫高约498,
-          //   等比放大后收紧到 rx400/ry310,中心落在猫躯干而非画布中点;
-          //   地面光池同理从 04 的 cy286(猫脚下方)换算到 v1.1 的 y612。
+          // 两层:①底色 = 04 的 main 径向渐变(--bg #111719,中心是 3% --light 提亮出来的
+          //   #161d1e);②猫咪身后的光 = 04 真正在用的那套 SVG 光晕椭圆,几何换算见下。
           // demo 源文件仍字节不动,与进度条替换同一机制:运行时同域注入,不碰动画代码。
           style.textContent = ':root{background:#111719!important}'
             + 'html,body{background:#111719!important}'

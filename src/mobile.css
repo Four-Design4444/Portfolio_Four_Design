@@ -1017,7 +1017,71 @@ html[data-device="mobile"] .mob-deck {
 }
 html[data-device="mobile"] .mob-deck.grabbing { cursor: grabbing; }
 
-/* Card: 3:5, centred via transform; JS overwrites transform every frame. */
+/* ===== 统一卡面 (2026-10-07) =====
+   一级卡组(.mob-card)与二级轨道(.mw-card)共用同一套卡面。原因:跨级转场不再是
+   一张「裸露 img 覆盖层」在飞,而是**这张卡本体**在动(见 WorksPage 的入场/离场),
+   两端尺寸不同,只有把卡面内部的一切(圆角/底色/阴影/蒙版渐变/文案位置与字号)
+   按**卡片宽度的百分比**(cqw)表达,同一张卡在任何尺寸下才逐像素一致 ——
+   任何一处写死 px,放大到二级尺寸时文字/位置就会错位,交接瞬间读出「换了张卡」。
+   cqw 要求卡面自己是容器:container-type:size(卡片尺寸由外部给定,与内容无关)。
+   系数按二级主卡 290.8px 反推:9cqw=26.2(原 26px) / 4.6cqw=13.4(原 13px) /
+   6.9cqw=20 / 6.2cqw=18 —— 二级卡面与改动前逐项等值,一级卡面按同一比例缩放。 */
+html[data-device="mobile"] .mob-card,
+html[data-device="mobile"] .mw-card {
+  container-type: size;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #11131a;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, .55);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-device="mobile"] .mob-card-img,
+html[data-device="mobile"] .mw-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+html[data-device="mobile"] .mob-veil,
+html[data-device="mobile"] .mw-card-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 9, 13, .34) 0%, rgba(8, 9, 13, 0) 30%, rgba(8, 9, 13, 0) 56%, rgba(8, 9, 13, .78) 100%);
+}
+html[data-device="mobile"] .mob-copy,
+html[data-device="mobile"] .mw-card-copy {
+  position: absolute;
+  left: 6.9cqw;
+  right: 5.5cqw;
+  bottom: 6.2cqw;
+  z-index: 2;
+  display: grid;
+  gap: 1.4cqw;
+  text-align: left;
+  color: #ffffff;
+}
+html[data-device="mobile"] .mob-title,
+html[data-device="mobile"] .mw-card-copy strong {
+  font-size: 9cqw;
+  font-weight: 700;
+  line-height: 1.14;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .45);
+}
+html[data-device="mobile"] .mob-meta,
+html[data-device="mobile"] .mw-card-copy b {
+  font-size: 4.6cqw;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, .82);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .4);
+}
+
+/* 卡组专属:3:5、以 transform 居中、每帧由 JS 覆写 transform。
+   卡面阴影在卡组里承担纵深提示(前卡重、侧卡轻),所以这里覆盖成轻档;
+   .front 与二级主卡同值(= 跨级飞行两端必须一致的那一档)。 */
 html[data-device="mobile"] .mob-card {
   position: absolute;
   top: 50%;
@@ -1025,25 +1089,8 @@ html[data-device="mobile"] .mob-card {
   height: 100%;
   aspect-ratio: 3 / 5;
   margin: 0;
-  border-radius: 20px;
-  overflow: hidden;
   will-change: transform, opacity;
   box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
-  user-select: none;
-  background: #11131a;
-}
-html[data-device="mobile"] .mob-card-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  pointer-events: none;
-}
-html[data-device="mobile"] .mob-veil {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(8, 9, 13, .5) 0%, rgba(8, 9, 13, 0) 30%, rgba(8, 9, 13, 0) 58%, rgba(8, 9, 13, .8) 100%);
 }
 html[data-device="mobile"] .mob-dim {
   position: absolute;
@@ -1052,29 +1099,8 @@ html[data-device="mobile"] .mob-dim {
   opacity: 0;
   pointer-events: none;
 }
-html[data-device="mobile"] .mob-card.front { box-shadow: 0 24px 56px rgba(0, 0, 0, .6); }
+html[data-device="mobile"] .mob-card.front { box-shadow: 0 24px 56px rgba(0, 0, 0, .55); }
 html[data-device="mobile"] .mob-card.lift { box-shadow: 0 36px 72px rgba(0, 0, 0, .65); }
-html[data-device="mobile"] .mob-copy {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-html[data-device="mobile"] .mob-title {
-  font-size: 17px;
-  font-weight: 800;
-  line-height: 1.12;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, .6);
-}
-html[data-device="mobile"] .mob-meta {
-  font-size: 11px;
-  font-weight: 500;
-  color: #cdd3de;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, .6);
-}
 
 html[data-device="mobile"] .mob-dots {
   display: flex;
@@ -1206,7 +1232,7 @@ html[data-device="mobile"] .mw-track {
   will-change: transform;
 }
 
-/* 非当前卡:缩小 + 压暗,读出"队列里还有下一张";右侧露边即设计稿的 peek。 */
+/* 非当前卡:缩小 + 压暗,读出"队列里还有下一张";左右两侧露边即 peek。 */
 html[data-device="mobile"] .mw-slide {
   flex: none;
   width: var(--mw-card-w);
@@ -1222,6 +1248,8 @@ html[data-device="mobile"] .mw-slide.is-current {
   filter: none;
 }
 
+/* 卡面本体(圆角/底色/阴影/蒙版渐变/文案)已上移到「统一卡面」一节,
+   这里只保留轨道专属的盒模型与排布 —— 二级主卡与一级卡组必须是同一张卡。 */
 html[data-device="mobile"] .mw-card {
   position: relative;
   display: block;
@@ -1229,100 +1257,44 @@ html[data-device="mobile"] .mw-card {
   height: var(--mw-card-h);
   padding: 0;
   border: 0;
-  border-radius: 20px;
-  overflow: hidden;
-  background: #11131a;
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
-  -webkit-tap-highlight-color: transparent;
   cursor: pointer;
 }
 
-html[data-device="mobile"] .mw-card-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
+/* ---- 入场:轨道自身就是那张在飞的卡(2026-10-07 重做) --------------------
+   旧做法是另挂一张「裸露 img 覆盖层」从一级卡片飞到二级主卡,到达后再摘掉、
+   把真卡亮出来 —— 覆盖层没有蒙版/标题/阴影,交接瞬间这些东西凭空出现,
+   读起来就是「换了一张卡」;副卡更是等落位之后才各自淡入,主卡已经站好了
+   它们还没出来(业主两轮反馈)。
 
-html[data-device="mobile"] .mw-card-veil {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(8, 9, 13, 0.2) 0%, rgba(8, 9, 13, 0) 30%, rgba(8, 9, 13, 0) 55%, rgba(8, 9, 13, 0.72) 100%);
+   现在改为:轨道的**初始姿态**就是源卡姿态 —— 主卡被放到源卡矩形上(位移 +
+   缩放,尺寸等于源卡),其余卡以同一尺寸叠在它身后;随后与飞行同帧、同时长
+   张开到静止姿态。于是:
+     · 屏幕上永远只有这张卡本身,没有第二个元素参与交接 → 不可能跳帧;
+     · 副卡从主卡身后「抽」出来,与主卡同帧出发、同帧到位 → 不再晚到。
+   mw-armed 只存在一帧:写初始姿态时禁止过渡(否则会从静止姿态倒着飞出去)。 */
+html[data-device="mobile"] .works-index-page.mw-armed .mw-slide { transition: none; }
+html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
+  transition-duration: var(--mw-emerge-dur, 700ms);
 }
+html[data-device="mobile"] .works-index-page.mw-entering .mw-hint { opacity: 0; animation: none; }
+html[data-device="mobile"] .works-index-page.mw-entering .mw-stage { pointer-events: none; }
+/* 离场(二级→一级)反向收拢,期间同样不许用户插手。 */
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-stage { pointer-events: none; }
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-hint { opacity: 0; animation: none; }
+html[data-device="mobile"] .works-index-page.mw-leaving .works-side-rays { opacity: 0; }
+html[data-device="mobile"] .works-side-rays { transition: opacity 260ms ease; }
 
-html[data-device="mobile"] .mw-card-copy {
-  position: absolute;
-  left: 20px;
-  right: 16px;
-  bottom: 18px;
-  z-index: 2;
-  display: grid;
-  gap: 6px;
-  text-align: left;
-  color: #ffffff;
-  transition: opacity 420ms ease 80ms;
-}
-
-html[data-device="mobile"] .mw-card-copy strong {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.15;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.4);
-}
-
-html[data-device="mobile"] .mw-card-copy b {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.8);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
-}
-
-/* 放大动效到达前:二级页整体留空(2026-10-07 用户要求「二级页面默认情况下
-   是没有内容的」)——轨道(含主卡)与下滑提示全部不可见,屏幕上只有飞行中的
-   封面覆盖层;落位(onDone 摘除覆盖层)瞬间主卡无感接班。 */
-html[data-device="mobile"] .mw-is-arriving .mw-track,
-html[data-device="mobile"] .mw-is-arriving .mw-hint { opacity: 0; }
-/* ⚠ .mw-hint 的 bob keyframes 里写了 opacity(0.7~1),动画值会覆盖上面的
-   静态 opacity:0 —— 到达期间必须连 bob 一起停掉,提示才真的不可见。 */
-html[data-device="mobile"] .mw-is-arriving .mw-hint { animation: none; }
-html[data-device="mobile"] .mw-is-arriving .mw-stage,
-html[data-device="mobile"] .mw-is-arriving .mw-hint { pointer-events: none; }
-
-/* 落地余韵:主卡已在落点(覆盖层接班,无需动画),两侧卡、文案与压暗、
-   下滑提示依次淡入。keyframes 只定义 from,动画到元素自身的静止值,
-   不会在结束帧跳变(veil/copy 自带的透明度不受影响)。 */
-/* ⚠ 时序(2026-10-07 业主反馈「副卡入场太慢:主卡都进来好一阵了,副卡还没出来」):
-   覆盖层飞行 1050ms 期间二级页整体留空,主卡在落位那一刻**瞬间**接班,所以
-   副卡的淡入起点必须贴着这一帧,不能再叠 140ms 延迟 —— 旧值 680ms+140ms 让
-   副卡比主卡晚近 1 秒才出现。现在副卡与主卡同帧起步(只留 460ms 的柔化),
-   文案/压暗与下滑提示按 120/260ms 依次跟上,整体余韵仍保留但不再拖尾。 */
-html[data-device="mobile"] .mw-just-landed .mw-slide:not(.is-current) {
-  animation: mwFadeIn 460ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-html[data-device="mobile"] .mw-just-landed .mw-card-copy,
-html[data-device="mobile"] .mw-just-landed .mw-card-veil {
-  animation: mwFadeIn 520ms ease 120ms backwards;
-}
-html[data-device="mobile"] .mw-just-landed .mw-hint {
-  /* 提示自带 bob 动画(含 translateX 居中),淡入必须用专属 keyframes:
-     终态对齐 bob 的 0% 相位(ty0/opacity .7),结束后 bob 无缝接管。 */
-  animation: mwHintIn 520ms ease 260ms backwards;
+/* 落位后的余韵:只剩下滑提示淡入(卡片的入场已由轨道自己完成,见上方
+   mw-entering —— 主卡与副卡同帧张开,这里不再对任何卡片做二次淡入,
+   那正是「主卡站好了副卡才出来」的来源)。keyframes 只定义 from,
+   动画到元素自身的静止值,结束帧不跳变(提示自带 bob 含 translateX 居中)。 */
+html[data-device="mobile"] .mw-landed .mw-hint {
+  animation: mwHintIn 520ms ease backwards;
 }
 
 @keyframes mwHintIn {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to { opacity: 0.7; transform: translateX(-50%) translateY(0); }
-}
-
-@keyframes mwFadeIn {
-  from { opacity: 0; }
-}
-
-/* 覆盖层飞行放慢(2026-10-07 用户要求:一级→二级的卡片过渡慢一点) */
-html[data-device="mobile"] .shared-image-transition {
-  transition-duration: 1050ms;
 }
 
 /* 底部下滑提示:双 V,慢速上下浮动 */

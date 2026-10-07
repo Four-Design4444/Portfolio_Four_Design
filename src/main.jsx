@@ -102,22 +102,26 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 // ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(实测 R 的 getBoundingClientRect().right)，
 //    使首字母 F 正好接在 R 结束的地方，形成纵向连续的视觉关系。
 //
-// ⚠ 2026-10-07 二次修正(业主: 「FOUR DESIGN 还是在上面所有 SVG 全部入场后才入场」)。
-//   探针 .workbuddy/tools/probe-byline-overlap.mjs 实测旧参数(2040/120/1800)：
-//     SVG 全部完成 = 2947ms —— 那一刻首字 opacity 只有 0.50、中间字 0.06、末字 0.00，
-//     整行要到 5000ms 才收尾。也就是说"上面全入场完"时下面才刚过半 → 观感就是分两段。
-//   根因有二，都已改：
-//   ① 起点太晚：R 的入场上限虽然是 index*120 + 1800 = 2040ms，但 smootherstep 缓动下
-//      它在 ≈1720ms 就已经 ≥0.95 —— 眼睛早就认定"R 入场完了"。所以起点改按**可见完成**
-//      取 1720ms，让 FOUR DESIGN 的左→右扫过与 PORTFOLIO/welcome 的收尾真正叠在一起。
-//   ② 单字时长太长：小号(10px)字形套用大字母的 1800ms 解模糊，前 40% 时间都是看不出
-//      东西的糊块，等于又晚了半秒。缩短到 650ms：11 个字在 SVG 落地(2947ms)时已成型
-//      约 70%，尾巴只多留 ~400ms。
-//   同时 stagger 保持 100ms(11 字共 1000ms 铺开) —— 业主此前否掉过 60ms 那版，说读起来
-//   像"整行同时入场"，所以左→右次序必须留足可辨的间隔。
-const BYLINE_INTRO_START_MS = 1720; // R 达到 ~0.95 可见(名义 2040ms 的 83%)的时刻
-const BYLINE_CHAR_STAGGER_MS = 100;  // 11 字铺开 1000ms：比 PORTFOLIO 的 120ms 略快，但左→右清晰可辨
-const BYLINE_CHAR_DURATION_MS = 650; // 缩短单字时长，使整行在 SVG 收尾时基本成型
+// ⚠ 2026-10-07 三次修正。前两版都错在同一个地方：我给 FOUR DESIGN **自创了一套节奏**
+//   (v1 2040/120/1800 拖到 5000ms；v2 1720/100/650 快闪；v3 1720/85/380 更快)，
+//   而业主真正要的是「**跟上面 SVG 一样的入场动效**」+「不能等上面全入场完才出现」。
+//   所以这一版不再自创参数，直接把上面 SVG 的入场公式原样搬过来：
+//     · 同样的 easing      —— smooth() (smootherstep)，与 path 的 intro 同一个函数
+//     · 同样的单字时长      —— 1800ms
+//     · 同样的解模糊幅度    —— blur(52px → 0)，这是那"从糊里浮出来"的观感本体
+//     · 同样的间距          —— 120ms(与 PORTFOLIO 逐字完全一致)
+//     · 同样没有位移        —— SVG 的 transform 只由指针悬停驱动，入场阶段是 0；副标也不该有上浮
+//   起手点 BYLINE_INTRO_START_MS = 1080：PORTFOLIO 的 9 个 path 占 0~960ms 的 delay，
+//   1080 正是第 10 个位置(= welcome 首字)的时刻 —— 也就是**上面最后一个大写字母刚起步入场时，
+//   FOUR DESIGN 就已经跟着入场了**，两条小字(welcome / FOUR DESIGN)同批进入。
+//   (这才是"FOUR DESIGN 在上面全入场完才出现"的结构性修复：它的整段动效与上面重叠，
+//    而不是等上面收干净再单独补一段。)
+// ⚠ 想让它更早收干净就动 BYLINE_CHAR_DURATION_MS(按比例缩)，**不要动 stagger**：
+//   stagger 压到 60ms 量级业主否过(读作"整行同时入场")。
+const BYLINE_INTRO_START_MS = 1080; // = welcome 首字时刻；此时 PORTFOLIO 最后一个字母刚起手
+const BYLINE_CHAR_STAGGER_MS = 120;  // 与 PORTFOLIO 逐字间距完全一致
+const BYLINE_CHAR_DURATION_MS = 1800; // 与 PORTFOLIO 淡入时长完全一致
+const BYLINE_CHAR_BLUR_PX = 52;      // 与 PORTFOLIO 解模糊幅度完全一致(入场观感的本体)
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -4746,12 +4750,14 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         const rotate = dx * 12 * pull + wave * 2.2;
         const skew = dy * 9 * pull;
         node.style.opacity = String(intro);
-        node.style.filter = `blur(${((1 - intro) * 52).toFixed(3)}px)`;
+        node.style.filter = `blur(${((1 - intro) * BYLINE_CHAR_BLUR_PX).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
-      // 移动端副标 "Four Design"：逐字左→右入场，起手点以 SVG 的 R「看得见的完成」为准
-      // (BYLINE_INTRO_START_MS)，与上方尚未收尾的字母并行，读作同一个盒子继续往右扫。
-      // 位置：把左缘对齐到 R 的右缘，使首字母 F 正好接在 R 结束的位置，上下读作同一处出场。
+      // 移动端副标 "Four Design"：**入场动效与上面 SVG 逐字完全同款** ——
+      // 同一个 smooth() easing / 1800ms / blur(52px→0) / 120ms 间距 / 无位移(上面 path 的
+      // transform 只由指针悬停驱动，入场阶段是 0，所以副标也不做上浮)。
+      // 起手点见 BYLINE_INTRO_START_MS 注释：与 welcome 首批同刻，上面还在入场时它就跟着入场。
+      // 位置：把左缘对齐到 R 的右缘，使首字母 F 正好接在 R 的位置上，上下读作同一处。
       const byline = bylineRef.current;
       if (byline) {
         if (!bylineAlignRef.current && start !== null) {
@@ -4773,19 +4779,16 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         // 整行容器只负责定位/对齐，本身不参与淡入(避免与逐字叠加)。
         byline.style.opacity = '1';
         byline.style.filter = 'none';
-        // 逐字从左到右入场：从 R「看得见的完成」开始(见 BYLINE_INTRO_START_MS 注释)，
-        // 与仍在上方的 PORTFOLIO 尾段/welcome 并行 → 读作同一个盒子继续往右入场。
+        // 与上面 path 逐字同一套公式：delay = 起点 + i*120，时长 1800ms，smootherstep 解模糊。
+        // 不再有独立的位移/幂次解模糊 —— 那些"自创参数"正是业主说的"跟上面SVG不一样"。
         const chars = bylineCharRefs.current;
         for (let i = 0; i < chars.length; i++) {
           const node = chars[i];
           if (!node) continue;
           const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
-          const miss = 1 - charIntro;
           node.style.opacity = String(charIntro);
-          // 解模糊按 miss^1.7 衰减(而不是线性)：小字号下线性解模糊会让前 40% 时间都是一个
-          // 看不出内容的糊块，观感上等于把"起手"又推后半秒。幂次衰减让它很快可读。
-          node.style.filter = `blur(${(Math.pow(miss, 1.7) * 7).toFixed(3)}px)`;
-          node.style.transform = `translate3d(0, ${(miss * 6).toFixed(2)}px, 0)`;
+          node.style.filter = `blur(${((1 - charIntro) * BYLINE_CHAR_BLUR_PX).toFixed(3)}px)`;
+          node.style.transform = 'none';
         }
       }
       frame = window.requestAnimationFrame(render);
