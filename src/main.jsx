@@ -2477,6 +2477,12 @@ function MobileShowcaseDeck({ items, openWorks, active = true }) {
       } else {
         goToRef.current(s.downIdx);
       }
+      // ⚠ 必须重渲染:按下那一刻的 render(isDrag=true)已经把 .front 摘掉了。
+      //   若在这里直接 return,类名就永远缺失 —— 表现为「点卡进二级页再返回后,
+      //   首页主卡的阴影比两侧副卡还浅」(.mob-card.front 的 24px/56px 阴影丢了)。
+      //   goTo 分支内部自己会 render,这里统一再走一次是幂等的(静止态重写同样的
+      //   静止 transform),不会引入过渡或跳变。
+      renderRef.current();
       if (scheduleCarouselRef.current) scheduleCarouselRef.current();
       return;
     }

@@ -278,6 +278,24 @@ html[data-device="mobile"] .morph-logo .four-logo {
   height: 12px;
 }
 
+/* The mark itself must keep the SVG's own 701:200 ratio on EVERY level.
+   The button box above is only a hit area and keeps the 12px rhythm; the <img>
+   inside it gets its true proportional height (40 x 200/701 = 11.4123px).
+   Why this matters: with `object-fit: contain`, a box whose ratio differs from
+   the asset's makes the rasterised strokes shrink off-centre and go slightly
+   translucent at the edges — the white letters then read as "dark-outlined"
+   against the dark capsule. Worse, home (50 x 14.27 = 3.5049, exact) and works
+   (40 x 12 = 3.3333, 4.9% flat) disagreed, so the 620ms width/height morph
+   interpolated the ratio between 3.505 and 3.333 and the distortion was worst
+   mid-flight — exactly when the owner saw the stray outline. Deriving both
+   ends from 200/701 makes the ratio constant through the whole transition and
+   the resting distortion 0%. `height:auto` would also be right here, but
+   auto<->length is not interpolable (see the home rule above), which is what
+   caused the FOUR jump-frame bug on 2026-10-05. */
+html[data-device="mobile"] .morph-logo .four-logo {
+  height: 11.41px;
+}
+
 /* Leave a little more breathing room between the capsule edge and the mark. */
 html[data-device="mobile"] .morph-logo {
   margin-left: 15px;
