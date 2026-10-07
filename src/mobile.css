@@ -1233,9 +1233,15 @@ html[data-device="mobile"] .mw-track {
 }
 
 /* 非当前卡:缩小 + 压暗,读出"队列里还有下一张";左右两侧露边即 peek。
-   ⚠ z-index 必须显式给:入场初始姿态下 33 张卡全部叠在同一位置(全尺寸相同),
+   ⚠ z-index 必须显式给:入场初始姿态下全部卡叠在同一位置(尺寸相同),
      若靠 DOM 顺序决定叠放,排在最后的副本会压在主卡之上 —— 那是**另一件作品**,
-     用户会看到主卡闪一下别人再张开。当前卡固定在最高层,副卡一律从它身后抽出。 */
+     用户会看到主卡闪一下别人再张开。当前卡固定在最高层,副卡一律从它身后抽出。
+   ⚠ 压暗用「纯黑覆盖层」而不是 filter:brightness(.55) —— 数学上完全等价
+     (c*(1-.45) ≡ c*.55,逐像素相同),但 filter 会给每张卡建一个渲染表面
+     再跑一遍滤镜,33 张叠在一起时实测多花 ~95ms,正好堵在动画起跑那一帧。
+     首页卡组(.mob-dim)用的也是覆盖层,两边现在同一套做法。
+   ⚠ data-far 的卡整张不绘制(见 RAIL_WINDOW):入场那一摞里它们被主卡完整
+     盖住,平时又远在屏外,隐藏零代价、零视觉差别。 */
 html[data-device="mobile"] .mw-slide {
   flex: none;
   width: var(--mw-card-w);
@@ -1243,15 +1249,25 @@ html[data-device="mobile"] .mw-slide {
   justify-content: center;
   z-index: 1;
   transform: scale(0.94);
-  filter: brightness(0.55);
-  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1), filter 520ms ease;
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-
+html[data-device="mobile"] .mw-slide[data-far] { visibility: hidden; }
 html[data-device="mobile"] .mw-slide.is-current {
   z-index: 2;
   transform: none;
-  filter: none;
 }
+/* 压暗层压在卡面之上(z-index 3 > 文案的 2),圆角由 .mw-card 的 overflow 裁掉。 */
+html[data-device="mobile"] .mw-slide .mw-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #000;
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 520ms ease;
+}
+html[data-device="mobile"] .mw-slide.is-current .mw-card::after { opacity: 0; }
 
 /* 卡面本体(圆角/底色/阴影/蒙版渐变/文案)已上移到「统一卡面」一节,
    这里只保留轨道专属的盒模型与排布 —— 二级主卡与一级卡组必须是同一张卡。 */

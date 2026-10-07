@@ -304,6 +304,18 @@ const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL, ...WORKS_RAIL];
 const RAIL_LO = RAIL_N;          // 允许停留的最左索引(中间副本的第一张)
 const RAIL_HI = RAIL_N * 2 - 1;  // 允许停留的最右索引(中间副本的最后一张)
 const RAIL_HOME = RAIL_N;        // 初始落点 = 中间副本
+/* 「活跃窗口」(2026-10-07 性能):只有距当前索引 ±RAIL_WINDOW 的卡参与绘制
+   (data-far → visibility:hidden),再远的整份副本既不渲染也不解码图片。
+   ⚠ 为什么必须这么做:入场初始姿态要求「源卡尺寸」的每张卡都缩到主卡位置上,
+     于是 33 张卡在同一矩形里叠成一摞 —— 浏览器得把这一摞**全部**画出来
+     (每张都带大圆角 + 56px 投影 + 蒙版渐变 + 圆角裁剪的位图)。实测这一个
+     绘制任务就把主线程堵了 60~200ms,正好卡在动画起跑那一帧,读起来就是
+     「点了没反应,然后突然张开」。去掉投影/滤镜/蒙版任一项只能省一部分,
+     33 → 9 才是量级上的解法。
+   为什么不会露馅:窗口边缘(±4)距中心 4×312px ≈ 1250px,视口才 393px 宽,
+     所以卡「进入窗口」这件事永远发生在屏外;而入场那一摞里,窗口外的副本
+     本来就被主卡(z-index 2)完整盖住,隐藏它们没有任何视觉差别。 */
+const RAIL_WINDOW = 4;
 /* 跨级转场时长:入场(从源卡姿态张开到静止)与离场(收拢回首页那张卡)同值。
    必须与 .mw-entering/.mw-leaving 的过渡时长一致,否则主卡与副卡会分家。 */
 const RAIL_EMERGE_MS = 700;
@@ -6143,37 +6155,41 @@ function WorksPage({
           onPointerCancel={railCancel}
         >
           <div className="mw-track" ref={trackRef}>
-            {RAIL_SLIDES.map((work, i) => (
-              <div
-                className={`mw-slide${i === pos ? ' is-current' : ''}`}
-                key={`${work.id}-${i}`}
-                data-rail-index={i}
-                data-rail-work={work.id}
-              >
-                <button
-                  type="button"
-                  className="mw-card"
-                  aria-label={`${work.title} — 下滑或点按查看设计详情`}
+            {RAIL_SLIDES.map((work, i) => {
+              /* 距当前卡 ±RAIL_WINDOW 之外:整张卡不参与绘制、也不解码封面
+                 (见 RAIL_WINDOW 处的说明)。attribute 存在即代表 far。 */
+              const live = Math.abs(i - pos) <= RAIL_WINDOW;
+              return (
+                <div
+                  className={`mw-slide${i === pos ? ' is-current' : ''}`}
+                  key={`${work.id}-${i}`}
+                  data-rail-index={i}
+                  data-rail-work={work.id}
+                  data-far={live ? undefined : ''}
                 >
-                  {/* ⚠ src 只给当前卡附近的 ±4 张:33 个节点若同时挂上 src,首帧
-                       要一次性解码 11 张 ~290×485 的封面(实测主线程阻塞 144ms),
-                       而那正是入场动画即将起跑的时刻 —— 动画会整整晚 ~150ms 才动,
-                       读起来就是「点了没反应,然后突然张开」。远处的副本此刻不是
-                       被主卡完全盖住(入场初始姿态)就是远在屏外,不需要位图。 */}
-                  <img
-                    className="mw-card-img"
-                    src={Math.abs(i - pos) <= 4 ? (work.detailHero ?? work.image) : undefined}
-                    alt=""
-                    decoding="async"
-                  />
-                  <span className="mw-card-veil" aria-hidden="true" />
-                  <span className="mw-card-copy" aria-hidden="true">
-                    <strong>{work.title}</strong>
-                    <b>{work.subtitle}</b>
-                  </span>
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    className="mw-card"
+                    aria-label={`${work.title} — 下滑或点按查看设计详情`}
+                  >
+                    {/* ⚠ 只给活跃窗口挂 src:33 个节点同时挂上会让首帧一次性解码
+                         全部封面,正好压在动画起跑那一帧上(实测多花 ~85ms)。
+                         远处副本要么被主卡盖住、要么远在屏外,不需要位图。 */}
+                    <img
+                      className="mw-card-img"
+                      src={live ? (work.detailHero ?? work.image) : undefined}
+                      alt=""
+                      decoding="async"
+                    />
+                    <span className="mw-card-veil" aria-hidden="true" />
+                    <span className="mw-card-copy" aria-hidden="true">
+                      <strong>{work.title}</strong>
+                      <b>{work.subtitle}</b>
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
         <button

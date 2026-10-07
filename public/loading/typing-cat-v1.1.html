@@ -34,7 +34,7 @@ window.catV2.frame=Math.floor(t/80)%16;window.catV2.pawPhase=k;
 $('.head').setAttribute('transform','translate(0 '+n(Math.sin((t%1280)/1280*Math.PI*2)*.8)+')');
 // Close quickly, reopen slowly. Occasionally pair a second small blink.
 const blinkTime=t%11300;let blink=1;
-for(const [start,duration] of [[3480,230],[7560,240],[7900,185]]){if(blinkTime>=start&&blinkTime<start+duration){const p=(blinkTime-start)/duration;blink=p<.35?1-p/.35:(p-.35)/.65;blink=blink*blink*(3-2*blink)}}
+for(const [start,duration] of [[1050,230],[2840,240],[4710,230],[5050,185],[7220,240],[9410,230]]){if(blinkTime>=start&&blinkTime<start+duration){const p=(blinkTime-start)/duration;blink=p<.35?1-p/.35:(p-.35)/.65;blink=blink*blink*(3-2*blink)}}
 const opening=Math.max(.018,blink);$('.eyes').setAttribute('transform','translate(0 280) scale(1 '+n(opening)+') translate(0 -280)');$('.closed-eyes').setAttribute('opacity',String(blink<.12?1:0));
 window.catV2.blink=blink;window.catV2.time=t;window.catV2.lastRenderedAt=performance.now();
 }
