@@ -3506,7 +3506,17 @@ function HeroSection({ active = true, onVideoReady }) {
       return hasWebCodecs ? 'mobile-webcodecs' : 'mobile-jsmpeg';
     }
     const video = document.createElement('video');
-    const supportsHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
+    const canPlayHEVC = HERO_HEVC_CODEC_TYPES.some((type) => /^(probably|maybe)$/.test(video.canPlayType(type)));
+    // index.html 已用 MediaCapabilities 把「这台机器真解得动 HEVC 吗」坐实，结论写进
+    // window.__heroHevcProbe，且 hero 视频的 preload 也是按同一个结论发出的。
+    // 这里必须复用它：只有明确的 false 才否决 HEVC。探测没落地（undefined）或浏览器
+    // 没有该 API 时退回 canPlayType —— 与 index.html 的兜底分支一致，才不会 preload
+    // 一套、React 播另一套（那会让两对视频都下载一遍）。
+    // 这样定下来之后，assetMode 在首帧就固定，播放过程中不再因为「解不出来」而把
+    // base/alpha 两个 <video> 整体重建（key 带 assetMode），两条轨也就不会中途
+    // 各换一次源 —— 前景与背景始终来自同一对视频、同一时刻的帧。
+    const hevcProbe = typeof window !== 'undefined' ? window.__heroHevcProbe : undefined;
+    const supportsHEVC = hevcProbe === false ? false : canPlayHEVC;
     if (isMobile) return supportsHEVC ? 'mobile' : 'mobile-fallback';
     return supportsHEVC ? 'hevc' : 'fallback';
   });
@@ -4137,12 +4147,55 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     };
     let heroInView = true;      // hero 是否在视口内（交叉观察器维护）
     let visibilityObserver = null;
+    // 滚动期保护：翻页/滚动会让解码短时跟不上（waiting/stalled/帧间停顿），但这是
+    // 瞬时且正常的，不该被看门狗当成"真卡死"。更关键的是，降级链 hevc→fallback→
+    // alpha2d 是靠换 assetMode 实现的，base/alpha 两个 <video> 会被整体重建（key 带
+    // assetMode），其中 fallback→alpha2d 只换 alpha 的源、base 源不变 —— 一旦在滚动
+    // 中被误触发，两条轨就会重新起播并错开，画面里猫（前景）和天空（背景）不再是同
+    // 一帧。所以滚动刚结束时一律不降级，等网络/解码缓过来再说（真错误稍后仍会触发）。
+    let lastScrollAt = 0;
+    const noteScroll = () => { lastScrollAt = performance.now(); };
+    window.addEventListener('scroll', noteScroll, { passive: true });
+    // 两轨时间差超过这个值就认为错帧了，强制把 alpha 拉回 base 的时刻重播。
+    const HERO_SYNC_TOLERANCE = 0.4;
+    // 滚动刚过去多久之内，抑制降级与重同步（避免滚动中触发 seek 造成抖动）。
+    const SCROLL_QUIET_MS = 1200;
+    const RESYNC_COOLDOWN_MS = 1000;
+    let lastResyncAt = 0;
+    // base 是主时钟（背景），alpha（前景遮罩）跟着它走。把 alpha seek 到 base 的
+    // 当前时刻即可让两轨重新同帧；seeked 处理器本来就会重排帧配对，不需要另写逻辑。
+    const resyncPair = () => {
+      if (disposed || base.seeking || alpha.seeking) return;
+      const now = performance.now();
+      if (now - lastResyncAt < RESYNC_COOLDOWN_MS) return;
+      lastResyncAt = now;
+      const target = Number.isFinite(base.currentTime) ? base.currentTime : 0;
+      baseCanvas.dataset.syncCount = String(Number(baseCanvas.dataset.syncCount || 0) + 1);
+      showImmediatePair = true;
+      try { alpha.currentTime = Math.max(0, Math.min(alpha.duration || Number.POSITIVE_INFINITY, target)); } catch {}
+    };
 
     const checkForStall = () => {
       if (disposed) return;
       // 因滚动出屏而被我们主动暂停时，别把"暂停"误判成"卡死"再拉起来。
       if (!heroInView) { stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS); return; }
       const now = performance.now();
+      // 滚动进行中 / 刚结束：暂停一切破坏性处理（降级、重同步）。滚动带来的解码停顿
+      // 是瞬时的，等它过去再看；否则一次快速滚动就可能把双轨整体重建、永久错帧。
+      if (now - lastScrollAt < SCROLL_QUIET_MS) {
+        stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
+        return;
+      }
+      // 同步守卫：两轨都取到过帧之后，若它们的当前时刻已经错开超过容差，说明某条轨
+      // 被单独重建过（降级）或解码滞后了 —— 画面会出现"前景是这帧、背景是另一帧"。
+      // 代价小的解法是主动把 alpha seek 回 base 的时刻，让两条轨重新对齐。
+      if (hasPresentedFrame && !base.seeking && !alpha.seeking
+        && Number.isFinite(base.currentTime) && Number.isFinite(alpha.currentTime)
+        && Math.abs(base.currentTime - alpha.currentTime) > HERO_SYNC_TOLERANCE) {
+        resyncPair();
+        stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
+        return;
+      }
       if (now < recoveryIgnoreUntil) {
         stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
         return;
@@ -4238,9 +4291,17 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       cancelVideoFrameCallbacks();
       if (fallbackRaf) { window.cancelAnimationFrame(fallbackRaf); fallbackRaf = 0; }
     };
-    // 恢复：仅在还没跑到时重新起播并重启合成循环，避免重复启动。
+    // 恢复：回屏前先把两条轨重新对齐，再起播并重启合成循环。滚动出屏期间我们暂停了
+    // 两个时钟，但暂停前若已因解码快慢错开，回到屏幕就必须先对齐 —— 否则用户看到的
+    // 前景（alpha 猫）与背景（base 天空）不是同一帧。
     const resumeVisible = () => {
       if (!active) return;
+      if (Number.isFinite(base.currentTime) && Number.isFinite(alpha.currentTime)
+        && !base.seeking && !alpha.seeking
+        && Math.abs(base.currentTime - alpha.currentTime) > HERO_SYNC_TOLERANCE) {
+        showImmediatePair = true;
+        try { alpha.currentTime = Math.max(0, Math.min(alpha.duration || Number.POSITIVE_INFINITY, base.currentTime)); } catch {}
+      }
       if (base.paused || alpha.paused) {
         safePlay(base);
         safePlay(alpha);
@@ -4278,6 +4339,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     return () => {
       disposed = true;
       if (visibilityObserver) visibilityObserver.disconnect();
+      window.removeEventListener('scroll', noteScroll);
       if (stallTimer) window.clearTimeout(stallTimer);
       base.removeEventListener('play', startBothVideoFrameCallbacks);
       alpha.removeEventListener('play', startBothVideoFrameCallbacks);
@@ -4621,6 +4683,54 @@ function HomePage({ openWorks, paging, active = true }) {
         cover: work.detailHero ?? work.image
       }))
   );
+
+  // 揭幕后把「滚动才用得上」的东西提前备好。实测（见 .workbuddy/tools/
+  // probe-postreveal-scroll.mjs）：一揭幕就快速滚动时，7 张作品封面是在滚动那一下
+  // 才开始下载的，尾屏 iframe 也是那一刻才挂载、才编译 Three.js，两件事叠加把主线程
+  // 啃出好几秒长任务。放到空闲时间做，滚动路径上就只剩滚动本身。
+  // 全部走 requestIdleCallback：主线程一忙（用户正在滚、正在交互）回调就自动让路，
+  // 绝不与首屏视频或滚动抢帧。封面是纯下载、最便宜，先做；尾屏要编译着色器，排在
+  // 后面并给更长的 timeout。IntersectionObserver 那条临近挂载路径原样保留作兜底 ——
+  // 用户若立刻就滚，它照样会触发。
+  useEffect(() => {
+    if (!heroVideoReady || !active) return undefined;
+    let cancelled = false;
+    const idle = (cb, timeout) => (typeof window.requestIdleCallback === 'function'
+      ? { kind: 'idle', id: window.requestIdleCallback(cb, { timeout }) }
+      : { kind: 'timer', id: window.setTimeout(() => cb({ timeRemaining: () => 0 }), Math.min(timeout, 400)) });
+    const cancelIdle = (handle) => {
+      if (!handle) return;
+      if (handle.kind === 'idle' && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(handle.id);
+      else if (handle.kind === 'timer') window.clearTimeout(handle.id);
+    };
+
+    const covers = (isMobile ? mobileWorksItems : worksItems)
+      .map((item) => item.cover)
+      .filter(Boolean);
+    let index = 0;
+    let pending = null;
+    // 一张一张来，别一口气发七个请求又把首屏带宽抢回去。
+    const prefetchNext = () => {
+      if (cancelled || index >= covers.length) return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = covers[index];
+      index += 1;
+      pending = idle(prefetchNext, 1200);
+    };
+    let streetHandle = null;
+    const start = () => {
+      if (cancelled) return;
+      prefetchNext();
+      streetHandle = idle(() => { if (!cancelled) setContactPreload(true); }, 4000);
+    };
+    pending = idle(start, 2000);
+    return () => {
+      cancelled = true;
+      cancelIdle(pending);
+      cancelIdle(streetHandle);
+    };
+  }, [heroVideoReady, active, isMobile]);
 
   // Where the controller thinks it is. On a paged home the scroll position is
   // the only thing that can say: the browser may have restored one from an
@@ -5269,6 +5379,17 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
     d.down = false;
     const stage = stageRef.current;
     if (stage?.releasePointerCapture) { try { stage.releasePointerCapture(d.pointerId); } catch (_) {} }
+    // ⚠ 手势判定结果必须先读成局部常量再更新状态 —— 不能把 d.dx 留在
+    // setActiveIndex 的 updater 里读:updater 由 React 调度时才执行(该 fiber
+    // 已有挂起更新时不走 eager 路径),而下面紧接着就把 d.dx 清零,读到 0
+    // → 「dx < 0」恒假 → 无论左右滑都切上一张(探针实测:从首页进入后左滑
+    // 反而回到前一张;已在首张时更是一张都切不动)。
+    const axis = d.axis;
+    const dx = d.dx;
+    const dy = d.dy;
+    const flick = Math.abs(d.vel) > 0.45;
+    d.dx = 0; d.dy = 0; d.axis = null; d.vel = 0; d.lastDX = 0;
+
     if (!d.moved) {
       // 点击:命中侧卡 → 切到它;命中主卡 → 进详情
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -5278,14 +5399,17 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
       else openDetail(works[mwIndexRef.current]);
       return;
     }
-    if (d.axis === 'x' && (Math.abs(d.dx) > 62 || Math.abs(d.vel) > 0.45)) {
-      setActiveIndex((i) => Math.min(works.length - 1, Math.max(0, i + (d.dx < 0 ? 1 : -1))));
-    } else if (d.axis === 'y' && Math.abs(d.dy) > 72) {
+    if (axis === 'x' && (Math.abs(dx) > 62 || flick)) {
+      const target = Math.min(works.length - 1, Math.max(0, mwIndexRef.current + (dx < 0 ? 1 : -1)));
+      setActiveIndex(target);
+      // ⚠ 已经在首/末张时被夹住 → index 没变 → useLayoutEffect 不重跑 →
+      // 轨道停在手指留下的位移上不归位(探针实测 trackTf 卡在 128)。
+      if (target === mwIndexRef.current) mwApply(0, 0, true);
+    } else if (axis === 'y' && Math.abs(dy) > 72) {
       openDetail(works[mwIndexRef.current]);
     } else {
       mwApply(0, 0, true);
     }
-    d.dx = 0; d.dy = 0; d.axis = null;
   };
   const mwCancel = () => {
     const d = mwDragRef.current;
