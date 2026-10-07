@@ -4642,16 +4642,17 @@ function HomePage({ openWorks, paging, active = true }) {
   const [heroVideoReady, setHeroVideoReady] = useState(false);
   const markHeroVideoReady = useCallback(() => setHeroVideoReady(true), []);
   const [coversPreloaded, setCoversPreloaded] = useState(false);
+  const [tailReady, setTailReady] = useState(false);
   // 首屏 Loading 遮罩只在首页出现（index.html 按 hash 判定），揭幕信号也只由
   // 首页给出：hero 真正播起来 = 首屏内容加载完毕。遮罩里的进度条另有真实来源
   // （preload 资源条目 + <video> buffered），这个事件只是"可以揭幕了"的终判。
   useEffect(() => {
-    // 揭幕闸门：hero 真正可播「且」所有作品封面已在 loading 阶段预载完成，
-    // 二者皆备才揭幕 —— 进入 hero 后不再有任何加载负载（PC / 移动端一致）。
-    if (!heroVideoReady || !coversPreloaded) return undefined;
+    // 揭幕闸门：hero 真正可播「且」所有作品封面已预载「且」尾屏 WebGL 已编译完成，
+    // 三者皆备才揭幕 —— 进入 hero 后不再有任何加载负载（PC / 移动端一致）。
+    if (!heroVideoReady || !coversPreloaded || !tailReady) return undefined;
     const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
     return () => window.cancelAnimationFrame(frame);
-  }, [heroVideoReady, coversPreloaded]);
+  }, [heroVideoReady, coversPreloaded, tailReady]);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);
@@ -4693,23 +4694,37 @@ function HomePage({ openWorks, paging, active = true }) {
   useEffect(() => {
     let cancelled = false;
     const covers = [...worksItems, ...mobileWorksItems].map((it) => it.cover).filter(Boolean);
-    let done = 0;
     const total = covers.length;
+    let done = 0;
+    // 把封面预载进度并回首屏 loading 进度条（见 index.html 的 loading:progress 监听）。
+    const emit = (progress) => {
+      try {
+        window.dispatchEvent(new CustomEvent('loading:progress', {
+          detail: { id: 'covers', weight: 3, progress }
+        }));
+      } catch (_) { /* noop */ }
+    };
     const finish = () => { if (!cancelled) setCoversPreloaded(true); };
     if (total === 0) {
+      emit(1);
       finish();
     } else {
+      emit(0);
       covers.forEach((src) => {
         const img = new Image();
         img.decoding = 'async';
-        img.onload = img.onerror = () => { done += 1; if (done >= total) finish(); };
+        img.onload = img.onerror = () => {
+          done += 1;
+          emit(done / total);
+          if (done >= total) finish();
+        };
         img.src = src;
       });
       // 兜底：封面下载过慢也不让 loading 卡死（4s 后强制放行）
       window.setTimeout(finish, 4000);
     }
-    // 尾屏 WebGL 在 loading 阶段就挂载并烧录 intro（隐藏于遮罩之下），
-    // 用户抵达尾屏时场景已就绪，无编译/渐入黑屏。
+    // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
+    // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
     setContactPreload(true);
     return () => { cancelled = true; };
   }, []);
@@ -5142,6 +5157,7 @@ function HomePage({ openWorks, paging, active = true }) {
         <ContactStreet
           active={active && contactVisible}
           preload={active && contactPreload}
+          onTailReady={setTailReady}
         />
       </section>
       </div>

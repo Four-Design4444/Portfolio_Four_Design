@@ -44,7 +44,7 @@ const HOST_JS = `
   window.requestAnimationFrame = function (cb) {
     return rawRaf(function (t) {
       if (window.__streetPaused) {
-        window.setTimeout(function () { cb(t); }, 240);
+        window.setTimeout(function () { cb(t); }, 1000);
         return;
       }
       cb(t);
@@ -227,48 +227,46 @@ function useStreetWheelBridge(enabled) {
 }
 
 // demo 的夜街有 2.7s 的 intro 灯光渐入（scene.js: intro += dt/2.7），intro 没走
-// 完时灯只有 35% 亮度 —— 预挂载的全部意义就是"趁用户还没滑到尾屏把这 2.7s 烧完"。
-// 所以刚挂载的那几秒必须满帧，烧完才允许降频；回尾屏时永远满帧。
-const INTRO_BURN_MS = 3200;
+// 完时灯只有 35% 亮度。尾屏挂载已提前到 loading 阶段（见 HomePage），但其渲染在
+// 不可见时一律空转（__streetPaused）：灯光烧录只在真正进入尾屏（active=true）时
+// 满帧播放，避免提前烧录的满帧渲染漏进 hero 播放期抢主线程/GPU。
 
-export default function ContactStreet({ active, preload }) {
+export default function ContactStreet({ active, preload, onTailReady }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
   // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
   const [mounted, setMounted] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const frameRef = useRef(null);
   const everActive = useRef(false);
-  const introBurned = useRef(false);
 
   useEffect(() => {
     if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
 
-  // 降频开关（P-04）：尾屏不在这屏时把 3D 渲染压到 ~4fps 保活。
+  // 降频开关（P-04）：尾屏不在视口内时，3D 渲染立即压到空转保活，绝不跑满帧
+  // intro 烧录。原因：尾屏挂载已提前到 loading 阶段（见 HomePage），而 loading 通常
+  // 比尾屏 intro 烧录（约 3.2s）短 —— 若此时满帧烧录，会漏进 hero 播放的头几秒，
+  // 与首屏视频抢同一条主线程/GPU 造成卡顿（iframe 与父页面同源，JS 跑在同一条主线程上）。
+  // shader 编译在 iframe 加载时一次性完成，与 __streetPaused 无关，所以"提前挂载"的
+  // 预编译红利照样保留；灯光烧录改到真正进入尾屏（active=true）时再满帧播放即可。
+  //
+  // ⚠ 时序：HOST_JS 在 iframe 文档加载时把 window.__streetPaused 初始化为 false，
+  // 若这里在文档就绪前就写 true，会写在与正式文档不同的 window 上、随后被 HOST_JS
+  // 覆盖回 false —— 于是尾屏始终满帧。所以必须等 __streetHostHooked(=HOST_JS 已注入)
+  // 之后再写；active 变化时本 effect 重跑会重新写入。
   useEffect(() => {
     if (!mounted) return undefined;
-    const setPaused = (paused) => {
-      try {
-        const win = frameRef.current && frameRef.current.contentWindow;
-        if (win) win.__streetPaused = paused;
-      } catch (_) { /* 已销毁 / 跨域时静默 */ }
+    let stopped = false;
+    let timer = null;
+    const apply = () => {
+      if (stopped) return;
+      const win = frameRef.current && frameRef.current.contentWindow;
+      if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
+      try { win.__streetPaused = !active; } catch (_) { /* 已销毁 / 跨域时静默 */ }
     };
-    if (active) {
-      setPaused(false); // 尾屏可见：永远满帧
-      return undefined;
-    }
-    if (introBurned.current) {
-      setPaused(true);
-      return undefined;
-    }
-    // 刚挂载、尾屏还没到：给满帧 INTRO_BURN_MS 把 intro 灯光烧完，再降频。
-    setPaused(false);
-    const timer = window.setTimeout(() => {
-      introBurned.current = true;
-      setPaused(true);
-    }, INTRO_BURN_MS);
-    return () => window.clearTimeout(timer);
+    apply();
+    return () => { stopped = true; if (timer) window.clearTimeout(timer); };
   }, [mounted, active]);
 
   useStreetWheelBridge(mounted && active);
