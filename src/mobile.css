@@ -106,7 +106,7 @@ html[data-device="mobile"] .morph-nav.nav-home .morph-logo {
 }
 
 html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
-  /* 字标尺寸恒定(见 styles.css 第五轮注释),三态只差 scale:
+  /* 字标尺寸恒定(见上方第五轮注释),三态只差 scale:
      home = 1,works = 40/50 = 0.8(40 × 200/701 = 11.412px,与旧几何一致)。 */
   transform: translate(-50%, -50%) scale(1);
 }
@@ -278,15 +278,28 @@ html[data-device="mobile"] .morph-logo {
 
 /* The mark keeps the SVG's own 701:200 ratio on EVERY level.
    2026-10-07 第五轮:字标尺寸定死为 home 态(50 × 200/701 = 14.27px),
-   三态只差 scale(works = 40/50 = 0.8)—— 不再逐帧改 width/height,
-   没有每帧重栅格化的窗口(黑框根因,详见 styles.css 同名注释);
-   两端比例恒为 3.505,中点零畸变,auto↔length 不可插值问题一并消失。
-   position/left/top 沿用 styles.css 的 .morph-logo .four-logo 基础规则
-   (绝对定位居中),这里只覆写尺寸与缩放。 */
+   三态只差 scale(works = 40/50 = 0.8)—— 不再逐帧改 width/height。
+   黑框根因:每帧改几何尺寸 = 每帧一次新栅格化,真机合成器偶发来不及把
+   新尺寸的纹理画好,就先把该盒的底色刷上去(设备截图实测 68×29 近黑
+   #030707、圆角 2px、紧贴字标外缘 —— 正是字标自身那一圈盒)。纯 scale
+   期间合成器沿用已栅格化的旧纹理做合成变换,不存在「新尺寸要现画」的
+   窗口;两端比例恒为 3.505,中点零畸变,auto↔length 不可插值问题一并消失。
+   ⚠ 本方案**只作用于移动端**(本文件全部规则带 data-device 前缀):
+     position/left/top/origin 等基础定位也在这里自包含,不依赖也不改动
+     styles.css 的 .morph-logo .four-logo(PC 端保持逐帧改宽高的旧实现,
+     业主明确要求本轮不碰 PC)。 */
+html[data-device="mobile"] .morph-logo { position: relative; }
 html[data-device="mobile"] .morph-logo .four-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 50px;
   height: 14.27px;
   transform: translate(-50%, -50%) scale(0.8);
+  transform-origin: 50% 50%;
+  opacity: 1;
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 /* Leave a little more breathing room between the capsule edge and the mark. */

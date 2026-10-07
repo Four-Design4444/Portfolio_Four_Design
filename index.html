@@ -303,23 +303,30 @@
           // 注意 halo 会超出画布边界,这是刻意的 —— 04 里它同样溢出画布,靠 .art 的
           // overflow:visible 呈现,是一圈弥散在猫背后的环境光,不是一块有边的光斑。
           var svg = doc.querySelector('svg.art');
-          // 2026-10-08: 视觉居中。main 的 place-items:center 只保证 .loader 盒子居中,
-          // 管不到「画进画布里的图形」—— demo 的 viewBox 是 0 0 1080 659,可主体
-          // (猫耳左沿 319 → 笔记本右沿 1017) 的中心在 668,比画布中心 540 偏右 128 个单位,
-          // 于是整幅画面在视觉上右倾:实测边距左 134 / 右 62(393 宽视口),
-          // 像素亮度质心偏右 39.6px。把 viewBox 的 min-x 右移 128 是纯平移(不缩放),
-          // 主体边距即左右各 98、质心回到中线;128 是画布比例,PC/移动端同解。
-          // halo/地面阴影与猫在同一 SVG 坐标系里,会自动一起平移,光与猫的相对关系不变。
-          // 2026-10-08 二改：光圈单独右移 85 个单位。
-          // 上面把 viewBox 右移 128 让「猫+笔记本」居中后，光也跟着平移了同样的量，
-          // 但光原本就不是以主体为中心的（halo cx 583 / floor cx 624，主体中心 668），
-          // 于是光圈反而比主体更偏左。分层实测质心（analyze-glow-split.py）：
-          //   桌面 1440: 光圈 -34.8px、接地阴影 -17.7px、猫+笔记本 +4.6px
-          //   移动  393: 光圈 -23.5px、接地阴影 -11.9px、猫+笔记本 +3.4px
-          // 即「光圈偏得比阴影多一倍」，整坨一起移会矫枉过正 → 只把 halo/floor 右移 85
-          // （= 主体中心 668 − halo 原 cx 583），阴影保持贴在猫/笔记本的接地处不动。
-          // 移动端光晕原本左溢出屏幕 16.7px，右移后左右各留 7px 正好收进画面。
-          if (svg) svg.setAttribute('viewBox', '128 0 1080 659');
+          // ★ Loading 画面的三档横向构图，全部以 SVG user unit 表达（→ PC/移动端同解）。
+          // ① VB_SHIFT 128 —— 视觉居中的第一轮。main 的 place-items:center 只保证 .loader
+          //    盒子居中，管不到「画进画布里的图形」：demo 的 viewBox 是 0 0 1080 659，
+          //    而主干（猫耳左沿 319 → 笔记本右沿 1017）的中心在 668，比画布中心 540 偏右
+          //    128 个单位。把 min-x 右移 128 是纯平移不缩放，主干边距即左右相等。
+          // ② GLOW_SHIFT 85 —— 光圈单独居中。① 把光也平移了同样的量，可光原本就不以主体
+          //    为中心（halo cx 583 / floor cx 624 vs 主干中心 668），于是光圈反而更偏左。
+          //    分层实测质心（analyze-glow-split.py，正=偏右）：
+          //      桌面 1440: 光圈 -34.8px、接地阴影 -17.7px、猫+笔记本 +4.6px
+          //      移动  393: 光圈 -23.5px、接地阴影 -11.9px、猫+笔记本 +3.4px
+          //    光圈偏得比阴影多一倍，整坨移会矫枉过正，所以只补 halo/floor。
+          // ③ SUBJECT_SHIFT 40 —— 主体（含接地阴影）在画布里再往右一点点。
+          //    ① 是按「猫耳→笔记本」居中，没把向左甩的尾巴算进去：含尾整体轮廓左边距几乎
+          //    贴到画布边缘、右边还剩 83px（1440），看着仍偏左。
+          //    analyze-subject-shift.py 实测几档（X=0 / 40 / 90）的抗阈值十字：
+          //      1440 X=0  边距 492:575  实心部分(th25) bboxΔ -28.0  质心Δ +5.2
+          //      1440 X=90 边距 530:537  完全对称，但主干会被推到质心 +42 —— 过头
+          //    取 40（≈ 完全对称所需的四成），左边不再贴边、主干也不至于明显偏右。
+          // ★ 实现要点：min-x 减 SUBJECT_SHIFT 会让全部内容（含投影）右移，
+          //   光要保持在屏幕原位就必须同步减 SUBJECT_SHIFT —— 两个数必须成对出现。
+          var VB_SHIFT = 128;
+          var GLOW_SHIFT = 85;
+          var SUBJECT_SHIFT = 40;
+          if (svg) svg.setAttribute('viewBox', String(VB_SHIFT - SUBJECT_SHIFT) + ' 0 1080 659');
           if (svg && !doc.getElementById('halo')) {
             var lightBox = doc.createElement('div');
             lightBox.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
@@ -332,8 +339,8 @@
               + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="24 15"/></filter>'
               + '<filter id="loader-shadow-contact" x="-10%" y="-180%" width="120%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7 4"/></filter>'
               + '</defs>'
-              + '<ellipse cx="668" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
-              + '<ellipse cx="709" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
+              + '<ellipse cx="' + (583 + GLOW_SHIFT - SUBJECT_SHIFT) + '" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
+              + '<ellipse cx="' + (624 + GLOW_SHIFT - SUBJECT_SHIFT) + '" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
               // The broad layer is a flattened half-round pool: it spreads below the cat and laptop
               // instead of ending as a straight strip. The smaller layer keeps the contact at y604-605.
               + '<g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none">'
