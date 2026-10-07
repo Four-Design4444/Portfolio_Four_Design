@@ -152,66 +152,34 @@
               || /^(probably|maybe)$/.test(v.canPlayType('video/mp4; codecs="hvc1"'));
           } catch (e) { return false; }
         })();
-        // canPlayType 只回答「浏览器认得这个 codec 串」，不回答「这台机器真的解得动」。
-        // 用 MediaCapabilities 把结论坐实：它问的是实际解码器能力。判错的代价很大 ——
-        // 播到一半解不出来会走 HeroSection 的降级链，而降级靠换 assetMode 实现，
-        // base/alpha 两个 <video> 会被整体重建（key 带 assetMode），两条轨一起重新
-        // 下载、重新起播，而这时 Loading 早揭幕了，用户看到的就是这段卡顿。
-        // 代价对比：放弃 HEVC 只是换一对 H.264（体积几乎一样），远小于中途重建。
-        var heroAssetsApplied = false;
-        var applyHeroAssets = function (hevcOK) {
-          if (heroAssetsApplied) return;
-          heroAssetsApplied = true;
-          // React 侧 HeroSection 读这个值决定 assetMode，保证与这里的 preload 是同一
-          // 个结论；未定义时它退回 canPlayType，与本函数的兜底路径一致。
-          window.__heroHevcProbe = !!hevcOK;
-          if (isMobile) {
-            // WeChat mobile paints through WebCodecs (preloaded above); its
-            // native-video fallbacks only engage after a decoder failure, so
-            // they are deliberately NOT preloaded.
-            if (!/MicroMessenger/i.test(ua)) {
-              heroPreload(hevcOK ? '/media/hero-mobile.mp4' : '/media/hero-mobile-fallback.mp4');
-            }
-          } else if (/MicroMessenger/i.test(ua)) {
-            // Desktop WeChat is forced onto the H.264 fallback pair in
-            // HeroSection regardless of HEVC support.
-            heroPreload('/media/hero-base.mp4');
-            heroPreload('/media/hero-mask-fallback.mp4');
-            heroPosterPreload();
-          } else if (hevcOK) {
-            heroPreload('/media/hero-hevc.mp4');
-            heroPreload('/media/hero-mask-hevc.mp4');
-            heroPosterPreload();
-          } else {
-            heroPreload('/media/hero-base.mp4');
-            heroPreload('/media/hero-mask-fallback.mp4');
-            heroPosterPreload();
+        // 用 canPlayType 同步决定 HEVC 走哪一对视频。preload 与 React 侧的 assetMode
+        // 必须同一结论：这里同步把结论写进 window.__heroHevcProbe，React 的 HeroSection
+        // 直接读它（未定义时退回 canPlayType，与本分支一致）。两者永远一致，绝不会出现在
+        // 首帧之后才换 assetMode、把 base/alpha 两个 <video> 整体重建的「中途降级」。
+        // （曾改用 MediaCapabilities 做异步探测来提前规避降级，但它与 canPlayType 结论
+        // 可能相左且存在竞态，导致 index 预载与 React 渲染错配、视频起播失败而冻结。）
+        window.__heroHevcProbe = !!heroSupportsHEVC;
+        if (isMobile) {
+          // WeChat mobile paints through WebCodecs (preloaded above); its
+          // native-video fallbacks only engage after a decoder failure, so
+          // they are deliberately NOT preloaded.
+          if (!/MicroMessenger/i.test(ua)) {
+            heroPreload(heroSupportsHEVC ? '/media/hero-mobile.mp4' : '/media/hero-mobile-fallback.mp4');
           }
-        };
-        var probeHEVC = function () {
-          try {
-            var mc = navigator.mediaCapabilities;
-            if (mc && mc.decodingInfo) {
-              return mc.decodingInfo({
-                type: 'file',
-                video: { contentType: 'video/mp4; codecs="hvc1"', width: 1920, height: 1080, bitrate: 8000000, framerate: 30 }
-              }).then(function (r) { return !!(r && r.supported && r.smooth); },
-                function () { return heroSupportsHEVC; });
-            }
-          } catch (e) { /* noop */ }
-          return Promise.resolve(heroSupportsHEVC);
-        };
-        if (!heroSupportsHEVC) {
-          // 连 codec 串都不认，不必再问解码器。
-          applyHeroAssets(false);
+        } else if (/MicroMessenger/i.test(ua)) {
+          // Desktop WeChat is forced onto the H.264 fallback pair in
+          // HeroSection regardless of HEVC support.
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
+        } else if (heroSupportsHEVC) {
+          heroPreload('/media/hero-hevc.mp4');
+          heroPreload('/media/hero-mask-hevc.mp4');
+          heroPosterPreload();
         } else {
-          // 探测是本地调用（通常几毫秒），但要防它一直不落地：300ms 后按 canPlayType
-          // 的结论放行，preload 不能悬着 —— 视频下载晚 300ms 会直接顶到揭幕时间。
-          var probeTimer = window.setTimeout(function () { applyHeroAssets(true); }, 300);
-          probeHEVC().then(function (ok) {
-            window.clearTimeout(probeTimer);
-            applyHeroAssets(ok);
-          });
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
         }
         // The home route always uses one-screen paging. Keep secondary routes
         // in their regular document flow from the first paint.
