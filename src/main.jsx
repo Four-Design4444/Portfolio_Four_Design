@@ -1217,7 +1217,15 @@ function App() {
       // 出现,就是业主看到的「跳帧换了一张卡」。
       if (opts?.rect && opts?.src) {
         if (isMobileDevice()) {
-          setWorksEntry({ rect: opts.rect, workId: opts.workId ?? '' });
+          setWorksEntry({
+            rect: opts.rect,
+            workId: opts.workId ?? '',
+            /* 副卡姿态 + 一级卡面布局高:二级轨道的入场初始姿态要用它们,
+               让左右两张副卡从它们在一级里的位置接着动(见 WorksPage 入场)。 */
+            cardH: opts.cardH ?? null,
+            prevPose: opts.prevPose ?? null,
+            nextPose: opts.nextPose ?? null
+          });
         } else {
           setSharedImage({
             src: opts.src,
@@ -1402,6 +1410,7 @@ function App() {
                 paging={paging && route.page === 'home'}
                 active={route.page === 'home'}
                 deckFocusId={deckFocusId}
+                revealProjects={exitWorks}
               />
             </div>
             {/* 2026-10-06 移动端:详情页在底下时二级页保持挂载(翻页动效的底层),
@@ -1839,13 +1848,28 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
   const [visible, setVisible] = useState(false);
   const lastScrollYRef = useRef(typeof window === 'undefined' ? 0 : window.scrollY);
   const visibleRef = useRef(false);
+  const syncRef = useRef(null);
 
   useEffect(() => {
     const element = ref.current;
     if (!element) return undefined;
 
     let frame = 0;
+    /* ⚠ 隐藏节点上绝不做判定。首页整层离开时是 display:none(.page-keep.is-hidden),
+       此时 rect 全是 0 → 「不在视口内、也不在折叠线以下」;可一旦是**半隐藏**
+       (层刚恢复显示、而 window 还没滚回离开时的位置),rect 就落回折叠线以下,
+       → 判成「不可见」把 is-visible 摘掉。等滚动恢复完成再判回来要等好几帧,
+       那几帧正好压在「二级页收拢回一级」上:业主看到的就是卡片缩回一个**空的**
+       一级页,然后一级页的设计才「啪」地出现 —— 「接不回一级页面的设计」。
+       所以先过 isRendered():祖先 display:none 或盒子塌成 0 时直接跳过,保留上一次
+       的判定结果(首页离开时本来就停在「可见」)。 */
+    const isRendered = () => {
+      if (element.offsetParent === null && getComputedStyle(element).position !== 'fixed') return false;
+      const b = element.getBoundingClientRect();
+      return b.width > 0 || b.height > 0;
+    };
     const syncVisibility = () => {
+      if (!isRendered()) return;
       const rect = element.getBoundingClientRect();
       const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
       const currentScrollY = window.scrollY;
@@ -1868,9 +1892,12 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
         setVisible(false);
       }
     };
+    /* 暴露给外部主动重算(首页重新可见时用):不必等滚动事件。 */
+    syncRef.current = syncVisibility;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        if (!isRendered()) return;
         const currentScrollY = window.scrollY;
         const isScrollingDown = currentScrollY >= lastScrollYRef.current;
         lastScrollYRef.current = currentScrollY;
@@ -1902,6 +1929,7 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
     window.addEventListener('resize', syncVisibility);
 
     return () => {
+      syncRef.current = null;
       observer.disconnect();
       window.cancelAnimationFrame(frame);
       window.clearInterval(visibilityTimer);
@@ -1910,7 +1938,9 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
     };
   }, [threshold, rootMargin]);
 
-  return [ref, visible];
+  /* 第三个返回值:主动重算(稳定引用)。首页从二级页回来时用它,见 HomePage。 */
+  const resync = useCallback(() => { if (syncRef.current) syncRef.current(); }, []);
+  return [ref, visible, resync];
 }
 
 function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, activeCategory, activeIndex, total, goHome, goWorks, goWorksBack, goDetailByIndex, goDetailCategory }) {
@@ -2443,6 +2473,24 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '' }) {
     return 3;
   };
 
+  /* 读一张卡的**实测视觉姿态**(不受 transform 影响的布局高 + 受 transform 影响的
+     中心/缩放/旋转)。跨级转场要把一级卡组里主卡与副卡的姿态原样交给二级轨道,
+     二级轨道据此让「同一张卡」从原位接着动。旋转/缩放从 computed matrix 里解:
+     a = s·cosθ、b = s·sinθ → s = hypot(a,b)、θ = atan2(b,a)。 */
+  const poseOf = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0)) return null;
+    let scale = 1;
+    let rot = 0;
+    try {
+      const m = new DOMMatrix(getComputedStyle(el).transform);
+      scale = Math.hypot(m.a, m.b) || 1;
+      rot = Math.atan2(m.b, m.a) * 180 / Math.PI;
+    } catch (_) { /* 老浏览器没有 DOMMatrix:退化成纯位移/缩放,视觉差异可忽略 */ }
+    return { cx: r.x + r.width / 2, cy: r.y + r.height / 2, scale, rot, h: el.offsetHeight };
+  };
+
   const stateRef = useRef({
     active: 0, p: 0, isDrag: false, moved: false,
     startX: 0, startY: 0, curDX: 0, curDY: 0, lastDX: 0, vel: 0, downIdx: 0,
@@ -2576,14 +2624,28 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '' }) {
       if (s.downIdx === s.active) {
         const item = ctxRef.current.items[s.active];
         if (item) {
-          // 2026-10-06 移动端:带上卡片几何与封面,二级页用 SharedImageTransition
-          // 做放大无缝接入(卡片从首页原位放大成二级页主卡)。
-          const cardEl = cardRefs.current[s.downIdx];
-          const rect = cardEl ? cardEl.getBoundingClientRect() : null;
+          // 2026-10-07 移动端:进二级页用「轨道自己执行跨级转场」。
+          // ⚠ 连**副卡**的姿态一起交出去(业主第三轮反馈第 1 条):一级卡组里
+          //   左右两张卡此刻已经摆在主卡两侧(±81px、0.86 倍、±8° 倾斜),
+          //   如果二级轨道让副卡从主卡身后「凭空抽出来」,那两张卡就是换了一张。
+          //   把它们的实测姿态(相对主卡中心的偏移 / 缩放 / 旋转)交给轨道,副卡
+          //   就能从「一级里它原来的位置」接着动 —— 两级之间是同一张卡。
+          const N = ctxRef.current.items.length;
+          const frontEl = cardRefs.current[s.active];
+          const self = poseOf(frontEl);
+          const prev = poseOf(cardRefs.current[(s.active - 1 + N) % N]);
+          const next = poseOf(cardRefs.current[(s.active + 1) % N]);
+          const relPose = (p) => (p && self
+            ? { dx: p.cx - self.cx, dy: p.cy - self.cy, scale: p.scale, rot: p.rot }
+            : null);
+          const rect = frontEl ? frontEl.getBoundingClientRect() : null;
           ctxRef.current.openWorks(item.project.category, false, {
             workId: item.project.id,
             rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
-            src: item.cover
+            src: item.cover,
+            cardH: self ? self.h : null,
+            prevPose: relPose(prev),
+            nextPose: relPose(next)
           });
         }
       } else {
@@ -5047,7 +5109,7 @@ function usePagingEnabled(active = true) {
 
   return enabled;
 }
-function HomePage({ openWorks, paging, active = true, deckFocusId = '' }) {
+function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealProjects = false }) {
   const [profileRef, profileSeen] = useRevealOnView();
   // 首屏视频是否已真正开始播放。尾屏预挂载必须等这个信号 —— 首屏视频优先级
   // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
@@ -5077,7 +5139,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '' }) {
     const t = window.setTimeout(reveal, 2000);
     return () => window.clearTimeout(t);
   }, [heroVideoReady, coversPreloaded, reveal]);
-  const [projectsRef, projectsSeen] = useRevealOnView();
+  const [projectsRef, projectsSeen, projectsResync] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);
   useEffect(() => {
@@ -5504,8 +5566,25 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '' }) {
 
   // With paging on, arrival at a page is what reveals it - the observer is only
   // there for the unpaged (touch and narrow) layout.
+  /* 首页重新可见(二级页返回)时主动重算一次各区块的入场状态。
+     goHome 里的滚动恢复是双 rAF,而这一帧 scrollY 还在 0;若只靠滚动事件,
+     「可见」这件事就依赖事件时序。这里在 active 翻真的同一帧、以及滚动恢复
+     之后各补一次,确保二级页收拢回来的那张卡落在**已经渲染好**的一级页上。 */
+  useLayoutEffect(() => {
+    if (!active) return undefined;
+    projectsResync();
+    const timers = [0, 60, 200].map((ms) => window.setTimeout(projectsResync, ms));
+    const raf = window.requestAnimationFrame(() => window.requestAnimationFrame(projectsResync));
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.cancelAnimationFrame(raf);
+    };
+  }, [active, projectsResync]);
+
   const profileVisible = paging ? hasEnteredPage && index === 1 : profileSeen;
-  const projectsVisible = paging ? hasEnteredPage && index === 2 : projectsSeen;
+  // revealProjects:二级页 → 一级页的回程期间强制点亮(见 App 的 exitWorks)。
+  // 回程只有 ~600ms,期间一级页必须**已经是完整的**,否则卡片收拢的落点是一片空。
+  const projectsVisible = revealProjects || (paging ? hasEnteredPage && index === 2 : projectsSeen);
   const contactVisible = paging ? hasEnteredPage && index === 3 : contactSeen;
 
   return (
@@ -5731,18 +5810,27 @@ function WorksPage({
     const stage = stageRef.current;
     const track = trackRef.current;
     const slide = track ? track.children[0] : null;
-    if (!stage || !track || !slide) return null;
+    const card = slide ? slide.querySelector('.mw-card') : null;
+    if (!stage || !track || !slide || !card) return null;
     const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
     /* ⚠ 绝不能用 offsetWidth:它取整(实测 290.812 → 291),再乘上索引
        (pos 最大 21)就把整轨推偏最多 4px —— 探针实测主卡比舞台中心偏左
        2.5px,且入场落点与回程落点各差同一个量。改用 getComputedStyle 读
-       已解算的小数宽度(/stage 同理,用 rect.width 而不是 clientWidth)。 */
-    const cardW = parseFloat(getComputedStyle(slide).width);
-    if (!(cardW > 0)) return null;
-    return { stageW: stage.getBoundingClientRect().width, slideW: cardW + gap, cardW };
+       已解算的小数宽度(/stage 同理,用 rect.width 而不是 clientWidth)。
+       ⚠ 两个宽度必须分开取:卡槽宽(--mw-pitch)决定**排布节距**,卡面宽
+       (--mw-card-w)决定**居中基准**。副卡缩小之后槽宽会窄于卡面宽,混用
+       会让主卡偏心 —— 见 mobile.css 里 --mw-pitch 的说明。 */
+    const slotW = parseFloat(getComputedStyle(slide).width);
+    const cardW = parseFloat(getComputedStyle(card).width);
+    if (!(slotW > 0) || !(cardW > 0)) return null;
+    return { stageW: stage.getBoundingClientRect().width, slideW: slotW + gap, slotW, cardW };
   }, []);
 
-  const railBase = (g, p) => (g.stageW - g.cardW) / 2 - p * g.slideW;
+  /* 当前卡左边缘的目标位置。
+     ⚠ 卡面在槽里是**居中溢出**的(槽宽 --mw-pitch 窄于卡面宽 --mw-card-w),
+       所以要减掉这个内偏移 (slotW − cardW)/2,否则整轨恒定偏心半个差值
+       (实测 26.15px,入场首帧与离场落点一起偏)。 */
+  const railBase = (g, p) => (g.stageW - g.cardW) / 2 - (g.slotW - g.cardW) / 2 - p * g.slideW;
 
   const railApply = useCallback((dx = 0, dy = 0, animate = false, extraY = 0, dur = 0) => {
     const track = trackRef.current;
@@ -5758,6 +5846,10 @@ function WorksPage({
     if (!isMobile) return undefined;
     if (appliedRef.current === pos) return undefined;
     if (phaseRef.current === 'armed' || phaseRef.current === 'entering') return undefined;
+    /* ⚠ 离场期间绝不归位:回程的 track transform 是**收拢动画**的一部分,这里一旦
+       接管就会把它换成「吸到某个索引」的补间 —— 整轨被拉走,收拢动画当场作废
+       (2026-10-07 实测:pos 被改掉时 track 被拽走 477px)。 */
+    if (leavingRef.current) return undefined;
     const teleport = teleportRef.current;
     teleportRef.current = false;
     appliedRef.current = pos;
@@ -5810,12 +5902,27 @@ function WorksPage({
 
     const scale = src.height / dst.height;
     const dy = (src.y + src.height / 2) - (dst.y + dst.height / 2);
+    /* 副卡(左右邻居)也必须是**同一张卡**:一级卡组里它们此刻已经摆在主卡两侧
+       (±81px、0.86 倍、±8° 倾斜),姿态随 entry 一起传了进来。于是入场初始姿态
+       里 idx±1 就停在**它们在一级里的位置**,再与主卡同帧张开到二级的静止位 ——
+       副卡从「一级里它原来的位置」接着动,而不是从主卡身后凭空抽出来。
+       远处副本看不见,照旧压在主卡位置(被主卡完整盖住)。
+       ⚠ 缩放要换算:一级卡面高 = entry.cardH,二级卡面高 = dst.height,同尺寸
+         在两级里的 scale 系数不同,直接套 p.scale 会小一圈。 */
+    const deckH = entry.cardH || src.height;
+    const poseFor = (i) => {
+      if (i === idx) return null;
+      const p = i === idx - 1 ? entry.prevPose : (i === idx + 1 ? entry.nextPose : null);
+      if (!p) return null;
+      const k = (p.scale * deckH) / dst.height;
+      return `translate(${p.dx - (i - idx) * g.slideW}px, ${p.dy || 0}px) rotate(${p.rot || 0}deg) scale(${k})`;
+    };
     const slides = Array.prototype.slice.call(track.children);
     track.style.transition = 'none';
     track.style.transform = `translate3d(${railBase(g, idx)}px, ${dy}px, 0)`;
     slides.forEach((el, i) => {
       el.style.transition = 'none';
-      el.style.transform = `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
+      el.style.transform = poseFor(i) || `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
     });
     setPhase('armed');
     phaseRef.current = 'armed';
@@ -5852,8 +5959,11 @@ function WorksPage({
 
   /* 离场:二级 → 一级,反向收拢回首页卡组里的那张卡。
      首页此刻已经可见(goHome 先把卡组焦点瞬移到同一张卡),所以这里能量到真实
-     落点;量到之后整轨反向收敛 —— 副卡缩回主卡身后、主卡缩到首页尺寸并移到它
-     的位置,结束时二级页卸下,屏幕上只剩一级卡组里的同一张卡。 */
+     落点;量到之后整轨反向收敛 —— 主卡缩到首页尺寸并移到它的位置,左右两张副卡
+     同样收回到**它们在一级卡组里的姿态**(位置/缩放/旋转),结束时二级页卸下,
+     屏幕上只剩一级卡组里的同样三张卡,逐像素对齐,所以交接看不见。
+     ⚠ 必须是「同一个入场动效的镜像」:入场从一级姿态张开到二级静止位,离场就
+       从二级静止位收拢回一级姿态 —— 两端同一张卡、同一曲线、同一时长。 */
   const leaveDoneRef = useRef(onLeavingDone);
   leaveDoneRef.current = onLeavingDone;
   useLayoutEffect(() => {
@@ -5861,13 +5971,45 @@ function WorksPage({
     const idx = posRef.current;
     const work = workAt(idx);
     if (!work) { if (leaveDoneRef.current) leaveDoneRef.current(); return undefined; }
+    const realIdx = realIndexOf(idx);
+    const prevWork = WORKS_RAIL[(realIdx - 1 + RAIL_N) % RAIL_N];
+    const nextWork = WORKS_RAIL[(realIdx + 1) % RAIL_N];
     let raf = 0;
     let tries = 0;
-    let lastRect = null;
+    let lastSig = '';
     let stable = 0;
     let finished = false;
 
-    const run = (rect) => {
+    const poseOf = (el, self) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (!(r.width > 0)) return null;
+      let s = 1; let rot = 0;
+      try {
+        const m = new DOMMatrix(getComputedStyle(el).transform);
+        s = Math.hypot(m.a, m.b) || 1;
+        rot = Math.atan2(m.b, m.a) * 180 / Math.PI;
+      } catch (_) { /* 无 DOMMatrix 时退化为纯位移+缩放 */ }
+      return { dx: (r.x + r.width / 2) - self.cx, dy: (r.y + r.height / 2) - self.cy, scale: s, rot };
+    };
+
+    const measure = () => {
+      const el = document.querySelector(`[data-deck-work="${work.id}"]`);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (!(r.width > 0) || !(r.height > 0)) return null;
+      const self = { cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+      const prevPose = poseOf(document.querySelector(`[data-deck-work="${prevWork.id}"]`), self);
+      const nextPose = poseOf(document.querySelector(`[data-deck-work="${nextWork.id}"]`), self);
+      /* 签名里连两张副卡的姿态一起算:只要任一还在动(卡片复活/滚动未停),就不算稳定。 */
+      const sig = [r.x, r.y, r.width, r.height, el.offsetHeight,
+        prevPose ? prevPose.dx : NaN, prevPose ? prevPose.scale : NaN,
+        nextPose ? nextPose.dx : NaN, nextPose ? nextPose.scale : NaN]
+        .map((v) => (Number.isFinite(v) ? v.toFixed(1) : '-')).join('|');
+      return { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, cardH: el.offsetHeight, prevPose, nextPose, sig };
+    };
+
+    const run = (m) => {
       if (finished) return;
       const track = trackRef.current;
       const g = railGeom();
@@ -5877,13 +6019,22 @@ function WorksPage({
       const dst = cardEl.getBoundingClientRect();
       if (!(dst.height > 0)) { if (leaveDoneRef.current) leaveDoneRef.current(); return; }
       finished = true;
+      const rect = m.rect;
       const scale = rect.height / dst.height;
       const dy = (rect.y + rect.height / 2) - (dst.y + dst.height / 2);
       const dur = RAIL_LEAVE_MS;
+      const deckH = m.cardH || rect.height;
+      const poseFor = (i) => {
+        if (i === idx) return null;
+        const p = i === idx - 1 ? m.prevPose : (i === idx + 1 ? m.nextPose : null);
+        if (!p) return null;
+        const k = (p.scale * deckH) / dst.height;
+        return `translate(${p.dx - (i - idx) * g.slideW}px, ${p.dy || 0}px) rotate(${p.rot || 0}deg) scale(${k})`;
+      };
       const slides = Array.prototype.slice.call(track.children);
       slides.forEach((el, i) => {
         el.style.transition = `transform ${dur}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-        el.style.transform = `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
+        el.style.transform = poseFor(i) || `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
       });
       track.style.transition = `transform ${dur}ms cubic-bezier(0.22, 1, 0.36, 1)`;
       track.style.transform = `translate3d(${railBase(g, idx)}px, ${dy}px, 0)`;
@@ -5892,18 +6043,17 @@ function WorksPage({
 
     const poll = () => {
       tries += 1;
-      const target = document.querySelector(`[data-deck-work="${work.id}"]`);
-      const rect = target ? target.getBoundingClientRect() : null;
-      if (rect && rect.width > 0 && rect.height > 0) {
-        // ⚠ 必须连续两帧量到同一矩形:goHome 还在把首页滚回离开时的位置,
+      const m = measure();
+      if (m) {
+        // ⚠ 必须连续两帧量到同一组几何:goHome 还在把首页滚回离开时的位置,
         //   量早了读到的是滚动前的坐标,落点会与返回后的卡片错开。
-        if (lastRect && Math.abs(lastRect.y - rect.y) < 0.5 && Math.abs(lastRect.height - rect.height) < 0.5) {
+        if (lastSig && lastSig === m.sig) {
           stable += 1;
-          if (stable >= 2) { run(rect); return; }
+          if (stable >= 2) { run(m); return; }
         } else {
           stable = 0;
         }
-        lastRect = rect;
+        lastSig = m.sig;
       }
       if (tries >= 90) { if (leaveDoneRef.current) leaveDoneRef.current(); return; }
       raf = window.requestAnimationFrame(poll);
@@ -5930,6 +6080,11 @@ function WorksPage({
      ⚠ 两者一致时是空操作 —— 滑到某张卡时 notify 已把分类回写,不会自己滑走。 */
   useEffect(() => {
     if (!isMobile) return undefined;
+    /* ⚠ 离场期间不许再滑:goHome 清空 hash 会触发一次 hashchange,parseRoute('')
+       把分类重置成默认的 ui,这个 effect 会立刻把主卡滑回 ui 首卡 —— 正在收拢的
+       轨道被整体拽走,收拢动画当场作废(业主第三轮之前「回程像换了一张卡」的
+       一半原因就在这里)。 */
+    if (leavingRef.current) return undefined;
     const cur = workAt(pos);
     if (cur && cur.category === activeCategory.id) return undefined;
     const targetReal = WORKS_RAIL.findIndex((w) => w.category === activeCategory.id);

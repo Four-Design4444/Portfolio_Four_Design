@@ -312,15 +312,16 @@
               + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
               + '<radialGradient id="floor"><stop stop-color="#b9d7cd" stop-opacity=".16"/>'
               + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
-              + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="16 9"/></filter>'
-              + '<filter id="loader-shadow-contact" x="-10%" y="-150%" width="120%" height="400%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="5 3"/></filter>'
+              + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="24 15"/></filter>'
+              + '<filter id="loader-shadow-contact" x="-10%" y="-180%" width="120%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7 4"/></filter>'
               + '</defs>'
               + '<ellipse cx="583" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
               + '<ellipse cx="624" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
-              // Shared footprint follows the cat base (y604) and laptop base (y605), not the elevated tail.
+              // The broad layer is a flattened half-round pool: it spreads below the cat and laptop
+              // instead of ending as a straight strip. The smaller layer keeps the contact at y604-605.
               + '<g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none">'
-              + '<path d="M326 594 H949 Q969 594 969 605 Q969 612 949 612 H326 Q304 612 304 604 Q304 594 326 594Z" opacity=".26" filter="url(#loader-shadow-soft)"/>'
-              + '<path d="M326 598 H949 Q967 598 967 605 Q967 609 949 609 H326 Q306 609 306 604 Q306 598 326 598Z" opacity=".46" filter="url(#loader-shadow-contact)"/>'
+              + '<ellipse cx="630" cy="615" rx="365" ry="38" opacity=".23" filter="url(#loader-shadow-soft)"/>'
+              + '<ellipse cx="630" cy="605" rx="335" ry="13" opacity=".38" filter="url(#loader-shadow-contact)"/>'
               + '</g>'
               + '</svg>';
             var lightSvg = lightBox.firstChild;

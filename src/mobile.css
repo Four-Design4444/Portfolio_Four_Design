@@ -1218,7 +1218,18 @@ html[data-device="mobile"] .mw-stage {
      3:5 与 20px 圆角和首页卡组完全同形 —— 首页点卡的放大动效才能无缝衔接。 */
   --mw-card-h: min(58vh, 500px, calc(74vw * 5 / 3));
   --mw-card-w: calc(var(--mw-card-h) * 0.6);
-  --mw-gap: 14px;
+  /* 副卡(非当前卡)的统一缩放。业主第三轮:副卡要明显小于主卡,层级才清楚 ——
+     同比例缩到 0.75(比原来的 0.94 再降约 20%)。
+     ⚠ 这个值只决定**静止姿态**。跨级转场(入场张开 / 离场收拢)的两端都由实测
+       矩形反推 scale,不读这个变量,所以以后单独改主卡或副卡尺寸都不会让动效
+       跳帧 —— 前提是别把尺寸写进 JS。 */
+  --mw-side-scale: 0.75;
+  /* 卡槽节距(= 排布步长)。⚠ 必须随副卡缩小一起收窄:槽位若仍按整卡宽排,
+     副卡缩到 0.75 之后会被挤出屏幕(只剩 1px 露边),完全看不出「后面还有卡」。
+     0.82 时右侧副卡露出约 50px 边角,层级清楚又留得住 peek。
+     ⚠ 宽度上有两个量、不能混:槽宽(--mw-pitch)管**排布节距**,卡面宽
+       (--mw-card-w)管**居中基准**;railGeom 分别读取(混用会让主卡偏心)。 */
+  --mw-pitch: calc(var(--mw-card-w) * 0.82);
 }
 
 html[data-device="mobile"] .mw-track {
@@ -1228,7 +1239,7 @@ html[data-device="mobile"] .mw-track {
   height: 100%;
   display: flex;
   align-items: center;
-  gap: var(--mw-gap);
+  gap: 0;
   will-change: transform;
 }
 
@@ -1244,12 +1255,14 @@ html[data-device="mobile"] .mw-track {
      盖住,平时又远在屏外,隐藏零代价、零视觉差别。 */
 html[data-device="mobile"] .mw-slide {
   flex: none;
-  width: var(--mw-card-w);
+  /* ⚠ 槽宽 = 节距,不是卡面宽:卡面比槽宽(缩小后的副卡要靠它把两侧 pek 留在
+     屏内),卡面在槽里居中溢出,视觉上就是「一张小卡叠在大卡后面」。 */
+  width: var(--mw-pitch);
   display: flex;
   justify-content: center;
   z-index: 1;
-  transform: scale(0.94);
-  /* 每张卡各自一层:入场初始姿态是「同一矩形里叠一摞、随后一起张开」,
+  transform: scale(var(--mw-side-scale));
+  /* 每张卡各自一层:入场初始姿态是「一摞卡从各自的一级姿态张开」,
      不给图层的话浏览器得在动画起跑那一帧把这一摞重新栅格化,实测最坏
      堵到 112ms;提层之后这一摞直接沿用已栅格的纹理做合成变换,最坏 37ms。 */
   will-change: transform;
@@ -1278,6 +1291,11 @@ html[data-device="mobile"] .mw-slide.is-current .mw-card::after { opacity: 0; }
 html[data-device="mobile"] .mw-card {
   position: relative;
   display: block;
+  /* ⚠ flex:none 必须给:卡面是 .mw-slide(flex 容器)的子项,而槽宽(--mw-pitch)
+     比卡面窄,默认 flex-shrink:1 会把卡面**压缩到槽宽**(实测主卡从 290.8 掉到
+     238.5)—— 主卡变小、副卡姿态换算全部错位。卡面必须保持自身宽度、越出槽位,
+     由槽位的居中把两侧露边留出来。 */
+  flex: none;
   width: var(--mw-card-w);
   height: var(--mw-card-h);
   padding: 0;
@@ -1291,11 +1309,13 @@ html[data-device="mobile"] .mw-card {
    读起来就是「换了一张卡」;副卡更是等落位之后才各自淡入,主卡已经站好了
    它们还没出来(业主两轮反馈)。
 
-   现在改为:轨道的**初始姿态**就是源卡姿态 —— 主卡被放到源卡矩形上(位移 +
-   缩放,尺寸等于源卡),其余卡以同一尺寸叠在它身后;随后与飞行同帧、同时长
-   张开到静止姿态。于是:
-     · 屏幕上永远只有这张卡本身,没有第二个元素参与交接 → 不可能跳帧;
-     · 副卡从主卡身后「抽」出来,与主卡同帧出发、同帧到位 → 不再晚到。
+   现在改为:轨道的**初始姿态**就是一级卡组此刻的姿态 —— 主卡被放到源卡矩形上
+   (位移 + 缩放,尺寸等于源卡),左右两张副卡停在**它们在一级里的位置**
+   (±SIDE_OFFSET、0.86 倍、±8° 倾斜,由 MobileShowcaseDeck 实测后随 entry
+   传进来);随后整排与飞行同帧、同时长张开到二级静止姿态。于是:
+     · 屏幕上永远只有这几张卡本身,没有第二个元素参与交接 → 不可能跳帧;
+     · 副卡从「一级里它自己的位置」接着动 → 副卡也是同一张卡(业主第三轮第 1 条);
+     · 三张卡同帧出发、同帧到位 → 不再「主卡站好了副卡才出来」。
    mw-armed 只存在一帧:写初始姿态时禁止过渡(否则会从静止姿态倒着飞出去)。 */
 html[data-device="mobile"] .works-index-page.mw-armed .mw-slide { transition: none; }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
@@ -1303,7 +1323,18 @@ html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
 }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-hint { opacity: 0; animation: none; }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-stage { pointer-events: none; }
-/* 离场(二级→一级)反向收拢,期间同样不许用户插手。 */
+/* 离场(二级→一级)是这个入场的**镜像**:主卡与两张副卡一起收拢回它们在一级
+   卡组里各自的姿态,结束时二级页卸下,屏幕上剩下一级卡组里的同三张卡,
+   逐像素对齐 → 交接看不见。期间同样不许用户插手。 */
+html[data-device="mobile"] .works-index-page.mw-leaving {
+  /* ⚠ 回程必须「让开」:二级层自身是不透明的(radial-gradient + #0d0c12),
+     整层若继续盖着,收拢就发生在一块黑底上 —— 一级页的设计根本不在场,卡片
+     缩完才整块出现。业主第三轮第 3 条「完全接不回一级页面的设计,没有动效
+     过渡」就是这个:不是没有动画,是动画的另一端(一级页)不可见。
+     让开背景与光晕之后,回程每一帧都能看见一级页本体,与入场完全对称。 */
+  background: transparent;
+  pointer-events: none;
+}
 html[data-device="mobile"] .works-index-page.mw-leaving .mw-stage { pointer-events: none; }
 html[data-device="mobile"] .works-index-page.mw-leaving .mw-hint { opacity: 0; animation: none; }
 html[data-device="mobile"] .works-index-page.mw-leaving .works-side-rays { opacity: 0; }
