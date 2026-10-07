@@ -1132,9 +1132,16 @@ html[data-device="mobile"] .mob-card {
 html[data-device="mobile"] .mob-dim {
   position: absolute;
   inset: 0;
-  background: #06070a;
+  /* 必须与二级 .mw-card::after 完全同形(同色 #000、同压在文案之上 z-index:3):
+     回程落定那一帧二级 ::after(z-index:3,#000)被卸载、一级 .mob-dim 现身的瞬间,
+     若两层不同色/不同层序,副卡文字会「被压暗→明亮」硬切、黑色图会「纯黑→#06070a 灰」
+     硬切 —— 即业主看到的「回程落定后副卡文字/卡面跳帧」。两端同色同层序,交接帧像素
+     逐像素相同,跳帧消失。一级主卡 .mob-dim 由 JS 置 opacity:0(见 main.jsx poseAt:
+     活跃卡 dim=0),本层不可见,不受 z-index:3 影响;只副卡(dim=0.62)被压暗到与二级一致。 */
+  background: #000;
   opacity: 0;
   pointer-events: none;
+  z-index: 3;
 }
 html[data-device="mobile"] .mob-card.front { box-shadow: 0 24px 56px rgba(0, 0, 0, .55); }
 html[data-device="mobile"] .mob-card.lift { box-shadow: 0 36px 72px rgba(0, 0, 0, .65); }

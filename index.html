@@ -308,12 +308,14 @@
           //    盒子居中，管不到「画进画布里的图形」：demo 的 viewBox 是 0 0 1080 659，
           //    而主干（猫耳左沿 319 → 笔记本右沿 1017）的中心在 668，比画布中心 540 偏右
           //    128 个单位。把 min-x 右移 128 是纯平移不缩放，主干边距即左右相等。
-          // ② GLOW_SHIFT 85 —— 光圈单独居中。① 把光也平移了同样的量，可光原本就不以主体
-          //    为中心（halo cx 583 / floor cx 624 vs 主干中心 668），于是光圈反而更偏左。
-          //    分层实测质心（analyze-glow-split.py，正=偏右）：
-          //      桌面 1440: 光圈 -34.8px、接地阴影 -17.7px、猫+笔记本 +4.6px
-          //      移动  393: 光圈 -23.5px、接地阴影 -11.9px、猫+笔记本 +3.4px
-          //    光圈偏得比阴影多一倍，整坨移会矫枉过正，所以只补 halo/floor。
+          // ② 光圈单独居中。① 把光也平移了同样的量，可光原本就不以主体为中心
+          //    （halo cx 583 / floor cx 624 vs 主干中心 668），于是光圈反而更偏左。
+          //    ★ 踩过的坑：曾给 halo / floor 加「同一个偏移量」+85 —— 可两者原本就不同心
+          //    （624 − 583 = 41），同质平移只会把 floor 推过头。分层实测（analyze-layer-center.py）：
+          //      halo −0.9px / floor **+20.9px** / 接地阴影 +1.2px（桌面 1440）
+          //      halo −0.8px / floor **+14.0px** / 接地阴影 +0.8px（移动 393）
+          //    即「猫脚下的地面光池」在用户语义里属于光圈、明显偏右。
+          //    所以两层不再各自加偏移量，统一直接落在屏幕中线 MID_X 上。
           // ③ SUBJECT_SHIFT 40 —— 主体（含接地阴影）在画布里再往右一点点。
           //    ① 是按「猫耳→笔记本」居中，没把向左甩的尾巴算进去：含尾整体轮廓左边距几乎
           //    贴到画布边缘、右边还剩 83px（1440），看着仍偏左。
@@ -324,8 +326,11 @@
           // ★ 实现要点：min-x 减 SUBJECT_SHIFT 会让全部内容（含投影）右移，
           //   光要保持在屏幕原位就必须同步减 SUBJECT_SHIFT —— 两个数必须成对出现。
           var VB_SHIFT = 128;
-          var GLOW_SHIFT = 85;
           var SUBJECT_SHIFT = 40;
+          // 屏幕中线在 SVG user 坐标里的 x = viewBox min-x + 画布半宽。
+          // 「光圈」两层 —— 猫身后大光晕 halo、猫脚下地面光池 floor（用户语义里的「底盘」）
+          // —— 都直接落在它身上，而不是各自再加偏移量（那样会把不同心的两层推成互相错位）。
+          var MID_X = (VB_SHIFT - SUBJECT_SHIFT) + 540;
           if (svg) svg.setAttribute('viewBox', String(VB_SHIFT - SUBJECT_SHIFT) + ' 0 1080 659');
           if (svg && !doc.getElementById('halo')) {
             var lightBox = doc.createElement('div');
@@ -339,8 +344,8 @@
               + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="24 15"/></filter>'
               + '<filter id="loader-shadow-contact" x="-10%" y="-180%" width="120%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7 4"/></filter>'
               + '</defs>'
-              + '<ellipse cx="' + (583 + GLOW_SHIFT - SUBJECT_SHIFT) + '" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
-              + '<ellipse cx="' + (624 + GLOW_SHIFT - SUBJECT_SHIFT) + '" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
+              + '<ellipse cx="' + MID_X + '" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
+              + '<ellipse cx="' + MID_X + '" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
               // The broad layer is a flattened half-round pool: it spreads below the cat and laptop
               // instead of ending as a straight strip. The smaller layer keeps the contact at y604-605.
               + '<g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none">'
