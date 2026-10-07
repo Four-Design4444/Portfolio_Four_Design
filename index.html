@@ -214,12 +214,12 @@
     </script>
   </head>
   <body>
-    <!-- 首屏 Loading（typing-cat v1.1）：demo 原文件字节级原封不动放在
-         public/loading/ 下，这里只做「嵌入 + 揭幕」，动画代码一行未改。
+    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
+         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 揭幕」。
          demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
          并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。 -->
-    <!-- 首屏 Loading（typing-cat v1.1）：demo 原文件字节级原封不动放在
-         public/loading/ 下，这里只做「嵌入 + 进度 + 揭幕」，动画代码一行未改。
+    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
+         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 进度 + 揭幕」。
          demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
          并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。
          只有首页会显示：二级(works)/三级(detail)页刷新直接进内容，不挡路。 -->
@@ -273,7 +273,7 @@
         // demo 自带的 .rail 是一条 2.6s 无限往返的假动画条，跟真实加载量毫无关系。
         // 这里整条摘掉，把真实进度条插到它原来的位置（动画正下方、居中）；排版
         // 参数抄 demo（rail 底色 / 2px 高 / #8b9eaf / #8291a0 小字），看上去就是
-        // 长在里面的。demo 源文件保持字节不变 —— 这是运行时的同域替换，不是改源码。
+        // 长在里面的。进度条以运行时的同域替换实现，不改 demo 的原条子。
         var placed = false;
         var placeIntoDemo = function () {
           if (placed) return;
@@ -286,7 +286,7 @@
           // 2026-10-07: 加载页背景整体换成参考版 outputs/typing-cat-04-mini.html 的做法,
           // 两层:①底色 = 04 的 main 径向渐变(--bg #111719,中心是 3% --light 提亮出来的
           //   #161d1e);②猫咪身后的光 = 04 真正在用的那套 SVG 光晕椭圆,几何换算见下。
-          // demo 源文件仍字节不动,与进度条替换同一机制:运行时同域注入,不碰动画代码。
+          // 背景与接触阴影沿用进度条替换机制:运行时同域注入;动画源文件只改眨眼时刻。
           style.textContent = ':root{background:#111719!important}'
             + 'html,body{background:#111719!important}'
             + 'main{background:radial-gradient(ellipse at 50% 49%,#161d1e 0%,#111719 68%)!important}'
@@ -312,9 +312,16 @@
               + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
               + '<radialGradient id="floor"><stop stop-color="#b9d7cd" stop-opacity=".16"/>'
               + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
+              + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="16 9"/></filter>'
+              + '<filter id="loader-shadow-contact" x="-10%" y="-150%" width="120%" height="400%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="5 3"/></filter>'
               + '</defs>'
               + '<ellipse cx="583" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
               + '<ellipse cx="624" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
+              // Shared footprint follows the cat base (y604) and laptop base (y605), not the elevated tail.
+              + '<g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none">'
+              + '<path d="M326 594 H949 Q969 594 969 605 Q969 612 949 612 H326 Q304 612 304 604 Q304 594 326 594Z" opacity=".26" filter="url(#loader-shadow-soft)"/>'
+              + '<path d="M326 598 H949 Q967 598 967 605 Q967 609 949 609 H326 Q306 609 306 604 Q306 598 326 598Z" opacity=".46" filter="url(#loader-shadow-contact)"/>'
+              + '</g>'
               + '</svg>';
             var lightSvg = lightBox.firstChild;
             // 一次性搬进 fragment 再插入:逐个 insertBefore 会把顺序反过来。

@@ -1249,6 +1249,10 @@ html[data-device="mobile"] .mw-slide {
   justify-content: center;
   z-index: 1;
   transform: scale(0.94);
+  /* 每张卡各自一层:入场初始姿态是「同一矩形里叠一摞、随后一起张开」,
+     不给图层的话浏览器得在动画起跑那一帧把这一摞重新栅格化,实测最坏
+     堵到 112ms;提层之后这一摞直接沿用已栅格的纹理做合成变换,最坏 37ms。 */
+  will-change: transform;
   transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 html[data-device="mobile"] .mw-slide[data-far] { visibility: hidden; }
