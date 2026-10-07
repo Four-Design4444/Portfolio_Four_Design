@@ -815,6 +815,7 @@ function App() {
   const [chromeIn, setChromeIn] = useState(false);
   const [homeHandoff, setHomeHandoff] = useState(false);
   const chromeTimerRef = useRef(0);
+  const chromeInTimerRef = useRef(0);
   /* 回程滚动复位(2026-10-07 业主第五轮):一级层是 display:none 隐藏的,隐藏
      期间文档高度塌掉、窗口滚动被浏览器钳回 0;路由切回 home 的同一提交里
      一级层重新可见,若此刻还停在 0,用户会看到首屏 hero 闪一帧再跳回原屏。
@@ -1342,6 +1343,10 @@ function App() {
          同步起跑;二级层底(mw-leaving::before)的 320ms 淡出让入场全程可见。 */
       setChromeHidden(false);
       setChromeIn(true);
+      window.clearTimeout(chromeInTimerRef.current);
+      /* 入场最长的一条 = 标题(延迟 160ms + 320ms)= 480ms。演完就摘掉
+         is-chrome-in:留着它,下次去程挂 is-chrome-out 时两条规则会打架。 */
+      chromeInTimerRef.current = window.setTimeout(() => setChromeIn(false), 600);
       window.location.hash = '';
       setRoute({ page: 'home', category: route.category, workId: '' });
       pendingHomeScrollRef.current =
@@ -1436,6 +1441,8 @@ function App() {
                  chromeHidden 保持 true(它们要等回程才入场)。 */
     if (mobileHandoff) {
       setChromeHidden(true);
+      setChromeIn(false);
+      window.clearTimeout(chromeInTimerRef.current);
       setHomeHandoff(true);
       window.clearTimeout(chromeTimerRef.current);
       chromeTimerRef.current = window.setTimeout(() => {
@@ -1617,6 +1624,7 @@ function App() {
                 deckFocusId={deckFocusId}
                 revealProjects={exitWorks}
                 chromeHidden={chromeHidden || homeHandoff}
+                chromeIn={chromeIn}
                 deckVeiled={exitWorks || homeHandoff}
               />
             </div>
@@ -2621,7 +2629,7 @@ function ShowcaseDeck({ items, openWorks }) {
    - Tapping a side card switches to it; tapping the front card opens works.
    - Auto-plays every 2.4s; pauses while dragging.
    The PC ShowcaseDeck (hover fan) is untouched. */
-function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chromeHidden = false, deckVeiled = false }) {
+function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chromeHidden = false, chromeIn = false, deckVeiled = false }) {
   const deckRef = useRef(null);
   const cardRefs = useRef([]);
   const dimRefs = useRef([]);
@@ -3031,7 +3039,7 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
   }, []);
 
   return (
-    <div className={`mob-showcase${chromeHidden ? ' is-chrome-out' : ''}${deckVeiled ? ' is-deck-veiled' : ''}`}>
+    <div className={`mob-showcase${chromeHidden ? ' is-chrome-out' : ''}${chromeIn ? ' is-chrome-in' : ''}${deckVeiled ? ' is-deck-veiled' : ''}`}>
       <h2 className="mob-heading rany-display-heading">Project Display</h2>
       <div className="mob-counter" ref={counterRef}>01 / 11</div>
 
@@ -5325,7 +5333,7 @@ function usePagingEnabled(active = true) {
 
   return enabled;
 }
-function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealProjects = false, chromeHidden = false, deckVeiled = false }) {
+function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealProjects = false, chromeHidden = false, chromeIn = false, deckVeiled = false }) {
   const [profileRef, profileSeen] = useRevealOnView();
   // 首屏视频是否已真正开始播放。尾屏预挂载必须等这个信号 —— 首屏视频优先级
   // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
@@ -5741,7 +5749,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         </div>
         <div className="project-list">
           {isMobile ? (
-            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} deckVeiled={deckVeiled} />
+            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} chromeIn={chromeIn} deckVeiled={deckVeiled} />
           ) : (
             <ShowcaseDeck items={worksItems} openWorks={openWorks} />
           )}

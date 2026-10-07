@@ -1259,6 +1259,40 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
     border-color 250ms ease;
 }
 
+/* ===== 回程入场改用 CSS animation (2026-10-07 业主第五轮第 1 条) =====
+   业主要求:回程时「其余元素」必须**与轨道收拢同帧起跑**,不能等收拢演完
+   (560ms)才升回来 —— 那样中间是空场,读作"两段动效",节奏太慢。
+
+   但入场**不能用 transition 驱动**:一级层在二级页期间是 `.page-keep.is-hidden
+   { display: none }`,从 display:none 出来的元素没有"上一次的计算值"可供过渡,
+   浏览器直接按新值起画 —— 探针实测 chrome 透明度 0→1 一帧硬切,正是业主要
+   消灭的跳帧。延后两帧再摘类则要赌 rAF 与 React 提交的相对顺序,真机上两种
+   时序都出现过(其中一种就是硬切)。
+
+   @keyframes 自带 from 关键帧,**不依赖任何历史计算值**,机制上没有竞态:
+   挂上 .is-chrome-in 的当帧就从 from 起跑,与收拢同帧开始,全程有过渡帧。 */
+@keyframes mob-chrome-in {
+  from { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.96); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading,
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter,
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots,
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-viewall,
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs {
+  /* both:延迟期间先保持 from(否则延迟的这 160ms 里元素是全亮的,起跑时
+     又归零 —— 那本身就是一次跳帧),演完再停在 to。 */
+  animation: mob-chrome-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* 入场顺序 = 退场顺序的镜像:缩略图条 0ms → 查看全部 40ms → 圆点 80ms →
+   计数器 120ms → 标题 160ms。与基础态的 transition-delay 同值,所以
+   animation 起跑与 transition 兜底两条路径读出来是同一节奏。 */
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs { animation-delay: 0ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-viewall { animation-delay: 40ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots { animation-delay: 80ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter { animation-delay: 120ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading { animation-delay: 160ms; }
+
 html[data-device="mobile"] .mob-thumbs.dragging { cursor: grabbing; scroll-behavior: auto; }
 
 /* ===== 跨级交接:一级卡组遮挡 + 二级层不透明底 (2026-10-07 业主第四轮) =====
