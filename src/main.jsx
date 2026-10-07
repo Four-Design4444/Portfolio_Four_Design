@@ -5918,10 +5918,22 @@ function WorksPage({
       return `translate(${p.dx - (i - idx) * g.slideW}px, ${p.dy || 0}px) rotate(${p.rot || 0}deg) scale(${k})`;
     };
     const slides = Array.prototype.slice.call(track.children);
+    /* 只有屏幕上看得见的三张卡(当前卡 + 左右邻居)参与张开。
+       其余副本一律**立即隐藏**,不跟着飞 —— 它们本来就躲在主卡身后,
+       参与动效只会白白多画三十张卡(入场起跑空档的旧病根就是这个),
+       落到屏幕上还会从主卡两侧露出一圈边。
+       ⚠ 必须 `visibility:hidden` 而不是 `display:none`/`remove`:槽位参与 flex
+         排布,摘掉任何一个都会让整排位置整体位移,节距和居中全错。 */
+    const near = (i) => i >= idx - 1 && i <= idx + 1;
     track.style.transition = 'none';
     track.style.transform = `translate3d(${railBase(g, idx)}px, ${dy}px, 0)`;
     slides.forEach((el, i) => {
       el.style.transition = 'none';
+      if (!near(i)) {
+        el.style.transform = '';
+        el.style.visibility = 'hidden';
+        return;
+      }
       el.style.transform = poseFor(i) || `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
     });
     setPhase('armed');
@@ -5932,7 +5944,8 @@ function WorksPage({
     let raf = 0;
     raf = window.requestAnimationFrame(() => {
       raf = window.requestAnimationFrame(() => {
-        slides.forEach((el) => {
+        slides.forEach((el, i) => {
+          if (!near(i)) return;
           el.style.transition = `transform ${RAIL_EMERGE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
           el.style.transform = '';
         });
@@ -5943,7 +5956,9 @@ function WorksPage({
       });
     });
     const done = window.setTimeout(() => {
-      slides.forEach((el) => { el.style.transition = ''; });
+      /* 收尾要把非邻居卡的 visibility 一起还回去:隐藏只是为了这一次张开,
+         落定之后它们照旧在屏外待命(左右滑动时会进来)。 */
+      slides.forEach((el) => { el.style.transition = ''; el.style.visibility = ''; });
       setPhase('idle');
       phaseRef.current = 'idle';
       setLanded(true);
@@ -5956,6 +5971,25 @@ function WorksPage({
       window.clearTimeout(landedOff);
     };
   }, [entry, isMobile, railGeom]);
+
+  /* 回程一开始(leaving 一变)就把非邻居卡隐藏掉,不等收拢起跑。
+     收拢必须等一级页落点几何稳定(滚动复位 + 焦点瞬移,通常 2~4 帧)才开始,
+     而 `mw-leaving` 从第一帧就是亮的 —— 若等到 run() 里才隐藏,这几帧里
+     非邻居卡仍是"可见"状态跟着一起等,正是业主看到的"其余卡片也在跟随"。
+     它们本来就停在屏外,提前隐藏零视觉代价。 */
+  useLayoutEffect(() => {
+    if (!isMobile || !leaving) return undefined;
+    const track = trackRef.current;
+    if (!track) return undefined;
+    const idx = posRef.current;
+    Array.prototype.forEach.call(track.children, (el, i) => {
+      if (i >= idx - 1 && i <= idx + 1) return;
+      el.style.transition = 'none';
+      el.style.transform = '';
+      el.style.visibility = 'hidden';
+    });
+    return undefined;
+  }, [leaving, isMobile]);
 
   /* 离场:二级 → 一级,反向收拢回首页卡组里的那张卡。
      首页此刻已经可见(goHome 先把卡组焦点瞬移到同一张卡),所以这里能量到真实
@@ -6032,7 +6066,22 @@ function WorksPage({
         return `translate(${p.dx - (i - idx) * g.slideW}px, ${p.dy || 0}px) rotate(${p.rot || 0}deg) scale(${k})`;
       };
       const slides = Array.prototype.slice.call(track.children);
+      /* 回程只让**屏幕上看得见的三张卡**收拢(业主第四轮第 2 条):
+         其余副本直接消失,不跟着飞回一级页。
+         旧写法的病:非邻居卡的目标是 `translateX(-(i-idx)·节距)`,那正好是
+         「从自己的槽位飞回主卡中心」—— 十几张卡穿过屏幕叠到主卡身上,而主卡
+         此刻正在缩小,缩到比它们还窄时就从两侧露出一整圈卡边,读起来就是
+         "一堆卡跟着回到一级页"。
+         ⚠ 用 visibility 而不是 display:槽位参与 flex 排布,摘掉会改变节距;
+         ⚠ 离场不需要还原,WorksPage 收拢结束就卸载。 */
+      const near = (i) => i >= idx - 1 && i <= idx + 1;
       slides.forEach((el, i) => {
+        if (!near(i)) {
+          el.style.transition = 'none';
+          el.style.transform = '';
+          el.style.visibility = 'hidden';
+          return;
+        }
         el.style.transition = `transform ${dur}ms cubic-bezier(0.22, 1, 0.36, 1)`;
         el.style.transform = poseFor(i) || `translateX(${-(i - idx) * g.slideW}px) scale(${scale})`;
       });

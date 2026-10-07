@@ -16,6 +16,22 @@ const originToFlip = (origin) => {
   }
 };
 
+/* 逐级向上判断是否真的被渲染。display:none 或 visibility:hidden 的祖先会让整棵
+   子树不绘制,但 IntersectionObserver 依然报告 isIntersecting —— 容器仍在布局流里、
+   rect 正常,observer 看不到"人看不见"这件事。
+   ⚠ 这可能造成的空转(2026-10-07 实测):移动端进三级详情页后,二级页作为
+     `.mw-under.is-covered`(visibility:hidden)保持挂载,其 SideRays 的 rAF 里照样
+     每帧跑一次全屏片元着色器 —— 用户看不到却持续 30fps 吃 GPU。渲染循环靠它真正暂停。 */
+const isRendered = (el) => {
+  let node = el;
+  while (node && node !== document.documentElement) {
+    const cs = getComputedStyle(node);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    node = node.parentElement;
+  }
+  return true;
+};
+
 function SideRays({
   speed = 2.5,
   rayColor1 = '#EAB308',
@@ -200,12 +216,26 @@ void main() {
       };
 
       let lastRender = 0;
+      // 遮挡判定节流：getComputedStyle 有成本，但遮挡只在页面级切换时变化
+      // （路由 / 覆盖层），按时间每 VIS_CHECK_MS 复查一次足够，且隐藏时**整帧不渲**。
+      const VIS_CHECK_MS = 200;
+      let lastVisCheck = -Infinity;
+      let rendered = true;   // 本帧是否真的该渲染（由周期性复查更新）
       const loop = (time) => {
         if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return;
-        // 先排下一帧：即便本帧跳过重绘，循环也不中断（保 WebGL 上下文 / shader）。
+        // 先排下一帧：即便本帧跳过重绘，循环也不中断（保 WebGL 上下文 / shader），
+        // 也才能靠后续帧把"重新可见"检测回来。
         animationIdRef.current = requestAnimationFrame(loop);
         // 标签页不可见时完全停渲，避免后台空转吃 CPU/GPU。
         if (document.hidden) return;
+        // 容器被祖先 display:none / visibility:hidden 遮住时同样停渲：
+        // IntersectionObserver 对这种"仍在布局流、rect 正常"的隐藏判不出来，
+        // 移动端三级页下二级页(.mw-under.is-covered)会因此空转全屏着色。
+        if (time - lastVisCheck >= VIS_CHECK_MS) {
+          lastVisCheck = time;
+          rendered = isRendered(containerRef.current);
+        }
+        if (!rendered) return;
         // 移动端按 frameInterval 节流：iTime 用真实时间推进，动画速度不变。
         if (frameInterval && time - lastRender < frameInterval) return;
         lastRender = time;
