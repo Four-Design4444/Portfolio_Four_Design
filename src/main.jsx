@@ -4646,13 +4646,25 @@ function HomePage({ openWorks, paging, active = true }) {
   // 首屏 Loading 遮罩只在首页出现（index.html 按 hash 判定），揭幕信号也只由
   // 首页给出：hero 真正播起来 = 首屏内容加载完毕。遮罩里的进度条另有真实来源
   // （preload 资源条目 + <video> buffered），这个事件只是"可以揭幕了"的终判。
+  // 揭幕闸门：首屏可播 + 封面预载完 = 进入 hero 后零加载负载（PC / 移动端一致）。
+  // 尾屏 WebGL 仍在 loading 期预载/编译（onTailReady 上报进度条），但它是一路滚到
+  // 最后的屏，用户抵达前必然编译完，不应作为硬闸门 —— 否则低端 GPU 上着色器编译
+  // 耗时数秒会直接拖住首屏揭幕（表现为进度条卡在 9x%）。故加 2s 兜底：首屏内容就绪后
+  // 最多再等 2s 让尾屏编译，超时即揭幕，尾屏继续在后台编译。
+  const revealedRef = useRef(false);
+  const reveal = useCallback(() => {
+    if (revealedRef.current) return;
+    revealedRef.current = true;
+    window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
+  }, []);
   useEffect(() => {
-    // 揭幕闸门：hero 真正可播「且」所有作品封面已预载「且」尾屏 WebGL 已编译完成，
-    // 三者皆备才揭幕 —— 进入 hero 后不再有任何加载负载（PC / 移动端一致）。
-    if (!heroVideoReady || !coversPreloaded || !tailReady) return undefined;
-    const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
-    return () => window.cancelAnimationFrame(frame);
-  }, [heroVideoReady, coversPreloaded, tailReady]);
+    if (heroVideoReady && coversPreloaded && tailReady) reveal();
+  }, [heroVideoReady, coversPreloaded, tailReady, reveal]);
+  useEffect(() => {
+    if (!heroVideoReady || !coversPreloaded) return undefined;
+    const t = window.setTimeout(reveal, 2000);
+    return () => window.clearTimeout(t);
+  }, [heroVideoReady, coversPreloaded, reveal]);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);

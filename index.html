@@ -467,6 +467,9 @@
         window.addEventListener('app:ready', function () { ready = true; hide(true); });
         var timer = window.setInterval(tick, 120);
         window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
+        // 兜底：无论如何 6s 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下始终
+        // 不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
+        window.setTimeout(function () { if (!hidden) hide(true); }, HARD_CAP);
         // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
         // 也要揭幕（不补满进度）。
         window.setTimeout(function () { hide(false); }, HARD_CAP);
