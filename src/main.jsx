@@ -102,26 +102,22 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 // ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(实测 R 的 getBoundingClientRect().right)，
 //    使首字母 F 正好接在 R 结束的地方，形成纵向连续的视觉关系。
 //
-// ⚠ 2026-10-07 三次修正。前两版都错在同一个地方：我给 FOUR DESIGN **自创了一套节奏**
-//   (v1 2040/120/1800 拖到 5000ms；v2 1720/100/650 只是把开头提前、尾巴仍落在上面之后)，
-//   而业主真正要的是「**跟上面 SVG 一样的入场动效**」+「不能等上面全入场完才出现」。
-//   所以这一版不再自创参数，直接把上面 SVG 的入场公式原样搬过来：
-//     · 同样的 easing      —— smooth() (smootherstep)，与 path 的 intro 同一个函数
-//     · 同样的单字时长      —— 1800ms
-//     · 同样的解模糊幅度    —— blur(52px → 0)，这是那"从糊里浮出来"的观感本体
-//     · 同样的间距          —— 120ms(与 PORTFOLIO 逐字完全一致)
-//     · 同样没有位移        —— SVG 的 transform 只由指针悬停驱动，入场阶段是 0；副标也不该有上浮
+// ⚠ 2026-10-07 定稿(业主第五次反馈)。前四版都错在同一个思路上：我一直在给 FOUR DESIGN
+//   「逐字错峰」(v1 2040/120/1800 拖到 5000ms；v2 1720/100/650 提前开头；v3 1720/85/380 更快；
+//    v4 1080/120/1800 复用上面 path 公式但仍逐字)，而业主要的是**整行一起出现，不要逐字分开**。
+//   → 现在：11 个字符共用同一个 delay，同一条曲线同时开始、同时结束，整行作为一个整体浮现。
+//   动效本体仍与上面 SVG 同源(业主同时要求"跟上面 SVG 一样的入场动效")：
+//     · 同样的 easing     —— smooth() (smootherstep)，与 path 的 intro 同一个函数
+//     · 同样的时长        —— 1800ms
+//     · 同样的解模糊幅度   —— blur(52px → 0)，这是那"从糊里浮出来"的观感本体
+//     · 同样没有位移       —— SVG 的 transform 只由指针悬停驱动，入场阶段是 0；副标也不做上浮
+//   唯一的差别 = 没有逐字间距(那是业主明确要求的)。
 //   起手点 BYLINE_INTRO_START_MS = 1080：PORTFOLIO 的 9 个 path 占 0~960ms 的 delay，
 //   1080 正是第 10 个位置(= welcome 首字)的时刻 —— 也就是**上面最后一个大写字母刚起步入场时，
-//   FOUR DESIGN 就已经跟着入场了**，两条小字(welcome / FOUR DESIGN)同批进入。
-//   (这才是"FOUR DESIGN 在上面全入场完才出现"的结构性修复：它的整段动效与上面重叠，
-//    而不是等上面收干净再单独补一段。)
-// ⚠ 想让它更早收干净就动 BYLINE_CHAR_DURATION_MS(按比例缩)，**不要动 stagger**：
-//   stagger 压到 60ms 量级业主否过(读作"整行同时入场")。
-const BYLINE_INTRO_START_MS = 1080; // = welcome 首字时刻；此时 PORTFOLIO 最后一个字母刚起手
-const BYLINE_CHAR_STAGGER_MS = 120;  // 与 PORTFOLIO 逐字间距完全一致
+//   FOUR DESIGN 整行就同时跟着入场**，与上面重叠收尾，不会"等上面全入场完才出现"。
+const BYLINE_INTRO_START_MS = 1080;   // = welcome 首字时刻；整行同一刻起手
 const BYLINE_CHAR_DURATION_MS = 1800; // 与 PORTFOLIO 淡入时长完全一致
-const HERO_INTRO_BLUR_PX = 52;      // 与 PORTFOLIO 解模糊幅度完全一致(入场观感的本体)
+const HERO_INTRO_BLUR_PX = 52;        // 与 PORTFOLIO 解模糊幅度完全一致(入场观感的本体)
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -3881,7 +3877,7 @@ function HeroSection({ active = true, onVideoReady }) {
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
   // 移动端副标 "Four Design"：由 hero 的入场 rAF 循环统一驱动，复用同一个揭幕计时起点。
-  // bylineRef 量测 R 右缘以定位其左缘；bylineCharRefs 为逐字节点(从左到右有序入场)。
+  // bylineRef 量测 R 右缘以定位其左缘；bylineCharRefs 为字符节点(整行统一入场，无逐字错峰)。
   const bylineRef = useRef(null);
   const bylineAlignRef = useRef(false);
   const bylineCharRefs = useRef([]);
@@ -4832,10 +4828,10 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         node.style.filter = `blur(${((1 - intro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
-      // 移动端副标 "Four Design"：**入场动效与上面 SVG 逐字完全同款** ——
-      // 同一个 smooth() easing / 1800ms / blur(52px→0) / 120ms 间距 / 无位移(上面 path 的
-      // transform 只由指针悬停驱动，入场阶段是 0，所以副标也不做上浮)。
-      // 起手点见 BYLINE_INTRO_START_MS 注释：与 welcome 首批同刻，上面还在入场时它就跟着入场。
+      // 移动端副标 "Four Design"：**整行一起入场**(业主明确要求，不要逐字分开)。
+      // 动效本体与上面 SVG 同源 —— 同一个 smooth() easing / 1800ms / blur(52px→0) / 无位移；
+      // 11 个字符共用同一个 delay，所以是同一时刻开始、同一时刻结束的"整体浮现"。
+      // 起手点见 BYLINE_INTRO_START_MS 注释：与 welcome 首批同刻，上面还在入场时整行就跟着入场。
       // 位置：把左缘对齐到 R 的右缘，使首字母 F 正好接在 R 的位置上，上下读作同一处。
       const byline = bylineRef.current;
       if (byline) {
@@ -4855,16 +4851,18 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
             } catch (_) { /* 布局还没就绪，下一帧再试 */ }
           }
         }
-        // 整行容器只负责定位/对齐，本身不参与淡入(避免与逐字叠加)。
+        // 整行容器只负责定位/对齐，本身不参与淡入(避免与字符层叠加)。
         byline.style.opacity = '1';
         byline.style.filter = 'none';
-        // 与上面 path 逐字同一套公式：delay = 起点 + i*120，时长 1800ms，smootherstep 解模糊。
-        // 不再有独立的位移/幂次解模糊 —— 那些"自创参数"正是业主说的"跟上面SVG不一样"。
+        // 与上面 path 同一套曲线(easing/时长/解模糊)，只是副标**整行**共用一个 delay，
+        // 所以是整体一起浮现，而不是从左到右依次出现。
+        // 整行一起浮现：所有字符共用同一个 delay(无 i*stagger)，同一条 smootherstep 曲线，
+        // 同时开始 / 同时结束。不再有独立的位移/幂次解模糊 —— 那些"自创参数"正是业主说的"跟上面SVG不一样"。
         const chars = bylineCharRefs.current;
         for (let i = 0; i < chars.length; i++) {
           const node = chars[i];
           if (!node) continue;
-          const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
+          const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS) / BYLINE_CHAR_DURATION_MS);
           node.style.opacity = String(charIntro);
           node.style.filter = `blur(${((1 - charIntro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
           node.style.transform = 'none';
@@ -6157,9 +6155,17 @@ function WorksPage({
                   className="mw-card"
                   aria-label={`${work.title} — 下滑或点按查看设计详情`}
                 >
-                  {/* 11 张封面在 loading 阶段已全部预载(HomePage 的 covers 预载),
-                      这里直接给 src:33 个节点共用 11 张已解码位图,滑动零等待。 */}
-                  <img className="mw-card-img" src={work.detailHero ?? work.image} alt={work.title} decoding="async" />
+                  {/* ⚠ src 只给当前卡附近的 ±4 张:33 个节点若同时挂上 src,首帧
+                       要一次性解码 11 张 ~290×485 的封面(实测主线程阻塞 144ms),
+                       而那正是入场动画即将起跑的时刻 —— 动画会整整晚 ~150ms 才动,
+                       读起来就是「点了没反应,然后突然张开」。远处的副本此刻不是
+                       被主卡完全盖住(入场初始姿态)就是远在屏外,不需要位图。 */}
+                  <img
+                    className="mw-card-img"
+                    src={Math.abs(i - pos) <= 4 ? (work.detailHero ?? work.image) : undefined}
+                    alt=""
+                    decoding="async"
+                  />
                   <span className="mw-card-veil" aria-hidden="true" />
                   <span className="mw-card-copy" aria-hidden="true">
                     <strong>{work.title}</strong>
