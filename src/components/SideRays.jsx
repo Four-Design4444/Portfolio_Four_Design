@@ -44,7 +44,11 @@ function SideRays({
   blend = 0.75,
   falloff = 1.6,
   opacity = 1,
-  className = ''
+  className = '',
+  /* 页面级点亮开关(2026-10-07 统一环境光):环境光现在是 App 层**单例**,
+     跨一级/二级复用同一个 WebGL 实例。路由不点亮它时(如详情页)传 false,
+     渲染循环直接跳过 —— 保上下文但不空转,重新点亮当帧即续,无重建闪烁。 */
+  active = true
 }) {
   const containerRef = useRef(null);
   const uniformsRef = useRef(null);
@@ -53,6 +57,8 @@ function SideRays({
   const meshRef = useRef(null);
   const cleanupFunctionRef = useRef(null);
   const observerRef = useRef(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -226,6 +232,8 @@ void main() {
         // 先排下一帧：即便本帧跳过重绘，循环也不中断（保 WebGL 上下文 / shader），
         // 也才能靠后续帧把"重新可见"检测回来。
         animationIdRef.current = requestAnimationFrame(loop);
+        // 路由不点亮时（如详情页）不渲染，但循环不退出 —— 重新点亮当帧即续。
+        if (!activeRef.current) return;
         // 标签页不可见时完全停渲，避免后台空转吃 CPU/GPU。
         if (document.hidden) return;
         // 容器被祖先 display:none / visibility:hidden 遮住时同样停渲：

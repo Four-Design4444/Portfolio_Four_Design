@@ -791,6 +791,18 @@ function App() {
   const [worksEntry, setWorksEntry] = useState(null);
   const [exitWorks, setExitWorks] = useState(false);
   const [deckFocusId, setDeckFocusId] = useState('');
+  /* 环境光(SideRays)单例 (2026-10-07):一级首页与二级作品页**共用同一个实例**。
+     以前两级各挂一份(一级 .home-rays-layer、二级 .works-side-rays),跨级时是两个
+     WebGL 上下文、各自 shader,视觉参数虽同但始终是"两个光"。现在提升到 App 顶层:
+       - raysMounted:是否已挂载。**首次点亮后就常驻**,之后一级/二级来回都复用同一个
+         WebGL 实例与 shader,不再重建 → 无上下文开销、无首帧闪烁,天然「同一个」。
+       - raysLit:当前是否点亮(是否在发光)。一级在 projects/contact 视口内、二级常态
+         点亮;详情页不点亮(视觉与改动前一致,且隐藏时停渲零空转)。
+     视觉一律以一级为准(参数、z-index 20、mask 78%、移动端 opacity 0.8)。 */
+  const [raysMounted, setRaysMounted] = useState(false);
+  const [raysLit, setRaysLit] = useState(false);
+  const appRaysLayerRef = useRef(null);
+  const appRaysHitRef = useRef(false);
   const mobileFlipTimerRef = useRef(0);
   const scheduleMobileFlipClear = () => {
     window.clearTimeout(mobileFlipTimerRef.current);
@@ -807,6 +819,99 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
+
+  /* 环境光单例的点亮/停渲驱动 (2026-10-07)。
+     点亮判据:
+       - 二级作品页(route.page === 'works'):常态点亮(整页都是光的舞台)。
+       - 首页(route.page === 'home'):沿用它原有的「作品展示/联系屏与视口相交」语义,
+         从 live 文档读这两段 rect(#projects / #contact),相交即点亮。
+       - 详情页:不点亮(停渲,视觉与改动前一致)。
+     实例生命周期:自上向下**只挂载、不卸载**(一旦点亮过就常驻)。这样一级/二级/详情
+     之间来回始终是同一个 WebGL 实例,既没有上下文重建开销,也不再换页闪一下 ——
+     这就是"两级共用一个环境光"的字面实现。
+     走的是 refs(classList / style)而不是 diff 类名,故不依赖 React 在下一次
+     render 才写 DOM。 */
+  useEffect(() => {
+    let frame = 0;
+
+    const homeSections = () => ['projects', 'contact']
+      .map((id) => document.getElementById(id))
+      .filter((el) => el && el.isConnected);
+
+    const setLit = (on) => {
+      const layer = appRaysLayerRef.current;
+      if (layer) {
+        if (on) layer.classList.add('is-on');
+        else layer.classList.remove('is-on');
+      }
+      if (on) setRaysLit(true);
+      else setRaysLit(false);
+    };
+
+    const syncRays = () => {
+      frame = 0;
+      const page = parseRoute().page;
+      if (page === 'detail') {
+        // 停渲但保持挂载(实例常驻),重新点亮当帧即续。
+        if (appRaysHitRef.current) { appRaysHitRef.current = false; setLit(false); }
+        return;
+      }
+
+      let hit = false;
+      if (page === 'works') {
+        hit = true;
+        // 二级页把这层钉回视口:一级的"跟随内容 translate"在二级会把层推
+        // 出屏幕(沿用首页的 follow 值),IntersectionObserver 随即判不可见 →
+        // 卸载 canvas。二级整页都是光的舞台,transform 归零即可。
+        const layer = appRaysLayerRef.current;
+        if (layer) layer.style.transform = 'translate3d(0, 0, 0)';
+      } else if (page === 'home') {
+        const elements = homeSections();
+        if (!elements.length) return;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        const rects = elements.map((element) => element.getBoundingClientRect());
+        hit = rects.some((rect) => rect.top < viewportHeight && rect.bottom > 0);
+        // 最上方的那段决定偏移:它在视口之上时钳到 0(层钉住),往上滚动把它
+        // 推下来时层跟着它走 —— 与改动前一致。
+        const lead = Math.min(...rects.map((rect) => rect.top));
+        const follow = Math.max(0, Math.min(lead, viewportHeight));
+        const layer = appRaysLayerRef.current;
+        if (layer) layer.style.transform = `translate3d(0, ${Math.round(follow)}px, 0)`;
+      }
+
+      if (hit === appRaysHitRef.current) return;
+      appRaysHitRef.current = hit;
+      if (hit) {
+        // 首次点亮即挂载,此后常驻;再次点亮不重建。
+        setRaysMounted(true);
+        setLit(true);
+      } else {
+        // 回滚到 hero:仅熄灭(保留 canvas 供回来时复用)。
+        setLit(false);
+      }
+    };
+
+    const onScrollOrResize = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(syncRays);
+    };
+
+    syncRays();
+    window.addEventListener('scroll', onScrollOrResize, { passive: true });
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize);
+      window.removeEventListener('resize', onScrollOrResize);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [route.page]);
+
+  // 卸载/熄灭时确保摘掉点亮类,避免残留。
+  useEffect(() => {
+    if (raysMounted) return;
+    const layer = appRaysLayerRef.current;
+    if (layer) layer.classList.remove('is-on');
+  }, [raysMounted]);
 
   useEffect(() => {
     if (route.page !== 'home') {
@@ -1370,6 +1475,29 @@ function App() {
 
   return (
     <>
+      {/* 环境光单例层(2026-10-07):一级与二级共用这**一个**实例。
+          位置/层级/视觉一律沿用一级原样(fixed inset:0、z-index 20、mask 78%、
+          mix-blend:screen、移动端 opacity .8),所以二级换用它等于"二级改用一级那道光"。
+          首次点亮后常驻,跨级来回不重建。 */}
+      <div className={`home-rays-layer${raysLit ? ' is-on' : ''}`} ref={appRaysLayerRef} aria-hidden="true">
+        {raysMounted && (
+          <SideRays
+            className="home-rays"
+            active={raysLit}
+            speed={2.5}
+            rayColor1="#EAB308"
+            rayColor2="#96c8ff"
+            intensity={2}
+            spread={2}
+            origin="top-right"
+            tilt={0}
+            saturation={1.5}
+            blend={0.75}
+            falloff={1.6}
+            opacity={1}
+          />
+        )}
+      </div>
       <main>
         {route.page !== 'heroMotionDemo' && (
           <MorphNav
@@ -5232,94 +5360,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
 
   const [index, setIndex] = useState(startIndexRef.current);
 
-  // The contact screen carries a WebGL ray burst. The same burst backs the
-  // projects screen, and it lives in a viewport-fixed layer so a page turn
-  // does not drag it along with the content.
-  //
-  // Two behaviours ride on top of that:
-  //   * arriving on a lit screen should settle first, then fade the light in -
-  //     switching straight on read as a hard pop;
-  //   * scrolling back up out of a lit screen should let the light travel with
-  //     the section it belongs to instead of being pinned to the viewport, so
-  //     it slides away with the content.
-  //
-  // The sections are read as a list, not hard-coded by name: adding or
-  // removing a lit screen here simply changes how far the shared burst
-  // reaches.
-  const [raysMounted, setRaysMounted] = useState(false);
-  const raysLayerRef = useRef(null);
-  const raysHitRef = useRef(false);
-  const raysHideTimer = useRef(0);
-
-  useEffect(() => {
-    const RAYS_TEARDOWN_DELAY = 700;
-
-    // Read as a list, and only from the live document, so a removed screen
-    // simply shortens the list and the screens below keep the light and the
-    // travel-on-the-way-up.
-    // The contact screen is in here too - it used to own its own burst pinned
-    // inside the section, which slid into view ahead of the content and stacked
-    // on top of this one; one shared burst now covers the whole tail.
-    const sections = () => [projectsRef.current, contactRef.current]
-      .filter((el) => el && el.isConnected);
-
-    const syncRays = () => {
-      const elements = sections();
-      if (!elements.length) return;
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-      const rects = elements.map((element) => element.getBoundingClientRect());
-      const hit = rects.some((rect) => rect.top < viewportHeight && rect.bottom > 0);
-
-      // The uppermost lit section owns the offset. While it sits above the
-      // viewport the offset clamps to 0 and the layer is pinned; once a scroll
-      // back up pushes it down, the layer rides along with it.
-      const lead = Math.min(...rects.map((rect) => rect.top));
-      const follow = Math.max(0, Math.min(lead, viewportHeight));
-      const layer = raysLayerRef.current;
-      if (layer) layer.style.transform = `translate3d(0, ${Math.round(follow)}px, 0)`;
-
-      if (hit === raysHitRef.current) return;
-      raysHitRef.current = hit;
-      window.clearTimeout(raysHideTimer.current);
-      if (hit) {
-        // Straight on, no settle delay and no fade: the layer rides in with the
-        // section it belongs to, so the arrival is the content's own motion.
-        setRaysMounted(true);
-        if (layer) layer.classList.add('is-on');
-      } else {
-        if (layer) layer.classList.remove('is-on');
-        // Keep the WebGL canvas alive through the dissolve so leaving a screen
-        // is not a disappearance.
-        raysHideTimer.current = window.setTimeout(() => setRaysMounted(false), RAYS_TEARDOWN_DELAY);
-      }
-    };
-
-    let frame = 0;
-    const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        syncRays();
-      });
-    };
-
-    syncRays();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (frame) cancelAnimationFrame(frame);
-      window.clearTimeout(raysHideTimer.current);
-    };
-  }, []);
-
-  // Unmounting always drops the lit class, so a remount cannot come back lit.
-  useEffect(() => {
-    if (raysMounted) return;
-    const layer = raysLayerRef.current;
-    if (layer) layer.classList.remove('is-on');
-  }, [raysMounted]);
+  // 环境光(SideRays)已提升为 **App 层单例**(见 App 的 app-rays-layer):
+  // 一级首页与二级作品页现在共用同一个 WebGL 实例、同一套以一级为准的参数。
+  // 首页不再自己挂载/调度光层,这里只负责把 projects/contact 的实测可见性
+  // 通过 data-section 暴露给 App 的光驱动(见下方 reveal* 的写入处)。
 
   // The first screen is already visible on the first paint. Later screens
   // reveal when their one-screen gesture arrives.
@@ -5589,25 +5633,6 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
 
   return (
     <>
-      <div className="home-rays-layer" ref={raysLayerRef} aria-hidden="true">
-        {raysMounted && (
-          <SideRays
-            className="home-rays"
-            speed={2.5}
-            rayColor1="#EAB308"
-            rayColor2="#96c8ff"
-            intensity={2}
-            spread={2}
-            origin="top-right"
-            tilt={0}
-            saturation={1.5}
-            blend={0.75}
-            falloff={1.6}
-            opacity={1}
-          />
-        )}
-      </div>
-
       <HeroSection active={active} onVideoReady={markHeroVideoReady} />
 
       <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
@@ -6336,20 +6361,6 @@ function WorksPage({
         ref={pageRef}
         className={`works-index-page${phase === 'entering' ? ' mw-entering' : ''}${phase === 'armed' ? ' mw-armed' : ''}${landed ? ' mw-landed' : ''}${leaving ? ' mw-leaving' : ''}${returning ? ' mw-under-return' : ''}`}
       >
-        <SideRays
-          className="works-side-rays"
-          speed={2.5}
-          rayColor1="#EAB308"
-          rayColor2="#96c8ff"
-          intensity={2}
-          spread={2}
-          origin="top-right"
-          tilt={0}
-          saturation={1.5}
-          blend={0.75}
-          falloff={1.6}
-          opacity={1}
-        />
         <div
           className="mw-stage"
           ref={stageRef}
@@ -6413,20 +6424,6 @@ function WorksPage({
 
   return (
     <section className="works-index-page works-index-page--orbit">
-      <SideRays
-        className="works-side-rays"
-        speed={2.5}
-        rayColor1="#EAB308"
-        rayColor2="#96c8ff"
-        intensity={2}
-        spread={2}
-        origin="top-right"
-        tilt={0}
-        saturation={1.5}
-        blend={0.75}
-        falloff={1.6}
-        opacity={1}
-      />
       <div className="works-container works-orbit-container">
         <div className="works-orbit-stage" ref={stageRef}>
           <div className="works-orbit" ref={orbitRef}>
