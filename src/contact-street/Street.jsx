@@ -6,6 +6,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 
+// 尾屏 intro 灯光渐入时长（demo scene.js: intro += dt/2.7，约 2.7s）。揭幕后趁用户
+// 滚动下行的空档满帧烧掉，留足余量避免「刚好滑到尾屏时还在烧」。
+const INTRO_BURN_MS = 3200;
+
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
 // ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header），保留底部导航栏。
 // ② 隐藏加载动画：#loading 覆盖全屏且 z-index:100，是 demo 用来遮 Three.js 冷启动的
@@ -238,11 +242,27 @@ export default function ContactStreet({ active, preload, onTailReady }) {
   const [revealed, setRevealed] = useState(false);
   const frameRef = useRef(null);
   const everActive = useRef(false);
+  // 首屏 loading 是否已揭幕：尾屏的 intro 灯光烧录要等揭幕后才开始（趁用户滚动下行的
+  // 空档烧掉），既不让它在 loading 期抢首屏视频，也不让它在「滑到尾屏那一刻」才开始
+  // 烧录（那会造成进入瞬间的提速跳变 / 卡顿）。
+  const [heroRevealed, setHeroRevealed] = useState(
+    (typeof window !== 'undefined' && window.__appRevealed) || false
+  );
+  const burnedRef = useRef(false);
 
   useEffect(() => {
     if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
+
+  useEffect(() => {
+    const onReady = () => setHeroRevealed(true);
+    if (typeof window !== 'undefined') {
+      if (window.__appRevealed) setHeroRevealed(true);
+      else window.addEventListener('app:ready', onReady);
+    }
+    return () => { if (typeof window !== 'undefined') window.removeEventListener('app:ready', onReady); };
+  }, []);
 
   // 降频开关（P-04）：尾屏不在视口内时，3D 渲染立即压到空转保活，绝不跑满帧
   // intro 烧录。原因：尾屏挂载已提前到 loading 阶段（见 HomePage），而 loading 通常
@@ -259,15 +279,23 @@ export default function ContactStreet({ active, preload, onTailReady }) {
     if (!mounted) return undefined;
     let stopped = false;
     let timer = null;
+    let burnTimer = null;
     const apply = () => {
       if (stopped) return;
       const win = frameRef.current && frameRef.current.contentWindow;
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
-      try { win.__streetPaused = !active; } catch (_) { /* 已销毁 / 跨域时静默 */ }
+      // 满帧条件：① 已在尾屏(active) ② loading 已揭幕且 intro 尚未烧完（趁滚动期烧掉）。
+      // 这样用户滑到尾屏时 intro 已=1，进入瞬间是「已就绪满帧」，不再有烧录+提速跳变。
+      const full = active || (heroRevealed && !burnedRef.current);
+      try { win.__streetPaused = !full; } catch (_) { /* 已销毁 / 跨域时静默 */ }
+      if (!active && heroRevealed && !burnedRef.current && !burnTimer) {
+        // 揭幕后最多烧 INTRO_BURN_MS 便降频空转；用户滚动到达时早就烧完
+        burnTimer = window.setTimeout(() => { burnedRef.current = true; apply(); }, INTRO_BURN_MS);
+      }
     };
     apply();
-    return () => { stopped = true; if (timer) window.clearTimeout(timer); };
-  }, [mounted, active]);
+    return () => { stopped = true; if (timer) window.clearTimeout(timer); if (burnTimer) window.clearTimeout(burnTimer); };
+  }, [mounted, active, heroRevealed]);
 
   useStreetWheelBridge(mounted && active);
 

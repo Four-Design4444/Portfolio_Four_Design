@@ -96,6 +96,15 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
   { x: 0.802, y: 0.894 },
   { x: 0.776, y: 0.894 }
 ];
+
+// 移动端副标 "Four Design" 的入场时机：等 hero 中心 SVG 的入场接近完成时再开始，且与
+// SVG 一样逐字从左到右有序入场（不是整行同时出现）。
+// SVG 各 path 入场 = introDelay + 1800ms，welcome 最晚 1080 + 6*55 = 1410 → 约 3210ms 收尾。
+// 在 ~2460ms（约 76% 处）起首字，字符间隔 60ms 依次跟上，正好落在 SVG 收尾段。
+const BYLINE_INTRO_START_MS = 2460;
+const BYLINE_CHAR_STAGGER_MS = 60;
+const BYLINE_CHAR_DURATION_MS = 900;
+const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
 import blenderIcon from './assets/profile/blender.webp';
@@ -2746,12 +2755,10 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
     window.addEventListener('resize', measure);
     const t = setTimeout(measure, 400);
     /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,挂载时量出的宽度
-       全为 0(芯片变细条)。RO 方案在预览面板冻结渲染下不可靠,改为确定性
-       方案:路由 hash 变化(返回一级)后按 200/600/1200ms 各重测一次,
-       此时首页必然已渲染,量到的是落定的静止宽度。 */
-    const onHash = () => { [200, 600, 1200].forEach((d) => setTimeout(measure, d)); };
-    window.addEventListener('hashchange', onHash);
-    return () => { window.removeEventListener('resize', measure); window.removeEventListener('hashchange', onHash); clearTimeout(t); clearTimeout(roTimer); if (ro) ro.disconnect(); };
+       全为 0(芯片变细条)。RO 方案在预览面板冻结渲染下不可靠,但真实设备上
+       RO 会正常触发;不叠加 hashchange 定时重测(路由过渡的瞬态布局
+       会量出垃圾值)。 */
+    return () => { window.removeEventListener('resize', measure); clearTimeout(t); clearTimeout(roTimer); if (ro) ro.disconnect(); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [selector, count, ...(deps || [])]);
 
@@ -2892,16 +2899,15 @@ function useMeasuredMaxCardHeight(infoRef) {
     measure();
     /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页处于隐藏态,本组件挂载时
        测量条高度全为 0,量出 --mob-exp-max: 0px 且无人重测 —— 返回一级后
-       经验/技能卡展开后高度为 0、无法正常显示。RO 在测量条
-       获得真实高度(首页变为可见)时自动重测,自愈;另配路由 hash 变化后的
-       200/600/1200ms 三次确定性重测(预览面板冻结渲染时 RO 不可靠)。 */
+       经验/技能卡展开后高度为 0、无法正常显示。ResizeObserver 在测量条
+       获得真实高度(首页变为可见)时自动重测,自愈。
+       ⚠ 不要加路由 hash 变化后的定时重测:hashchange 后 200-1200ms 正值
+       路由过渡的瞬态布局,实测量出 1500px 的垃圾高度毒化 --mob-exp-max。 */
     const ro = new ResizeObserver(() => measure());
     root.querySelectorAll('.mob-card-measure').forEach((m) => ro.observe(m));
     window.addEventListener('resize', measure);
-    const onHash = () => { [200, 600, 1200].forEach((d) => setTimeout(measure, d)); };
-    window.addEventListener('hashchange', onHash);
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('hashchange', onHash); };
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
   }, []);
 }
 
@@ -3162,10 +3168,29 @@ function CopyContactLine({ icon: Icon, label, value }) {
   const rollerRef = useRef(null);
   const mainRef = useRef(null);
   const doneRef = useRef(null);
+  const textRef = useRef(null);
   const timerRef = useRef(0);
   const widthsRef = useRef({ main: 0, done: 0 });
   const copiedRef = useRef(false);
   const [copied, setCopied] = useState(false);
+
+  // 字形推进宽度（不含盒内多余空间）。用 Range 量文字节点，得到真实字形宽。
+  // 2026-10-07 修 BUG(移动端下划线超宽)：移动端 CSS 把 .pf-copy-line 从 PC 的
+  // width:max-content 覆盖成 width:auto，两条 line 被 roller 盒宽（按邮箱量出的
+  // 196.9px）拉齐；而「已复制邮箱，欢迎联系」字形仅 143px，下划线若仍取 100%
+  // 盒宽就会右端空出一截。把当前「显示行」的字形宽度写成 --pf-rule-w，移动端
+  // 的 .pf-copy-rule 跟随它，切行即换宽（PC 端不受影响，仍用盒宽）。
+  const glyphW = (el) => {
+    if (!el || !el.firstChild) return 0;
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    return r.getBoundingClientRect().width;
+  };
+  const syncRuleW = (isCopied) => {
+    const el = isCopied ? doneRef.current : mainRef.current;
+    const w = glyphW(el);
+    if (w > 0 && textRef.current) textRef.current.style.setProperty('--pf-rule-w', w + 'px');
+  };
 
   // The roller is pinned to the value's natural width so the hover rule and
   // the rolled-in confirmation line always align with the text. Fonts finish
@@ -3177,6 +3202,7 @@ function CopyContactLine({ icon: Icon, label, value }) {
         done: doneRef.current.getBoundingClientRect().width
       };
       if (!copiedRef.current) rollerRef.current.style.width = widthsRef.current.main + 'px';
+      syncRuleW(copiedRef.current);
     };
     measure();
     /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,首次量出 roller
@@ -3202,10 +3228,12 @@ function CopyContactLine({ icon: Icon, label, value }) {
     clearTimeout(timerRef.current);
     copiedRef.current = true;
     rollerRef.current.style.width = widthsRef.current.done + 'px';
+    syncRuleW(true);                                // 下划线切到「已复制」行的字形宽度
     setCopied(true);
     timerRef.current = setTimeout(() => {
       copiedRef.current = false;
       rollerRef.current.style.width = widthsRef.current.main + 'px';
+      syncRuleW(false);                             // 复位时切回原值行的字形宽度
       setCopied(false);
       /* 2026-10-05: 提示停留 2600→1300ms(用户要求减半) —— 「已复制」看完即收,
          复位动画本身(roller 宽度/stack 位移的 CSS 过渡)不受影响。 */
@@ -3223,7 +3251,7 @@ function CopyContactLine({ icon: Icon, label, value }) {
         <Icon size={15} strokeWidth={1.8} className="pf-copy-ic-main" />
         <Copy size={15} strokeWidth={1.8} className="pf-copy-ic-copy" />
       </span>
-      <span className="pf-copy-text">
+      <span className="pf-copy-text" ref={textRef}>
         <span className="pf-copy-roller" ref={rollerRef}>
           <span className="pf-copy-stack">
             <span className="pf-copy-line" ref={mainRef}>{value}</span>
@@ -3550,6 +3578,9 @@ function HeroSection({ active = true, onVideoReady }) {
   const alphaCanvasRef = useRef(null);
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
+  // 移动端副标 "Four Design" 的逐字节点：由 hero 的入场 rAF 循环统一驱动，
+  // 复用同一个揭幕计时起点，做到与 SVG 同步的「从左到右」有序入场。
+  const bylineCharRefs = useRef([]);
   const jsmpegCanvasRef = useRef(null);
   const jsmpegPlayerRef = useRef(null);
   const wcCanvasRef = useRef(null);
@@ -4426,7 +4457,11 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     let centers = [];
     let hoverMix = 0;
     let lastTime = performance.now();
-    const start = performance.now();
+    // 入场动画只在 loading 加载完毕(app:ready)之后才开始，PC/移动同一套逻辑。
+    // 挂载时若已在揭幕后才挂（极端时序）则立即开始，否则等 app:ready 再计时。
+    let start = window.__appRevealed ? performance.now() : null;
+    const onReveal = () => { if (start === null) start = performance.now(); };
+    window.addEventListener('app:ready', onReveal);
     const smooth = (value) => {
       const t = Math.min(Math.max(value, 0), 1);
       return t * t * t * (t * (t * 6 - 15) + 10);
@@ -4465,7 +4500,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         const isWelcome = node.dataset.welcomePart !== undefined;
         const welcomeIndex = Number(node.dataset.welcomePart || 0);
         const introDelay = isWelcome ? 1080 + welcomeIndex * 55 : index * 120;
-        const intro = smooth((now - start - introDelay) / 1800);
+        const intro = start === null ? 0 : smooth((now - start - introDelay) / 1800);
         const dx = p.x - center.x;
         const dy = p.y - center.y;
         const proximity = Math.max(0, 1 - Math.sqrt(dx * dx * 1.15 + dy * dy * 1.3) / (isWelcome ? 0.48 : 0.46));
@@ -4481,10 +4516,24 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         node.style.filter = `blur(${((1 - intro) * 52).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
+      // 移动端副标 "Four Design"：与 SVG 同源计时，在 SVG 收尾段(约 76%)才开始逐字入场。
+      // 每个字符延迟 = 起始 + index*间隔，从左到右淡入 + 解模糊 + 轻微上浮，复刻 SVG 的有序出场。
+      const chars = bylineCharRefs.current;
+      for (let i = 0; i < chars.length; i++) {
+        const node = chars[i];
+        if (!node) continue;
+        const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
+        node.style.opacity = String(charIntro);
+        node.style.filter = `blur(${((1 - charIntro) * 10).toFixed(3)}px)`;
+        node.style.transform = `translate3d(0, ${((1 - charIntro) * 10).toFixed(2)}px, 0)`;
+      }
       frame = window.requestAnimationFrame(render);
     };
     frame = window.requestAnimationFrame(render);
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.removeEventListener('app:ready', onReveal);
+      window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (
@@ -4533,9 +4582,19 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
             <div className="hero-title-stack-mobile" aria-label="Group 10 portfolio mark">
               <div
                 className="hero-title-layer"
+                ref={wrapRef}
                 dangerouslySetInnerHTML={{ __html: heroTitleMarkup }}
               />
-              <span className="hero-title-byline">Four Design</span>
+              <span className="hero-title-byline" aria-label={BYLINE_TEXT}>
+                {BYLINE_TEXT.split('').map((ch, i) => (
+                  <span
+                    key={i}
+                    ref={(el) => { bylineCharRefs.current[i] = el; }}
+                    className="hero-title-byline-char"
+                    aria-hidden="true"
+                  >{ch === ' ' ? '\u00A0' : ch}</span>
+                ))}
+              </span>
             </div>
           </>
         ) : (

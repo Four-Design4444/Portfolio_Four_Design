@@ -1614,6 +1614,7 @@ html[data-device="mobile"] .hero-video-stage .hero-title-stack-mobile .hero-titl
 }
 
 html[data-device="mobile"] .hero-title-byline {
+  display: block;
   margin-top: 16px;
   color: #5373AB;
   font-size: 10px;
@@ -1621,6 +1622,17 @@ html[data-device="mobile"] .hero-title-byline {
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
+  text-align: center;
+}
+
+/* 逐字入场：每个字符独立节点，由 main.jsx 的 hero 入场 rAF 统一驱动（等中心 SVG
+   收尾时才逐个淡入，从左到右）。初始隐藏，避免在 loading 揭幕前先闪一下。
+   每个 inline-block 盒子宽度已含父级 letter-spacing 的推进量，因此整行视觉间距与
+   原来 <span>Four Design</span> 完全一致，无需额外补偿。 */
+html[data-device="mobile"] .hero-title-byline-char {
+  display: inline-block;
+  opacity: 0;
+  will-change: opacity, filter, transform;
 }
 
 /* Mobile uses a dedicated down-arrow scroll hint (distinct from the desktop
@@ -1915,6 +1927,19 @@ html[data-device="mobile"] .mob-profile-contact .pf-copy-line {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 2026-10-07 修 BUG:移动端下划线超宽。
+   PC 的 .pf-copy-line 是 width:max-content,rule 用 left:0;right:0 跟随
+   .pf-copy-text 的盒宽 —— PC 下 text 宽度=文字宽度,对齐。
+   但移动端上面把 line 覆写成 width:auto,两条 line 被 roller 盒宽(按邮箱
+   量出的 196.9px)统一拉齐;而「已复制邮箱，欢迎联系」字形仅 143px,
+   rule 若仍取 100% 盒宽,右端就空出约 54px。
+   修法:JS 用 Range 量出「当前显示行」的字形宽,写到 --pf-rule-w;
+   移动端 rule 放弃 left:0;right:0,改为固定这个字形宽度,切行即换宽。 */
+html[data-device="mobile"] .mob-profile-contact .pf-copy-rule {
+  right: auto;
+  width: var(--pf-rule-w, 100%);
 }
 
 /* The 点击复制 tag stays PC-only; the roller's 已复制 line is the mobile cue. */
@@ -2289,6 +2314,19 @@ html[data-device="mobile"] .mob-profile-shell > .mob-shell-inner {
   overflow: hidden;
 }
 
+/* 技能 shell 的剪切蒙版从【下到上】揭示(2026-10-04,业主指定,与经验卡的
+   上→下互为镜像):内层高度增长时内容钉在底部 —— 底部描边/dock 行顶
+   从第一帧就在,信息卡的顶部随后才揭示。仅技能 shell,经验 shell 不变。 */
+html[data-device="mobile"] .mob-profile-shell-skills > .mob-shell-inner {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+html[data-device="mobile"] .mob-profile-shell-skills > .mob-shell-inner > * {
+  flex-shrink: 0;
+}
+
 /* 技能组的段间距挂在 shell 的 margin 上，收起时一起归零 */
 html[data-device="mobile"] .mob-profile-shell-stats {
   margin-top: 0;
@@ -2370,6 +2408,10 @@ html[data-device="mobile"] .mob-profile-exp-card > *,
 html[data-device="mobile"] .mob-profile-skill-card > * {
   min-height: 0;
   overflow: hidden;
+  /* 2026-10-07: 技能卡容器改 flex 列(见下),子项禁止收缩 —— 容器高度小于
+     内容时必须让内容整体向上溢出、由容器 overflow 裁掉顶部的剩余部分,
+     而不是把内容盒压扁(压扁会让盒底描边/底内边距先被吃掉)。 */
+  flex-shrink: 0;
 }
 
 html[data-device="mobile"] .mob-profile-exp-card,
@@ -2400,6 +2442,24 @@ html[data-device="mobile"] .mob-profile-exp-card.is-visible {
 
 html[data-device="mobile"] .mob-profile-skill-card.is-visible {
   height: var(--mob-skill-max, var(--mob-card-h, 0px));
+}
+
+/* 技能卡镜像入场(2026-10-04,业主指定):信息卡从上方 -14px 快速【下移】落位
+   (经验卡是从下方上移),缩放锚点改【底边】—— 衔接描边所在的盒底全程钉在
+   dock 行顶,底部描边从第一帧就在,消除"描边突然出现"。
+   ⚠⚠ 2026-10-07 重做蒙版(业主:「从上往下快速入场 + 蒙版从下往上移动展示
+   全部内容,接缝描边完全展示」,与经验卡方向互为镜像):容器改 flex 列 +
+   justify-content: flex-end,内容盒底边钉死在容器底(= dock 行顶)。
+   之前容器是 block、内容盒顶对齐 —— 展开时容器向上长,内容盒跟着容器顶边
+   整体上移,看起来是「信息卡从下往上位移」;现在内容盒位置全程不动,只有
+   裁切窗口从盒底向上扫:第一帧露出接缝描边和最后一行字,标题最后浮现。
+   经验卡保持 block 顶对齐(窗口从盒顶向下扫)不动,两张卡正好互为镜像。 */
+html[data-device="mobile"] .mob-profile-skill-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transform: translateY(-14px) scaleY(0.92);
+  transform-origin: bottom center;
 }
 
 html[data-device="mobile"] .mob-profile-exp-card.is-visible,
@@ -2647,6 +2707,11 @@ html[data-device="mobile"] .mob-profile-skill-name {
 html[data-device="mobile"] .mob-profile-skills.is-docked {
   gap: 0;
   margin-left: 14px;
+  /* 2026-10-07: 删除了原来的 ::before 衔接描边 —— 它和信息卡盒底的边框
+     (0.8px)相邻但不重合,差 0.2px,高 DPR 屏上渲染成两条独立的细线(业主截图
+     实测两根 hairline 中间夹 1px 暗缝)。接缝描边现在只由信息卡自己的底边框
+     承担:蒙版从下往上揭示后,盒底从第一帧就可见,描边全程连续,不再需要
+     dock 侧补一条。 */
 }
 
 /* 整组**复位**(dock → 静止)：五枚芯片一起回到自然宽，名称/图标等卡宽快到位
@@ -2727,11 +2792,9 @@ html[data-device="mobile"] .mob-profile-skills.is-switching.is-docked .mob-profi
   --mob-w-dur: var(--mob-switch-dur);
 }
 
-/* 描述卡(dock 上方)底边与 dock 上沿贴合:这 -1px 让两者之间不出现双边。
-   同上，不能用 `+`（壳包裹后两者不再是兄弟），从壳内定位。 */
-html[data-device="mobile"] .mob-profile-shell-skills .mob-profile-skill-card.is-visible + .mob-profile-skills.is-docked {
-  margin-top: -1px;
-}
+/* 描述卡(dock 上方)底边与 dock 上沿贴合:描边只由信息卡底边框画一条
+   (2026-10-07 起),dock 顶边 = 卡片盒底外缘,不再做 -1px 上贴 —— 上贴会让
+   芯片底色盖住描边下沿。dock 行在 flex-end 布局里天然贴着卡片容器底,无缝。 */
 
 /* ---- 折叠图标(移动端,2026-10-03):描述卡展开时出现在所在行(经验标签行/
    技能行)右端、描述卡右缘上(图1/图2 红圈位置)。点它或点页面空白都恢复
