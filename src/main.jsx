@@ -105,6 +105,7 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 //    接在 R 结束的地方，形成纵向连续的视觉关系。
 const BYLINE_INTRO_START_MS = 2040;
 const BYLINE_RIGHT_X = 0.368; // R 右缘在 SVG viewBox 宽度里的占比
+const BYLINE_INTRO_DURATION_MS = 900;
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -2756,29 +2757,55 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
         if (old && old.length === next.length && old.every((v, i) => Math.abs(v - next[i]) < 0.5)) return old;
         return next;
       });
-      /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,首次量出的宽度
-         全为 0(芯片变成细条)且无人重测。RO 挂在每枚芯片上,但回调必须
-         防抖 120ms:dock 展开收起的 width 过渡期间芯片每帧都在变,逐帧测量
-         会把过渡中间值写回 CSS(实测停在 48px 的中间态);防抖后只在尺寸
-         稳定 120ms 后量一次,拿到的必然是落定的静止宽度。 */
-      if (!ro) {
-        ro = new ResizeObserver(() => {
-          clearTimeout(roTimer);
-          roTimer = setTimeout(measure, 120);
-        });
-        nodes.forEach((n) => ro.observe(n));
-      }
+      /* 首测成功但 RO 还没挂上时兜底补挂(正常路径已在 effect 里挂好)。 */
+      attachRO(nodes);
     };
+    /* ⚠⚠ 2026-10-07 修跳帧 BUG(业主复现路径:二级页刷新→返回一级→点技能卡,
+       直接跳帧成选项状态):旧版把 RO 创建放在 measure() **成功路径内部** ——
+       二级页刷新启动时首页是 .page-keep.is-hidden(display:none),首次 measure()
+       在 isRendered 守卫处 return,RO 根本没挂上;fonts.ready 在隐藏期间消耗、
+       400ms 定时器同样被拦,返回一级后没有任何触发源(无 resize),widths 永远
+       为 null → 芯片宽度回落 width:var(--mob-w, auto) —— 而 Chrome 从 auto 到
+       36px 不产生补间,点击展开就是整行瞬移。修复:RO 创建与测量解耦,effect
+       里无条件挂上(与 useMeasuredMaxCardHeight 同构 —— 那个 hook 正因如此能
+       自愈)。display:none→显示本身就是一次 box 尺寸变化,RO 必触发,防抖
+       120ms 后量到的必是显示后的落定静止宽度。 */
+    const attachRO = (els) => {
+      if (ro || els.length !== count) return;
+      ro = new ResizeObserver(() => {
+        clearTimeout(roTimer);
+        roTimer = setTimeout(measure, 120);
+      });
+      els.forEach((n) => ro.observe(n));
+    };
+    attachRO([...document.querySelectorAll(selector)]);
     measure();
     /* 字体加载完 / 容器宽度变化都会改静止态宽度，各等一次。 */
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
     window.addEventListener('resize', measure);
     const t = setTimeout(measure, 400);
-    /* 2026-10-04 修 BUG:以二级页 URL 刷新启动时首页隐藏,挂载时量出的宽度
-       全为 0(芯片变细条)。RO 方案在预览面板冻结渲染下不可靠,但真实设备上
-       RO 会正常触发;不叠加 hashchange 定时重测(路由过渡的瞬态布局
-       会量出垃圾值)。 */
-    return () => { window.removeEventListener('resize', measure); clearTimeout(t); clearTimeout(roTimer); clearTimeout(settleTimer); if (ro) ro.disconnect(); };
+    /* ⚠ 2026-10-07 修跳帧 BUG:探针实测 Chrome 的 ResizeObserver 对
+       display:none↔显示 的切换**完全不触发回调**(fired:0),上面"RO 自愈"
+       的假设不成立 —— 隐藏态挂载时首测被 isRendered 拦下,RO 又永远不响,
+       返回一级页后 widths 永远为 null → 芯片宽度回落 auto → 点击展开时
+       auto→36px 无补间,整行瞬移(业主:二级页刷新→返回一级→点技能卡必现)。
+       补 hashchange 后的分档重试(100/450/1000ms)覆盖路由过渡各落定点:
+       isRendered 拦隐藏态、unsettled 拦形变中间值,不会写垃圾值;
+       路由过渡用的是 transform,不影响布局宽度,中途量到也是正确值。 */
+    const routeTimers = [];
+    const onRouteChange = () => {
+      [100, 450, 1000].forEach((d) => routeTimers.push(setTimeout(measure, d)));
+    };
+    window.addEventListener('hashchange', onRouteChange);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('hashchange', onRouteChange);
+      clearTimeout(t);
+      routeTimers.forEach(clearTimeout);
+      clearTimeout(roTimer);
+      clearTimeout(settleTimer);
+      if (ro) ro.disconnect();
+    };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [selector, count, ...(deps || [])]);
 
@@ -2921,13 +2948,26 @@ function useMeasuredMaxCardHeight(infoRef) {
        测量条高度全为 0,量出 --mob-exp-max: 0px 且无人重测 —— 返回一级后
        经验/技能卡展开后高度为 0、无法正常显示。ResizeObserver 在测量条
        获得真实高度(首页变为可见)时自动重测,自愈。
-       ⚠ 不要加路由 hash 变化后的定时重测:hashchange 后 200-1200ms 正值
-       路由过渡的瞬态布局,实测量出 1500px 的垃圾高度毒化 --mob-exp-max。 */
+       ⚠ 2026-10-07 修正:探针实测 Chrome 的 ResizeObserver 对
+       display:none↔显示 的切换**不触发回调**(与 useMeasuredWidths 同一坑),
+       "RO 自愈"并不成立 —— 这次只是 resize/fonts 时机恰好凑巧救了高度。
+       同样补 hashchange 分档重试(100/450/1000ms);isRendered 拦隐藏态,
+       路由过渡的 transform 不影响 offsetHeight,中途量到也是正确值。 */
     const ro = new ResizeObserver(() => measure());
     root.querySelectorAll('.mob-card-measure').forEach((m) => ro.observe(m));
     window.addEventListener('resize', measure);
     if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+    const routeTimers = [];
+    const onRouteChange = () => {
+      [100, 450, 1000].forEach((d) => routeTimers.push(setTimeout(measure, d)));
+    };
+    window.addEventListener('hashchange', onRouteChange);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('hashchange', onRouteChange);
+      routeTimers.forEach(clearTimeout);
+    };
   }, []);
 }
 
@@ -3582,22 +3622,12 @@ function HeroSection({ active = true, onVideoReady }) {
   // out at the same moment regardless of which decoder won.
   const [canvasPainted, setCanvasPainted] = useState(false);
   const heroTitleMarkup = useMemo(() => {
-    // welcome 这七个白色 path 在源 SVG 里是「从右到左」排列的(最右侧的 w 在前)。
-    // 入场顺序由 data-welcome-part 决定(值越小越先)，所以这里按 bbox 的 x 从左到右
-    // 重新编号，让最左的字母最先入场 → 修正原来「从右到左」的逆序。
-    const welcomeMatches = [...group10Markup.matchAll(/<path\b(?=[^>]*\bfill="white")([^>]*?)\s*\/>/g)];
-    const xOf = (attributes) => {
-      const nums = attributes.match(/-?\d+\.?\d*/g) || [];
-      return nums.length ? Math.min(...nums.map(Number)) : 0;
-    };
-    const order = new Map();
-    welcomeMatches
-      .map((m) => ({ m, x: xOf(m[1]) }))
-      .sort((a, b) => a.x - b.x)
-      .forEach((entry, rank) => order.set(entry.m[1], rank));
+    // 标记 welcome 的七个白色 path。真正的入场次序在 useLayoutEffect 里按 getBBox().x
+    // 从左到右动态计算(见 welcomeOrder)，不依赖这里的编号。
+    let welcomePart = 0;
     const splitWelcome = group10Markup.replace(
       /<path\b(?=[^>]*\bfill="white")([^>]*?)\s*\/>/g,
-      (_match, attributes) => `<path${attributes} data-welcome-part="${order.get(attributes)}"/>`
+      (_match, attributes) => `<path${attributes} data-welcome-part="${welcomePart++}"/>`
     );
     return splitWelcome
       .replace('<svg ', '<svg class="hero-title-svg" ')
@@ -3610,9 +3640,10 @@ function HeroSection({ active = true, onVideoReady }) {
   const alphaCanvasRef = useRef(null);
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
-  // 移动端副标 "Four Design" 的逐字节点：由 hero 的入场 rAF 循环统一驱动，
-  // 复用同一个揭幕计时起点，做到与 SVG 同步的「从左到右」有序入场。
-  const bylineCharRefs = useRef([]);
+  // 移动端副标 "Four Design"：由 hero 的入场 rAF 循环统一驱动，复用同一个揭幕计时起点。
+  // 整行一起入场(时间以 SVG 的 R 字母完成为准)；bylineRef 用于量测 R 右缘以定位其左缘。
+  const bylineRef = useRef(null);
+  const bylineAlignRef = useRef(false);
   const jsmpegCanvasRef = useRef(null);
   const jsmpegPlayerRef = useRef(null);
   const wcCanvasRef = useRef(null);
@@ -4560,16 +4591,27 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         node.style.filter = `blur(${((1 - intro) * 52).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
-      // 移动端副标 "Four Design"：与 SVG 同源计时，在 SVG 收尾段(约 76%)才开始逐字入场。
-      // 每个字符延迟 = 起始 + index*间隔，从左到右淡入 + 解模糊 + 轻微上浮，复刻 SVG 的有序出场。
-      const chars = bylineCharRefs.current;
-      for (let i = 0; i < chars.length; i++) {
-        const node = chars[i];
-        if (!node) continue;
-        const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
-        node.style.opacity = String(charIntro);
-        node.style.filter = `blur(${((1 - charIntro) * 10).toFixed(3)}px)`;
-        node.style.transform = `translate3d(0, ${((1 - charIntro) * 10).toFixed(2)}px, 0)`;
+      // 移动端副标 "Four Design"：整行一起入场，时间以 SVG 的 R 字母完成为准(BYLINE_INTRO_START_MS)。
+      // 位置：把左缘对齐到 R 的右缘，使首字母 F 正好接在 R 结束的位置，上下读作同一处出场。
+      const byline = bylineRef.current;
+      if (byline) {
+        if (!bylineAlignRef.current && start !== null) {
+          const layer = wrapRef.current;
+          const svg = svgNode;
+          if (layer && svg) {
+            try {
+              const lr = layer.getBoundingClientRect();
+              const sr = svg.getBoundingClientRect();
+              const targetLeft = sr.left + sr.width * BYLINE_RIGHT_X;
+              byline.style.left = `${(targetLeft - lr.left).toFixed(2)}px`;
+              bylineAlignRef.current = true;
+            } catch (_) { /* 布局还没就绪，下一帧再试 */ }
+          }
+        }
+        const bylineIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS) / BYLINE_INTRO_DURATION_MS);
+        byline.style.opacity = String(bylineIntro);
+        byline.style.filter = `blur(${((1 - bylineIntro) * 10).toFixed(3)}px)`;
+        byline.style.transform = `translate3d(0, ${((1 - bylineIntro) * 10).toFixed(2)}px, 0)`;
       }
       frame = window.requestAnimationFrame(render);
     };
@@ -4629,16 +4671,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
                 ref={wrapRef}
                 dangerouslySetInnerHTML={{ __html: heroTitleMarkup }}
               />
-              <span className="hero-title-byline" aria-label={BYLINE_TEXT}>
-                {BYLINE_TEXT.split('').map((ch, i) => (
-                  <span
-                    key={i}
-                    ref={(el) => { bylineCharRefs.current[i] = el; }}
-                    className="hero-title-byline-char"
-                    aria-hidden="true"
-                  >{ch === ' ' ? '\u00A0' : ch}</span>
-                ))}
-              </span>
+              <span className="hero-title-byline" ref={bylineRef}>{BYLINE_TEXT}</span>
             </div>
           </>
         ) : (

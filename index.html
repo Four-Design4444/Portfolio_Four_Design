@@ -283,7 +283,14 @@
           var rail = doc.querySelector('.rail');
           if (!rail || !rail.parentNode) return;
           var style = doc.createElement('style');
-          style.textContent = '.app-loader-progress{margin:17px auto 0;width:fit-content;display:flex;align-items:center;gap:12px}.app-loader-bar{position:relative;width:140px;height:2px;background:rgba(185,203,213,0.09);overflow:hidden}.app-loader-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:#8b9eaf;transition:width .28s ease}.app-loader-num{font:10px/1 "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:1px;color:#8291a0;font-variant-numeric:tabular-nums}@media(prefers-reduced-motion:reduce){.app-loader-bar>i{transition:none}}';
+          // 2026-10-05: 附加加载页视觉 —— ①背景整体压暗为纯黑 ②猫身后加光圈,
+          // 让深色猫身与纯黑背景分离(猫成为前景)。demo 源文件仍字节不动,
+          // 与进度条替换同一机制:运行时同域注入,不碰动画代码。
+          style.textContent = 'main{background:#000!important}body{background:#000!important}'
+            + '.scene{position:relative;z-index:0}'
+            + '.scene:before{content:"";position:absolute;inset:-16% -12%;z-index:-1;pointer-events:none;'
+            + 'background:radial-gradient(ellipse 52% 52% at 50% 45%,rgba(146,186,228,0.26) 0%,rgba(146,186,228,0.10) 55%,rgba(146,186,228,0) 74%)}'
+            + '.app-loader-progress{margin:17px auto 0;width:fit-content;display:flex;align-items:center;gap:12px}.app-loader-bar{position:relative;width:140px;height:2px;background:rgba(185,203,213,0.09);overflow:hidden}.app-loader-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:#8b9eaf;transition:width .28s ease}.app-loader-num{font:10px/1 "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:1px;color:#8291a0;font-variant-numeric:tabular-nums}@media(prefers-reduced-motion:reduce){.app-loader-bar>i{transition:none}}';
           doc.head.appendChild(style);
           rail.parentNode.replaceChild(progress.root, rail);
           placed = true;
