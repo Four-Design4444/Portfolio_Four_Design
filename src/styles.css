@@ -515,7 +515,18 @@ img {
     height 620ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 620ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: top, width, height, padding, border-radius;
+  /* ⚠ 这里**故意不给 will-change**。
+     曾在 2026-10-05 加过 `will-change: top, width, height, padding, border-radius`,
+     本意是让形变更顺,但那五个属性全是几何属性:每次切换 top/width/height/padding
+     都要重新光栅化整层,而 FOUR logo 就在这一层里、又正好贴在这一层的左上角。
+     移动端频繁切换一级⇄二级时,合成器来不及把新几何的纹理画好,会先把该层的
+     **未光栅化底色**刷上去 —— 屏幕上就是 logo 外面套一个 68×29 的近黑圆角小方块
+     (设备截图实测:颜色 #030707、圆角约 2px、紧贴字标外缘约 3px),几帧后自己
+     消失,所以读起来「触发原因不明」。
+     will-change 只该用在合成器能独立处理的属性上;对会引发重绘的几何属性声明
+     will-change,等于强制浏览器每帧重建该层,反而制造了这个缺口。去掉之后这些
+     属性照旧走 transition(transform 之外的插值由主线程做,本就如此),形变观感
+     不变,但不再有「未光栅化底」的窗口。 */
 }
 
 .morph-nav::before {
@@ -616,6 +627,14 @@ body.nav-on-light .shared-active-pill-detail {
   width: 99px;
   height: 29px;
   transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms ease;
+  /* 2026-10-07「黑框」二道保险:即便外层导航因几何动画被重建,这一层也已经
+     自己提成独立合成层(backface-visibility:hidden 即等同于 transform 层),
+     并**显式声明透明背景** —— 合成器不会再拿"兜底底色"去填它的盒子。
+     设备截图里那个 68×29 近黑圆角方块,本质就是「一个盒子还没来得及被画,
+     先露出了底色」;把这里的背景与层身份都写死,就没有可露的底色了。 */
+  background: transparent;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
 }
 
 .morph-logo .four-logo {

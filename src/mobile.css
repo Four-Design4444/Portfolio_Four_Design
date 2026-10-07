@@ -319,6 +319,38 @@ html[data-device="mobile"] .morph-nav.nav-detail {
   /* 2026-10-05: 与基础规则同步收窄 48→40(两处必须同值)。 */
   height: 40px;
   padding: 0 10px;
+  /* 2026-10-07: 配色与 PC 对齐。此前移动端二/三级落回移动基础暗色
+     rgba(0,0,0,.66),而 PC 同态是 2.4% 白蓝亮玻璃 —— 两级观感"不是一套"。
+     这里按 PC 的 .nav-works / .nav-detail 复刻:极浅的蓝白底 + 24px 模糊 +
+     1.2 饱和 + 微弱描边与投影。默认亮色(与 PC 默认一致)。 */
+  --nav-border-color: rgba(214, 229, 255, 0.09);
+  background: rgba(183, 208, 250, 0.024);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+  /* ⚠ 必须把 morph 的五条过渡一并列出:这条规则比移动基础 .morph-nav 更具体,
+     只写 background/shadow 会把 top/width/height/padding/border-radius 的 620ms
+     形变过渡整个顶掉 → 二/三级胶囊形变失效。末尾补上主题翻转的两条。 */
+  transition:
+    top 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 260ms ease,
+    box-shadow 260ms ease;
+}
+
+/* 2026-10-07: 移动端也做实时动态转换(此前 main.jsx 的 useDetailNavOnLight
+   直接 early-return 跳过了移动端,所以移动端没有翻暗能力)。采样到导航带
+   正下方内容偏亮(如三级页下滑到大图)时,给 body 挂 .nav-on-light → 玻璃翻深,
+   保证白字可读;亮背景过去再切回。
+   ⚠ 选择器带 html[data-device] 前缀保证优先级 ≥ 上面的默认条款 (0,3,1)。 */
+html[data-device="mobile"] body.nav-on-light .morph-nav.nav-works,
+html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail {
+  background: rgba(10, 15, 24, 0.34);
+  --nav-border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
 /* Logo is kept on the left of the top capsule on every level and doubles
@@ -1167,7 +1199,151 @@ html[data-device="mobile"] .mob-thumbs {
   margin-top: auto;
   width: 100%;
 }
+
+/* ===== 一级页「其余元素」的跨级入场 / 离场 (2026-10-07 业主第四轮第 1 条) =====
+   除主/副卡与导航之外,Project Display 标题、计数器、圆点、「查看全部」按钮、
+   缩略图条在跨级时原本是**瞬间消失 / 瞬间出现**(works 层的不透明底一盖上来,
+   它们就没了;回程反过来),所以业主读作「这些东西完全没有离场动效」。
+
+   现在给这五组元素统一的退场/入场姿态:
+     退场:轻微上移(-14px)+ 缩小(0.96)+ 淡出,240ms,逐个错开 40ms
+           (标题最先走、缩略图条最后)
+     入场:反向,320ms,顺序与退场镜像(缩略图条最先回、标题最后)
+   退场类 .is-chrome-out 挂在 .mob-showcase 上,由 App 的 chromeHidden 驱动。
+
+   ⚠ 两个方向的时序必须分别写在"各自的目标态"里(与 .mobile-menu-toggle 的配色
+     节奏同一手法):去程读 .is-chrome-out 的 240ms 逐条延迟,回程读基础态的
+     320ms 镜像延迟。写在同一条规则里就只有一个方向是对的。
+   ⚠ 不给 will-change:.mob-thumbs 是 overflow-x 滚动容器,给它 transform 层
+     会影响原生横向滚动;这几个元素的动画量很小,不需要提层。 */
+html[data-device="mobile"] .mob-heading,
+html[data-device="mobile"] .mob-counter,
+html[data-device="mobile"] .mob-dots,
+html[data-device="mobile"] .mob-thumbs {
+  /* 基础(= 入场目标)态:完全就位。入场顺序 —— 缩略图条 0ms、圆点 80ms、
+     计数器 120ms、标题 160ms(「查看全部」单独见下)。 */
+  transition:
+    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-device="mobile"] .mob-thumbs { transition-delay: 0ms; }
+html[data-device="mobile"] .mob-dots { transition-delay: 80ms; }
+html[data-device="mobile"] .mob-counter { transition-delay: 120ms; }
+html[data-device="mobile"] .mob-heading { transition-delay: 160ms; }
+
+/* 「查看全部」自带按压反馈(background / border-color),必须把新旧过渡**合并**,
+   不能直接覆盖 —— 覆盖掉就把按下变色的过渡弄丢了。 */
+html[data-device="mobile"] .mob-viewall {
+  transition:
+    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1) 40ms,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 40ms,
+    background 250ms ease,
+    border-color 250ms ease;
+}
+
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-heading,
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter,
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots,
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs {
+  opacity: 0;
+  /* 朝导航方向(上)缩走一小步,读作"让位给飞起来的卡"。 */
+  transform: translate3d(0, -14px, 0) scale(0.96);
+  /* 退场顺序与入场镜像:标题 0ms、计数器 40ms、圆点 80ms、缩略图条 160ms。 */
+  transition:
+    opacity 240ms cubic-bezier(0.4, 0, 0.7, 1),
+    transform 240ms cubic-bezier(0.4, 0, 0.7, 1);
+}
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-heading { transition-delay: 0ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter { transition-delay: 40ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots { transition-delay: 80ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs { transition-delay: 160ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
+  opacity: 0;
+  transform: translate3d(0, -14px, 0) scale(0.96);
+  transition:
+    opacity 240ms cubic-bezier(0.4, 0, 0.7, 1) 120ms,
+    transform 240ms cubic-bezier(0.4, 0, 0.7, 1) 120ms,
+    background 250ms ease,
+    border-color 250ms ease;
+}
+
 html[data-device="mobile"] .mob-thumbs.dragging { cursor: grabbing; scroll-behavior: auto; }
+
+/* ===== 跨级交接:一级卡组遮挡 + 二级层不透明底 (2026-10-07 业主第四轮) =====
+   第 2 条——业主:「二级返回一级时,最底层的背景能看到**残留的一级页面的三张卡片**,
+   不应该出现重复的内容。」
+
+   成因:回程时 goHome 立刻把 route 切回 home → 一级层(含它自己的三张卡)当帧可见,
+   而二级轨道(此刻 .mw-leaving、背景透明)正在**收拢回同一组卡片** —— 于是全程
+   同时存在两套三张卡;二级层收拢完一卸下,剩下的就是一级那套,读起来就是"残留"。
+
+   做法:交接期间把一级**卡组**整个遮住。用 visibility:hidden,**不能用 display:none**
+   —— 轨道收拢要实测这三张卡的矩形来算落点,display 会让它们没有布局盒、量到 0
+   (visibility:hidden 的节点仍保留布局盒,rect 照常正确)。轨道落定后由 JS 摘掉,
+   一级卡组当帧现身,几何与轨道落点逐像素相同 → 交接看不见。 */
+html[data-device="mobile"] .mob-showcase.is-deck-veiled .mob-deck { visibility: hidden; }
+
+/* 二级层的不透明底独立成 ::before,以便跨级时精确控制它的显隐:
+     去程交接(mw-handoff):从透明淡入 —— 一级页「其余元素」的退场才有地方演;
+     回程(mw-leaving):淡出   —— 一级页的设计(标题/计数器/圆点)在收拢全程在场。
+   底画在 ::before(z-index:0),.works-index-page 自身改透明;舞台与光晕都在
+   它之后(DOM 在后、z-index 不低),照常压在上面。 */
+html[data-device="mobile"] .works-index-page { background: transparent; }
+html[data-device="mobile"] .works-index-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
+    radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
+    #0d0c12;
+  opacity: 1;
+  /* 回程淡出用这条过渡(mw-leaving 把 opacity 置 0)。
+     ⚠ 去程**不走**过渡,走下面的挂载动画:元素刚建出来就是目标值,
+       过渡不会触发,只有动画才能让"新挂载"也带上进场。 */
+  transition: opacity 320ms ease;
+}
+/* 去程交接:works 层刚挂上时底从透明淡入(挂载动画,不依赖类名切换时序——
+   类名摘除后动画已 forwards 停在 opacity:1,撤类不会引起任何回跳)。
+   360ms 淡完;一级层要到 620ms 才撤,所以淡入全程一级层仍在场,
+   底色压上去的过程里看得见一级「其余元素」正在退场。 */
+html[data-device="mobile"] .works-index-page.mw-handoff::before {
+  animation: mwHandoffBgIn 360ms ease-out both;
+}
+@keyframes mwHandoffBgIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* 回程:底淡出,一级页的设计(标题/计数器/圆点)在收拢全程在场。 */
+html[data-device="mobile"] .works-index-page.mw-leaving::before { opacity: 0; }
+
+/* ===== 副卡压暗度跨级连续 (2026-10-07 第四轮) =====
+   一级副卡的压暗层 .mob-dim 是 0.62,二级副卡的压暗层 .mw-card::after 是 0.45。
+   收拢结束的交接帧二级层卸载、一级层现身,0.45 → 0.62 是**一帧硬切** ——
+   即业主说的「执行完动效后明显看到一级副卡跳帧一下子变暗」。方向还是反的:
+   二级收拢时副卡比一级静止态更**亮**,落定瞬间忽然压暗一档,读起来就是闪。
+   修法:让二级副卡的压暗值在两个转场相位里与一级同值(0.62),再补间回静止的
+   0.45 —— 交接两端同值,其余帧是真实的过渡,不再有硬切:
+     去程 armed   → 0.62(与一级静止态一致,接着张开)
+          entering → 补间到 0.45(二级静止值),时长 = 张开时长
+     回程 leaving  → 由 0.45 补间回 0.62,时长 = 收拢时长(560ms)
+   于是落定那一帧两级的副卡压暗都是 0.62,交接不可见。
+   ⚠ 只覆盖**非当前卡**(:not(.is-current)):主卡那层恒为 0(opacity:0 的规则
+     优先级更高、且被 :not 排除,互不干扰)。 */
+html[data-device="mobile"] .works-index-page.mw-armed .mw-slide:not(.is-current) .mw-card::after {
+  opacity: 0.62;
+  transition: none;
+}
+html[data-device="mobile"] .works-index-page.mw-entering .mw-slide:not(.is-current) .mw-card::after {
+  opacity: 0.45;
+  transition: opacity var(--mw-emerge-dur, 700ms) cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide:not(.is-current) .mw-card::after {
+  opacity: 0.62;
+  transition: opacity 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
 html[data-device="mobile"] .mob-thumbs::-webkit-scrollbar { display: none; }
 html[data-device="mobile"] .mob-thumb {
   flex: 0 0 auto;

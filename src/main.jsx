@@ -633,18 +633,20 @@ function parseRoute() {
 // 2026-10-05: 三级导航实时自适应亮背景。详情页滚动时导航条底下掠过的内容亮度
 // 会变化(顶部 hero 暗、下滑大图可能很亮)。用 elementsFromPoint 探测导航带正下方
 // 当前盖着的元素,图片用 canvas 采样真实像素估算平均亮度;超阈值给 body 挂
-// .nav-on-light 让玻璃翻深色、保证白字可读。rAF 节流 + 滞回阈值防抖。仅 PC
-// 详情页生效(移动端导航是另一套且 dataset 静态)。只改颜色/样式,不动交互动效。
+// .nav-on-light 让玻璃翻深色、保证白字可读。rAF 节流 + 滞回阈值防抖。
+// 2026-10-07: PC 与移动端都生效。移动端此前被 early-return 跳过(导航是另一套
+// 固定暗色),现在移动端二/三级导航已与 PC 统一为亮色玻璃,同样需要实时翻暗。
+// 差异只有滚动容器:PC 走 window scroll,移动端详情页是 .work-detail-page 内滚。
 function useDetailNavOnLight(isDetail) {
   useEffect(() => {
     if (!isDetail) {
       document.body.classList.remove('nav-on-light');
       return undefined;
     }
-    if (document.documentElement.dataset.device === 'mobile') {
-      document.body.classList.remove('nav-on-light');
-      return undefined;
-    }
+
+    const isMobile = document.documentElement.dataset.device === 'mobile';
+    // 移动端滚动发生在这个层内(scrollHeight 远大于视口时);PC 走 window。
+    const scrollHost = () => (isMobile ? document.querySelector('.work-detail-page') : null);
 
     const canvas = document.createElement('canvas');
     canvas.width = 24;
@@ -746,6 +748,9 @@ function useDetailNavOnLight(isDetail) {
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
     window.addEventListener('load', onScroll, true);
+    // 移动端详情页内滚:滚动事件不冒泡到 window,必须挂在内滚层上。
+    const host = scrollHost();
+    if (host) host.addEventListener('scroll', onScroll, { passive: true });
 
     // 入场 + 大图懒加载分批到位,延迟复采几次
     const timers = [0, 350, 900, 1800].map((t) => window.setTimeout(measure, t));
@@ -754,6 +759,7 @@ function useDetailNavOnLight(isDetail) {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
       window.removeEventListener('load', onScroll, true);
+      if (host) host.removeEventListener('scroll', onScroll);
       timers.forEach((t) => window.clearTimeout(t));
       if (scrollStopTimer) window.clearTimeout(scrollStopTimer);
       if (frame) window.cancelAnimationFrame(frame);
@@ -791,6 +797,17 @@ function App() {
   const [worksEntry, setWorksEntry] = useState(null);
   const [exitWorks, setExitWorks] = useState(false);
   const [deckFocusId, setDeckFocusId] = useState('');
+  /* 2026-10-07 业主第四轮:一级页「其余元素」(Project Display 标题 / 计数器 /
+     圆点 / 查看全部 / 缩略图条)在跨级时必须有自己的入场 / 离场动效。
+     两条机制:
+       chromeHidden = 这些元素退场(隐藏姿态)。去程点卡时立刻置 true → 它们先
+                      退场,再交出屏幕;回程收拢结束后置 false → 它们升回来。
+       homeHandoff  = 去程期间**暂缓隐藏一级页**:一级层要留在场上,其余元素才
+                      有地方演退场。退场演完(≈340ms)再撤,一级层随之隐藏。
+                      (works 层的不透明底同时淡入,所以这 340ms 里看得见退场。) */
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const [homeHandoff, setHomeHandoff] = useState(false);
+  const chromeTimerRef = useRef(0);
   /* 环境光(SideRays)单例 (2026-10-07):一级首页与二级作品页**共用同一个实例**。
      以前两级各挂一份(一级 .home-rays-layer、二级 .works-side-rays),跨级时是两个
      WebGL 上下文、各自 shader,视觉参数虽同但始终是"两个光"。现在提升到 App 顶层:
@@ -1297,6 +1314,9 @@ function App() {
       setDeckFocusId(activeWork?.id ?? '');
       setWorksEntry(null);
       setExitWorks(true);
+      /* 其余元素**留在退场姿态**(chromeHidden 保持 true):轨道收拢的 560ms 里
+         它们不该已经出现 —— 那会和"卡片还在飞"打架。收拢结束
+         (onLeavingDone)再把它们升回来,即业主说的"回到一级后再入场"。 */
       window.location.hash = '';
       setRoute({ page: 'home', category: route.category, workId: '' });
       restoreScroll('portfolioHomeScrollY', homeScrollY);
@@ -1369,6 +1389,22 @@ function App() {
       restoreScroll('portfolioWorksScrollY', worksScrollY);
     } else {
       window.requestAnimationFrame(() => window.scrollTo(0, 0));
+    }
+    /* 2026-10-07 第四轮:一级页「其余元素」的**离场动效**。
+       只在"点卡进入"(有 opts.rect,即卡在飞)这条路径上启用 —— 此时才需要
+       「其余元素淡出上移 + 二级底渐显」的交接;导航直跳/查看全部没有飞行过程,
+       一级层当帧就该撤走,不需要、也不该拖 400ms。
+       时序:
+         t=0     chrome 进入退场姿态(240ms,逐条延迟 0/40/80/120/160)、
+                 homeHandoff 保持一级层在场、二级层底从透明淡入(360ms)、
+                 一级卡组被遮住(避免"静止卡 + 飞行卡"两份);
+         t≈620   撤 homeHandoff → 一级层隐藏(此时二级底已完全不透明)、
+                 chromeHidden 保持 true(它们要等回程才入场)。 */
+    if (isMobileDevice() && opts?.rect && opts?.src) {
+      setChromeHidden(true);
+      setHomeHandoff(true);
+      window.clearTimeout(chromeTimerRef.current);
+      chromeTimerRef.current = window.setTimeout(() => setHomeHandoff(false), 620);
     }
   };
 
@@ -1528,9 +1564,12 @@ function App() {
           <>
             {/* The home layer is never unmounted, only hidden. Its images,
                 video and scroll position survive a trip into works or detail,
-                so coming back needs no reload and lands on the same screen. */}
+                so coming back needs no reload and lands on the same screen.
+                2026-10-07 第四轮:去程交接(homeHandoff)期间**暂缓隐藏** ——
+                一级页「其余元素」的退场动效要有地方演;底层二级页此刻正从透明
+                淡入(mw-handoff),所以看到的是"标题/计数器/圆点淡出 + 二级渐显"。 */}
             <div
-              className={`page-keep${route.page === 'home' ? '' : ' is-hidden'}`}
+              className={`page-keep${route.page === 'home' || homeHandoff ? '' : ' is-hidden'}`}
               aria-hidden={route.page !== 'home'}
             >
               <HomePage
@@ -1539,6 +1578,8 @@ function App() {
                 active={route.page === 'home'}
                 deckFocusId={deckFocusId}
                 revealProjects={exitWorks}
+                chromeHidden={chromeHidden || homeHandoff}
+                deckVeiled={exitWorks || homeHandoff}
               />
             </div>
             {/* 2026-10-06 移动端:详情页在底下时二级页保持挂载(翻页动效的底层),
@@ -1556,8 +1597,17 @@ function App() {
                 returning={mobileFlip === 'exit'}
                 entry={worksEntry}
                 leaving={exitWorks}
+                handingOff={homeHandoff}
                 onEntryArmed={() => setWorksEntry(null)}
-                onLeavingDone={() => { setExitWorks(false); setWorksEntry(null); }}
+                onLeavingDone={() => {
+                  /* 收拢结束的**同一提交**里:撤二级层 + 解除一级卡组遮挡 + 让
+                     「其余元素」入场。三者同帧切换,一级卡组现身的几何与轨道
+                     落点逐像素相同,交接不可见;其余元素随后 320ms 逐条升回来
+                     (业主说的"回到一级后再入场")。 */
+                  setExitWorks(false);
+                  setWorksEntry(null);
+                  setChromeHidden(false);
+                }}
                 onActiveWorkChange={syncWorksActive}
                 onHome={goHome}
               />
@@ -2533,7 +2583,7 @@ function ShowcaseDeck({ items, openWorks }) {
    - Tapping a side card switches to it; tapping the front card opens works.
    - Auto-plays every 2.4s; pauses while dragging.
    The PC ShowcaseDeck (hover fan) is untouched. */
-function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '' }) {
+function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chromeHidden = false, deckVeiled = false }) {
   const deckRef = useRef(null);
   const cardRefs = useRef([]);
   const dimRefs = useRef([]);
@@ -2943,7 +2993,7 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '' }) {
   }, []);
 
   return (
-    <div className="mob-showcase">
+    <div className={`mob-showcase${chromeHidden ? ' is-chrome-out' : ''}${deckVeiled ? ' is-deck-veiled' : ''}`}>
       <h2 className="mob-heading rany-display-heading">Project Display</h2>
       <div className="mob-counter" ref={counterRef}>01 / 11</div>
 
@@ -5237,7 +5287,7 @@ function usePagingEnabled(active = true) {
 
   return enabled;
 }
-function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealProjects = false }) {
+function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealProjects = false, chromeHidden = false, deckVeiled = false }) {
   const [profileRef, profileSeen] = useRevealOnView();
   // 首屏视频是否已真正开始播放。尾屏预挂载必须等这个信号 —— 首屏视频优先级
   // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
@@ -5653,7 +5703,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         </div>
         <div className="project-list">
           {isMobile ? (
-            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} />
+            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} deckVeiled={deckVeiled} />
           ) : (
             <ShowcaseDeck items={worksItems} openWorks={openWorks} />
           )}
@@ -5703,7 +5753,7 @@ const ORBIT_AUTO_DELAY = 4000;
 
 function WorksPage({
   activeCategory, goDetail, workId = '', arriving = false, returning = false,
-  entry = null, leaving = false, onEntryArmed = null, onLeavingDone = null,
+  entry = null, leaving = false, handingOff = false, onEntryArmed = null, onLeavingDone = null,
   onActiveWorkChange = null, onHome = null
 }) {
   const works = worksByCategory[activeCategory.id] ?? [];
@@ -6359,7 +6409,7 @@ function WorksPage({
     return (
       <section
         ref={pageRef}
-        className={`works-index-page${phase === 'entering' ? ' mw-entering' : ''}${phase === 'armed' ? ' mw-armed' : ''}${landed ? ' mw-landed' : ''}${leaving ? ' mw-leaving' : ''}${returning ? ' mw-under-return' : ''}`}
+        className={`works-index-page${phase === 'entering' ? ' mw-entering' : ''}${phase === 'armed' ? ' mw-armed' : ''}${landed ? ' mw-landed' : ''}${leaving ? ' mw-leaving' : ''}${returning ? ' mw-under-return' : ''}${handingOff ? ' mw-handoff' : ''}`}
       >
         <div
           className="mw-stage"
