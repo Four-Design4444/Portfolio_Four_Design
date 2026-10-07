@@ -295,6 +295,16 @@ export default function ContactStreet({ active, preload, onTailReady }) {
     let cssDone = false;
     let readyDone = false;
     let elapsed = 0;
+    // 把尾屏 WebGL 预载进度并回首屏 loading 进度条（见 index.html 监听）：
+    // 挂载即登记 0，编译完成（#loading.loaded / canvas 已绘制）登记 1，并通知父页面。
+    let tailReported = false;
+    const reportTailReady = () => {
+      if (tailReported) return;
+      tailReported = true;
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 1 } })); } catch (_) {}
+      try { if (onTailReady) onTailReady(); } catch (_) {}
+    };
+    try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0 } })); } catch (_) {}
 
     const attempt = () => {
       if (stopped) return;
@@ -317,9 +327,13 @@ if (!readyDone) {
     const loading = doc.getElementById('loading');
   if (loading && loading.classList.contains('loaded')) {
             readyDone = true;
+            reportTailReady();
           } else {
             const canvas = doc.querySelector('#scene canvas');
-            if (canvas && canvas.width > 0 && canvas.height > 0) readyDone = true;
+            if (canvas && canvas.width > 0 && canvas.height > 0) {
+              readyDone = true;
+              reportTailReady();
+            }
           }
         }
         if (!readyDone) {
@@ -330,7 +344,7 @@ if (!readyDone) {
           //   （业主反馈"有时下滑下来模型还加载不出来"）。宁可遮罩多留一会儿，
           //   也绝不能提前露出未就绪的场景 —— 失败方向必须是安全的。
 elapsed += 1;
-          if (elapsed > 900) readyDone = true;
+          if (elapsed > 900) { readyDone = true; reportTailReady(); }
    }
       }
       if (cssDone && readyDone) {

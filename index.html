@@ -391,10 +391,26 @@
         };
         tasks.push({ weight: 2, read: imagesProgress });
 
-        var ready = false;
-        tasks.push({ weight: 2, read: function () { return ready ? 1 : 0; } });
+        // 外部进度（React 侧在 loading 阶段预载的内容：作品封面、尾屏 WebGL）：
+        // 通过 window 'loading:progress' 事件上报 { id, weight, progress }，并入同一条
+        // 加权进度条，于是条子会随封面一张张下完、尾屏着色器编译完而真实爬升，
+        // 用户能直接"看见 loading 在干活"。权重在首次上报时锁定，之后只更新 progress。
+        var external = {};
+        window.addEventListener('loading:progress', function (e) {
+          var d = e.detail || {};
+          if (!d.id) return;
+          if (!external[d.id]) {
+            var w = (typeof d.weight === 'number' && d.weight > 0) ? d.weight : 2;
+            external[d.id] = { weight: w, progress: 0 };
+            tasks.push({ weight: w, read: function () { return external[d.id] ? external[d.id].progress : 0; } });
+          }
+          if (typeof d.progress === 'number') {
+            external[d.id].progress = Math.max(external[d.id].progress, Math.min(1, d.progress));
+          }
+        });
 
-        var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;
+        var ready = false; // 仅供 hide() 内部状态使用，不再作为进度项
+
         var shown = 0; // 已显示到的进度，只增不减
         var eased = 0; // 平滑逼近值：真实值是阶梯状的（资源一个个到位），
                        // 直接刷会让条子一格一格蹦，这里让它连续地追上去
@@ -407,6 +423,7 @@
           num.textContent = percent + '%';
         };
         var tick = function () {
+          var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;
           var sum = 0;
           for (var i = 0; i < tasks.length; i++) sum += tasks[i].weight * tasks[i].read();
           var target = Math.min(1, sum / total);
