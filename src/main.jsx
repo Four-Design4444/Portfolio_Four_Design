@@ -806,8 +806,29 @@ function App() {
                       有地方演退场。退场演完(≈340ms)再撤,一级层随之隐藏。
                       (works 层的不透明底同时淡入,所以这 340ms 里看得见退场。) */
   const [chromeHidden, setChromeHidden] = useState(false);
+  /* 2026-10-07 第五轮:回程「其余元素」的入场改用 **CSS animation**(is-chrome-in)。
+     之前用「摘掉 is-chrome-out + transition」驱动,但一级层在二级页期间是
+     display:none —— 从 display:none 里出来的元素没有"上一次的计算值"可供
+     过渡,浏览器直接从新值起画;延时两帧再摘类则要赌 rAF 与 React 提交的
+     相对顺序,探针实测两种时序都会出现,其中一种就是 0→1 一帧硬切。
+     animation 自带 from 关键帧,不依赖任何历史计算值,机制上不存在竞态。 */
+  const [chromeIn, setChromeIn] = useState(false);
   const [homeHandoff, setHomeHandoff] = useState(false);
   const chromeTimerRef = useRef(0);
+  /* 回程滚动复位(2026-10-07 业主第五轮):一级层是 display:none 隐藏的,隐藏
+     期间文档高度塌掉、窗口滚动被浏览器钳回 0;路由切回 home 的同一提交里
+     一级层重新可见,若此刻还停在 0,用户会看到首屏 hero 闪一帧再跳回原屏。
+     useLayoutEffect 在提交后、绘制前同步滚回,连一帧都不会露。 */
+  const pendingHomeScrollRef = useRef(null);
+  useLayoutEffect(() => {
+    if (route.page !== 'home' || pendingHomeScrollRef.current === null) return undefined;
+    const y = pendingHomeScrollRef.current;
+    pendingHomeScrollRef.current = null;
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.body.style.scrollBehavior = 'auto';
+    window.scrollTo(0, y);
+    return undefined;
+  }, [route.page]);
   /* 环境光(SideRays)单例 (2026-10-07):一级首页与二级作品页**共用同一个实例**。
      以前两级各挂一份(一级 .home-rays-layer、二级 .works-side-rays),跨级时是两个
      WebGL 上下文、各自 shader,视觉参数虽同但始终是"两个光"。现在提升到 App 顶层:
@@ -1314,11 +1335,17 @@ function App() {
       setDeckFocusId(activeWork?.id ?? '');
       setWorksEntry(null);
       setExitWorks(true);
-      /* 其余元素**留在退场姿态**(chromeHidden 保持 true):轨道收拢的 560ms 里
-         它们不该已经出现 —— 那会和"卡片还在飞"打架。收拢结束
-         (onLeavingDone)再把它们升回来,即业主说的"回到一级后再入场"。 */
+      /* 业主第五轮:回程的「其余元素」入场必须与收拢**同帧开始** —— 等收拢
+         演完(560ms)才升回来读作"两段动效",中间是空场。这里立即摘掉
+         is-chrome-out 并挂 is-chrome-in(见 chromeIn 注释:动画自带 from,
+         不依赖 display:none 之前的历史计算值),五组元素按各自延迟与收拢
+         同步起跑;二级层底(mw-leaving::before)的 320ms 淡出让入场全程可见。 */
+      setChromeHidden(false);
+      setChromeIn(true);
       window.location.hash = '';
       setRoute({ page: 'home', category: route.category, workId: '' });
+      pendingHomeScrollRef.current =
+        Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? homeScrollY) || 0;
       restoreScroll('portfolioHomeScrollY', homeScrollY);
       return;
     }
@@ -1381,13 +1408,20 @@ function App() {
     }
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
-    window.scrollTo(0, 0);
+    /* 2026-10-07 业主第五轮「进二级页看到的不是过渡,而是首屏 hero」:
+       移动端点卡进二级时,一级层要留在场上演 620ms 的元素退场(homeHandoff),
+       而首页是**窗口滚动**分页 —— 此刻把窗口滚回 0,仍在场的一级层当帧就跳回
+       首屏 hero,退场动效全部被盖掉。二级层是 position:fixed(见
+       .works-index-page),不依赖窗口滚动,所以交接路径把复位推迟到一级层
+       隐藏(homeHandoff 撤)之后;非交接路径(导航直跳/查看全部/PC)照旧立即复位。 */
+    const mobileHandoff = isMobileDevice() && Boolean(opts?.rect && opts?.src);
+    if (!mobileHandoff) window.scrollTo(0, 0);
     const workId = opts?.workId ?? '';
     window.location.hash = `/works?category=${category}${workId ? `&work=${workId}` : ''}`;
     setRoute({ page: 'works', category, workId });
     if (restore) {
       restoreScroll('portfolioWorksScrollY', worksScrollY);
-    } else {
+    } else if (!mobileHandoff) {
       window.requestAnimationFrame(() => window.scrollTo(0, 0));
     }
     /* 2026-10-07 第四轮:一级页「其余元素」的**离场动效**。
@@ -1400,11 +1434,15 @@ function App() {
                  一级卡组被遮住(避免"静止卡 + 飞行卡"两份);
          t≈620   撤 homeHandoff → 一级层隐藏(此时二级底已完全不透明)、
                  chromeHidden 保持 true(它们要等回程才入场)。 */
-    if (isMobileDevice() && opts?.rect && opts?.src) {
+    if (mobileHandoff) {
       setChromeHidden(true);
       setHomeHandoff(true);
       window.clearTimeout(chromeTimerRef.current);
-      chromeTimerRef.current = window.setTimeout(() => setHomeHandoff(false), 620);
+      chromeTimerRef.current = window.setTimeout(() => {
+        setHomeHandoff(false);
+        /* 一级层此刻才隐藏;在此之前复位滚动会让 hero 闪进来(见上)。 */
+        window.scrollTo(0, 0);
+      }, 620);
     }
   };
 
@@ -1600,10 +1638,10 @@ function App() {
                 handingOff={homeHandoff}
                 onEntryArmed={() => setWorksEntry(null)}
                 onLeavingDone={() => {
-                  /* 收拢结束的**同一提交**里:撤二级层 + 解除一级卡组遮挡 + 让
-                     「其余元素」入场。三者同帧切换,一级卡组现身的几何与轨道
-                     落点逐像素相同,交接不可见;其余元素随后 320ms 逐条升回来
-                     (业主说的"回到一级后再入场")。 */
+                  /* 收拢结束的**同一提交**里:撤二级层 + 解除一级卡组遮挡。
+                     (「其余元素」的入场已提前到回程开始时与收拢同步起跑,
+                     这里只剩兜底:万一 chromeHidden 仍为 true 再补一刀。)
+                     一级卡组现身的几何与轨道落点逐像素相同,交接不可见。 */
                   setExitWorks(false);
                   setWorksEntry(null);
                   setChromeHidden(false);

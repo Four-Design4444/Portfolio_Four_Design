@@ -106,12 +106,9 @@ html[data-device="mobile"] .morph-nav.nav-home .morph-logo {
 }
 
 html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
-  width: 50px;
-  /* 高度必须用显式长度,不能用 auto:works 态是 12px,auto↔长度在 CSS
-     过渡里不可插值,形变到中点高度瞬跳 —— 就是 home↔works 时 FOUR 的
-     跳帧。50 × 200/701(svg 真实比例)= 14.27px,与 auto 的解析值一致,
-     首页静止观感零变化,过渡两端变为可插值长度。 */
-  height: 14.27px;
+  /* 字标尺寸恒定(见 styles.css 第五轮注释),三态只差 scale:
+     home = 1,works = 40/50 = 0.8(40 × 200/701 = 11.412px,与旧几何一致)。 */
+  transform: translate(-50%, -50%) scale(1);
 }
 
 /* Mobile home nav: the four text links fold away completely. Only the logo
@@ -279,22 +276,17 @@ html[data-device="mobile"] .morph-logo {
   height: 12px;
 }
 
-/* The mark must keep the SVG's own 701:200 ratio on EVERY level.
-   The button box above is only a hit area and keeps the 12px rhythm; the mark
-   inside it gets its true proportional height (40 x 200/701 = 11.4123px).
-   Why this matters: an SVG scales by its own preserveAspectRatio, so a box
-   whose ratio differs from the asset's letterboxes the content — the strokes
-   shrink off-centre and the padded margins read as a dark edge against the
-   dark capsule. Worse, home (50 x 14.27 = 3.5049, exact) and works
-   (40 x 12 = 3.3333, 4.9% flat) disagreed, so the 620ms width/height morph
-   interpolated the ratio between 3.505 and 3.333 and the distortion was worst
-   mid-flight. Deriving both ends from 200/701 makes the ratio constant through
-   the whole transition and the resting distortion 0%. `height:auto` would also
-   be right here, but auto<->length is not interpolable (see the home rule
-   above), which is what caused the FOUR jump-frame bug on 2026-10-05. */
+/* The mark keeps the SVG's own 701:200 ratio on EVERY level.
+   2026-10-07 第五轮:字标尺寸定死为 home 态(50 × 200/701 = 14.27px),
+   三态只差 scale(works = 40/50 = 0.8)—— 不再逐帧改 width/height,
+   没有每帧重栅格化的窗口(黑框根因,详见 styles.css 同名注释);
+   两端比例恒为 3.505,中点零畸变,auto↔length 不可插值问题一并消失。
+   position/left/top 沿用 styles.css 的 .morph-logo .four-logo 基础规则
+   (绝对定位居中),这里只覆写尺寸与缩放。 */
 html[data-device="mobile"] .morph-logo .four-logo {
-  width: 40px;
-  height: 11.41px;
+  width: 50px;
+  height: 14.27px;
+  transform: translate(-50%, -50%) scale(0.8);
 }
 
 /* Leave a little more breathing room between the capsule edge and the mark. */
@@ -1468,6 +1460,16 @@ html[data-device="mobile"] .mw-slide .mw-card::after {
 }
 html[data-device="mobile"] .mw-slide.is-current .mw-card::after { opacity: 0; }
 
+/* 副卡阴影跨级连续(2026-10-07 业主第五轮「副卡收尾跳帧」):
+   统一卡面给一级副卡的阴影是轻档(0 16px 40px,见 .mob-card),二级轨道的
+   副卡此前沿用卡面默认的重档(0 24px 56px = 主卡档)。逐帧采样证实:收拢的
+   几何/压暗/透明度逐像素对齐,唯独卸载那一帧副卡阴影 24/56 → 16/40 硬切,
+   就是业主看到的「副卡在结束时触发跳帧」;去程反向同理(16/40 → 24/56)。
+   轨道副卡与一级副卡同用轻档,交接两端同值 → 无可跳。 */
+html[data-device="mobile"] .mw-slide:not(.is-current) .mw-card {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+}
+
 /* 卡面本体(圆角/底色/阴影/蒙版渐变/文案)已上移到「统一卡面」一节,
    这里只保留轨道专属的盒模型与排布 —— 二级主卡与一级卡组必须是同一张卡。 */
 html[data-device="mobile"] .mw-card {
@@ -1743,15 +1745,16 @@ html[data-device="mobile"] .detail-image-stack {
 
   /* 2026-10-07: 原来这条把 .four-logo 也一起重置成 40x12 = 3.3333,
      比 svg 真实比例 3.505扁 4.9%,在窄屏机上把刚修好的畸变又引回来。
-     现在按钮保持 40x12 的点击区,内层 svg 按 40 × 200/701 = 11.41px。 */
+     窄屏机按钮保持 40x12 的点击区;字标现在恒为 50×14.27(见上方第五轮
+     注释),home 与 works 在窄屏上同尺寸,所以这里只要把 home 的 scale
+     从 1 收到 0.8(= works 值,渲染 40×11.41,与旧几何一致)。 */
   html[data-device="mobile"] .morph-nav.nav-home .morph-logo {
     width: 40px;
     height: 12px;
   }
 
   html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
-    width: 40px;
-    height: 11.41px;
+    transform: translate(-50%, -50%) scale(0.8);
   }
 
   html[data-device="mobile"] .detail-pager {
