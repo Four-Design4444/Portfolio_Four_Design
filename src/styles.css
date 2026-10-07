@@ -257,7 +257,10 @@ img {
   display: block;
   width: 99px;
   height: 29px;
-  object-fit: contain;
+  /* 2026-10-07: 这条规则原本带 object-fit: contain,是给 <img> 用的。内联 SVG
+     之后由 preserveAspectRatio="xMidYMid meet" 自己处理缩放,再叠 contain
+     会二次收缩(contain 是替换默认 fill,不是叠加,这里保留也无害,但显式
+     写出来会让人误以为还有裁剪逻辑)。统一交给 preserveAspectRatio。 */
 }
 
 .four-logo-large {
@@ -624,7 +627,11 @@ body.nav-on-light .shared-active-pill-detail {
 
 .nav-home .morph-logo .four-logo {
   width: 79px;
-  height: auto;
+  /* 2026-10-07: 原为 height:auto。auto↔length 在 CSS 过渡里不可插值,
+     home⇄works 形变到中点高度会瞬跳 —— 这是 2026-10-05 FOUR 跳帧的成因。
+     79 × 200/701 = 22.538px,与 auto 的解析值完全一致(实测 home 静止
+     79x22.53、比例 3.5062、畸变 0.04%),首页观感零变化,两端变为可插值长度。 */
+  height: 22.54px;
 }
 
 .nav-home .morph-logo {
@@ -632,10 +639,13 @@ body.nav-on-light .shared-active-pill-detail {
   height: 32px;
 }
 
+/* 2026-10-07: works 态此前是 75x22 = 3.4091,比 svg 真实比例 3.505 扁 2.74%。
+   与 home 一样按 200/701 推导:75 × 200/701 = 21.398px。宽度不变(75px 是
+   已定稿的视觉尺寸),只把高度从 22 收到 21.4,畸变归零。 */
 .nav-works .morph-logo .four-logo,
 .nav-detail .morph-logo .four-logo {
   width: 75px;
-  height: 22px;
+  height: 21.4px;
 }
 
 .nav-works .morph-logo,

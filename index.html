@@ -283,15 +283,49 @@
           var rail = doc.querySelector('.rail');
           if (!rail || !rail.parentNode) return;
           var style = doc.createElement('style');
-          // 2026-10-05: 附加加载页视觉 —— ①背景整体压暗为纯黑 ②猫身后加光圈,
-          // 让深色猫身与纯黑背景分离(猫成为前景)。demo 源文件仍字节不动,
-          // 与进度条替换同一机制:运行时同域注入,不碰动画代码。
-          style.textContent = 'main{background:#000!important}body{background:#000!important}'
-            + '.scene{position:relative;z-index:0}'
-            + '.scene:before{content:"";position:absolute;inset:-16% -12%;z-index:-1;pointer-events:none;'
-            + 'background:radial-gradient(ellipse 52% 52% at 50% 45%,rgba(146,186,228,0.26) 0%,rgba(146,186,228,0.10) 55%,rgba(146,186,228,0) 74%)}'
+          // 2026-10-07: 加载页背景整体换成参考版 outputs/typing-cat-04-mini.html 的做法,
+          // 两层:①底色 = 04 的 main 径向渐变(--bg #111719 + 3% --light 提亮的中心,
+          //   等价色 #161d1e);②猫咪身后的光 = 04 真正用的那套 SVG 光晕(渐变+椭圆),
+          //   不再用 CSS ::before 假光圈。位置按 v1.1 的 viewBox(1080x659)重新配比:
+          //   04 的光晕 rx162/ry144 对 420x340 画布里的猫(高约110),这里猫高约498,
+          //   等比放大后收紧到 rx400/ry310,中心落在猫躯干而非画布中点;
+          //   地面光池同理从 04 的 cy286(猫脚下方)换算到 v1.1 的 y612。
+          // demo 源文件仍字节不动,与进度条替换同一机制:运行时同域注入,不碰动画代码。
+          style.textContent = ':root{background:#111719!important}'
+            + 'html,body{background:#111719!important}'
+            + 'main{background:radial-gradient(ellipse at 50% 49%,#161d1e 0%,#111719 68%)!important}'
             + '.app-loader-progress{margin:17px auto 0;width:fit-content;display:flex;align-items:center;gap:12px}.app-loader-bar{position:relative;width:140px;height:2px;background:rgba(185,203,213,0.09);overflow:hidden}.app-loader-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:#8b9eaf;transition:width .28s ease}.app-loader-num{font:10px/1 "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:1px;color:#8291a0;font-variant-numeric:tabular-nums}@media(prefers-reduced-motion:reduce){.app-loader-bar>i{transition:none}}';
           doc.head.appendChild(style);
+
+          // 04 的「猫咪身后的光」是画在 SVG 里的两层径向渐变椭圆,不是 CSS 伪元素。
+          // 这里按同一份渐变停靠点(中心 .2 / .62 处 .055 / 末端 0;地面池 .16)重建,
+          // 插到 svg.art 最底层当背景,前景的猫与笔记本完全不受影响。
+          // 几何换算(.workbuddy/tools/probe-halo-geometry.mjs 实测两版猫的 bbox,
+          // calc-halo-fit.mjs 换算):04 的光是「绕着猫」的,所以按猫高缩放而不是按画布宽。
+          // 04 猫高 120.8 / 本 demo 猫高 499.7 → k=4.137。换算后光与猫的比例与 04 逐项相等:
+          //   halo rx/catH 1.341(= 04 的 1.341)、ry/catH 1.193(=1.192)、floor rx/catH 1.135(=1.134)。
+          // 注意 halo 会超出画布边界,这是刻意的 —— 04 里它同样溢出画布,靠 .art 的
+          // overflow:visible 呈现,是一圈弥散在猫背后的环境光,不是一块有边的光斑。
+          var svg = doc.querySelector('svg.art');
+          if (svg && !doc.getElementById('halo')) {
+            var lightBox = doc.createElement('div');
+            lightBox.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+              + '<defs>'
+              + '<radialGradient id="halo"><stop stop-color="#b9d7cd" stop-opacity=".2"/>'
+              + '<stop offset=".62" stop-color="#b9d7cd" stop-opacity=".055"/>'
+              + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
+              + '<radialGradient id="floor"><stop stop-color="#b9d7cd" stop-opacity=".16"/>'
+              + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
+              + '</defs>'
+              + '<ellipse cx="583" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
+              + '<ellipse cx="624" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
+              + '</svg>';
+            var lightSvg = lightBox.firstChild;
+            // 一次性搬进 fragment 再插入:逐个 insertBefore 会把顺序反过来。
+            var frag = doc.createDocumentFragment();
+            while (lightSvg.firstChild) frag.appendChild(lightSvg.firstChild);
+            svg.insertBefore(frag, svg.firstChild);
+          }
           rail.parentNode.replaceChild(progress.root, rail);
           placed = true;
           window.clearTimeout(fallbackTimer);

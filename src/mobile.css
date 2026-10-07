@@ -271,28 +271,29 @@ html[data-device="mobile"] .mobile-menu a.is-active::after {
 }
 
 
-/* The logo stays pinned to the left inside the capsule on every level. */
-html[data-device="mobile"] .morph-logo,
-html[data-device="mobile"] .morph-logo .four-logo {
+/* The logo stays pinned to the left inside the capsule on every level.
+   Only the BUTTON takes the 12px rhythm; the mark inside keeps its own ratio
+   (see the rule below). */
+html[data-device="mobile"] .morph-logo {
   width: 40px;
   height: 12px;
 }
 
-/* The mark itself must keep the SVG's own 701:200 ratio on EVERY level.
-   The button box above is only a hit area and keeps the 12px rhythm; the <img>
+/* The mark must keep the SVG's own 701:200 ratio on EVERY level.
+   The button box above is only a hit area and keeps the 12px rhythm; the mark
    inside it gets its true proportional height (40 x 200/701 = 11.4123px).
-   Why this matters: with `object-fit: contain`, a box whose ratio differs from
-   the asset's makes the rasterised strokes shrink off-centre and go slightly
-   translucent at the edges — the white letters then read as "dark-outlined"
-   against the dark capsule. Worse, home (50 x 14.27 = 3.5049, exact) and works
+   Why this matters: an SVG scales by its own preserveAspectRatio, so a box
+   whose ratio differs from the asset's letterboxes the content — the strokes
+   shrink off-centre and the padded margins read as a dark edge against the
+   dark capsule. Worse, home (50 x 14.27 = 3.5049, exact) and works
    (40 x 12 = 3.3333, 4.9% flat) disagreed, so the 620ms width/height morph
    interpolated the ratio between 3.505 and 3.333 and the distortion was worst
-   mid-flight — exactly when the owner saw the stray outline. Deriving both
-   ends from 200/701 makes the ratio constant through the whole transition and
-   the resting distortion 0%. `height:auto` would also be right here, but
-   auto<->length is not interpolable (see the home rule above), which is what
-   caused the FOUR jump-frame bug on 2026-10-05. */
+   mid-flight. Deriving both ends from 200/701 makes the ratio constant through
+   the whole transition and the resting distortion 0%. `height:auto` would also
+   be right here, but auto<->length is not interpolable (see the home rule
+   above), which is what caused the FOUR jump-frame bug on 2026-10-05. */
 html[data-device="mobile"] .morph-logo .four-logo {
+  width: 40px;
   height: 11.41px;
 }
 
@@ -1530,10 +1531,17 @@ html[data-device="mobile"] .detail-image-stack {
     padding: max(16px, env(safe-area-inset-top)) 20px 0;
   }
 
-  html[data-device="mobile"] .morph-nav.nav-home .morph-logo,
-  html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
+  /* 2026-10-07: 原来这条把 .four-logo 也一起重置成 40x12 = 3.3333,
+     比 svg 真实比例 3.505扁 4.9%,在窄屏机上把刚修好的畸变又引回来。
+     现在按钮保持 40x12 的点击区,内层 svg 按 40 × 200/701 = 11.41px。 */
+  html[data-device="mobile"] .morph-nav.nav-home .morph-logo {
     width: 40px;
     height: 12px;
+  }
+
+  html[data-device="mobile"] .morph-nav.nav-home .morph-logo .four-logo {
+    width: 40px;
+    height: 11.41px;
   }
 
   html[data-device="mobile"] .detail-pager {

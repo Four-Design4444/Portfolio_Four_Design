@@ -4,7 +4,6 @@ import { createPortal } from 'react-dom';
 import { Copy, House, Mail, Phone } from 'lucide-react';
 import './styles.css';
 import './mobile.css';
-import fourLogo from './assets/four-logo.svg';
 import group10Markup from './assets/group-10.svg?raw';
 import { createWebCodecsPlayer } from './heroWebCodecs';
 import ContactStreet from './contact-street/Street.jsx';
@@ -98,18 +97,27 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 ];
 
 // 移动端副标 "Four Design" 的入场时机与位置，都以 hero 中心 SVG 的 R 字母为准：
-// PROJECT 字标 = P(0) O(1) R(2) T(3) F(4) O(5) L(6) I(7) O(8)，每个 path 入场 =
-// index*120 + 1800ms；R 是第 3 个字母(index 2) → 2*120 + 1800 = 2040ms 完成。
-// ① 时机：R 入场完成的同一刻(2040ms)开始 "Four Design" 入场 → 上下看起来在同一位置同步出场。
-// ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(x ≈ 0.368 of SVG 宽度)，使首字母 F 正好
-//    接在 R 结束的地方，形成纵向连续的视觉关系。
-// 把 PORTFOLIO(上) 与 Four Design(下) 视为同一个盒子：盒子从左到右“有序”入场。
-// PORTFOLIO 逐字(index*120 + 1800ms)从左到右出场；当它执行到 R 完成(2040ms)这一程度时，
-// Four Design 从左到右逐字跟上，并且与 PORTFOLIO 尚未走完的字母(welcome 尾段)并行进行，
-// 读作“同一个盒子继续往右走”。因此 Four Design 的逐字节奏与 PORTFOLIO 保持一致(120ms/1800ms)。
-const BYLINE_INTRO_START_MS = 2040; // = R 完成时刻(2*120 + 1800)
-const BYLINE_CHAR_STAGGER_MS = 120;  // 与 PORTFOLIO 逐字节奏一致
-const BYLINE_CHAR_DURATION_MS = 1800; // 与 PORTFOLIO 淡入时长一致
+// PORTFOLIO 字标 = P(0) O(1) R(2) T(3) F(4) O(5) L(6) I(7) O(8)，每个 path 入场 =
+// index*120 + 1800ms；R 是第 3 个字母(index 2) → 2*120 + 1800 = 2040ms(名义时长结束)。
+// ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(实测 R 的 getBoundingClientRect().right)，
+//    使首字母 F 正好接在 R 结束的地方，形成纵向连续的视觉关系。
+//
+// ⚠ 2026-10-07 二次修正(业主: 「FOUR DESIGN 还是在上面所有 SVG 全部入场后才入场」)。
+//   探针 .workbuddy/tools/probe-byline-overlap.mjs 实测旧参数(2040/120/1800)：
+//     SVG 全部完成 = 2947ms —— 那一刻首字 opacity 只有 0.50、中间字 0.06、末字 0.00，
+//     整行要到 5000ms 才收尾。也就是说"上面全入场完"时下面才刚过半 → 观感就是分两段。
+//   根因有二，都已改：
+//   ① 起点太晚：R 的入场上限虽然是 index*120 + 1800 = 2040ms，但 smootherstep 缓动下
+//      它在 ≈1720ms 就已经 ≥0.95 —— 眼睛早就认定"R 入场完了"。所以起点改按**可见完成**
+//      取 1720ms，让 FOUR DESIGN 的左→右扫过与 PORTFOLIO/welcome 的收尾真正叠在一起。
+//   ② 单字时长太长：小号(10px)字形套用大字母的 1800ms 解模糊，前 40% 时间都是看不出
+//      东西的糊块，等于又晚了半秒。缩短到 650ms：11 个字在 SVG 落地(2947ms)时已成型
+//      约 70%，尾巴只多留 ~400ms。
+//   同时 stagger 保持 100ms(11 字共 1000ms 铺开) —— 业主此前否掉过 60ms 那版，说读起来
+//   像"整行同时入场"，所以左→右次序必须留足可辨的间隔。
+const BYLINE_INTRO_START_MS = 1720; // R 达到 ~0.95 可见(名义 2040ms 的 83%)的时刻
+const BYLINE_CHAR_STAGGER_MS = 100;  // 11 字铺开 1000ms：比 PORTFOLIO 的 120ms 略快，但左→右清晰可辨
+const BYLINE_CHAR_DURATION_MS = 650; // 缩短单字时长，使整行在 SVG 收尾时基本成型
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -528,8 +536,44 @@ function HeroMotionDemo() {
   );
 }
 
+/* The mark is inlined rather than loaded through <img src=...svg>.
+   Why (2026-10-07): as an <img> the SVG is rasterised into its own composited
+   layer, and on real phones the edges of that layer showed up as a 2px
+   near-black rectangle wrapped around the whole wordmark (measured at exactly
+   #101010, 2px wide, closed on all four sides, sitting ~2px outside the img
+   box). Chromium's headless mode never reproduces it, and it survived every
+   style-level fix (no border/outline/shadow paints it -- verified by dumping
+   the paint properties of the button, the img and the capsule on both nav
+   levels), which is why it looked like "nothing draws it". Inlining the same
+   paths lets the logo paint into the nav's own layer, so there is no separate
+   texture to fringe.
+
+   The paths and the 701x200 viewBox are byte-identical to four-logo.svg, so
+   the rendered geometry is unchanged: CSS still drives width/height, and the
+   width/height transitions morph exactly as before. */
 function LogoMark({ large = false }) {
-  return <img className={large ? 'four-logo four-logo-large' : 'four-logo'} src={fourLogo} alt="FOUR" />;
+  return (
+    <svg
+      className={large ? 'four-logo four-logo-large' : 'four-logo'}
+      viewBox="0 0 701 200"
+      width="701"
+      height="200"
+      /* xMidYMid meet = 按比例缩放并完整放入盒内,绝不裁切。
+         盒比例一旦与 701:200 不符,多出来的部分变成对称留白而不是拉伸。 */
+      preserveAspectRatio="xMidYMid meet"
+      role="img"
+      aria-label="FOUR"
+      focusable="false"
+    >
+      <path d="M399.403 0.360046V125.485C399.403 154.572 420.369 178.761 448.013 183.766V198.358C412.379 193.21 385 162.545 385 125.485V0.360046H399.403Z" fill="white" />
+      <path d="M532.27 0.360046V125.485C532.27 162.42 505.075 193.002 469.617 198.304V183.699C497.083 178.549 517.866 154.445 517.866 125.485V0.360046H532.27Z" fill="white" />
+      <path d="M642.09 14.7629C666.65 14.7629 686.559 34.6723 686.559 59.2318C686.559 83.7914 666.65 103.701 642.09 103.701H586.744L667.596 197.86H686.559L619 118.104H642.09C674.604 118.104 700.962 91.7458 700.962 59.2318C700.962 26.7178 674.604 0.360046 642.09 0.360046H569.281V14.7629H642.09Z" fill="white" />
+      <path d="M256.732 0C311.618 0.000100937 356.112 44.4939 356.112 99.3799C356.112 154.252 311.641 198.736 256.774 198.759V184.356C303.686 184.334 341.708 146.297 341.708 99.3799C341.708 52.4484 303.663 14.4034 256.732 14.4033C209.8 14.4033 171.754 52.4484 171.754 99.3799C171.754 100.241 171.769 101.099 171.794 101.954H157.384C157.363 101.099 157.352 100.241 157.352 99.3799C157.352 44.4939 201.846 0 256.732 0Z" fill="white" />
+      <path d="M1.59209e-07 0H138V14H1.59209e-07V0Z" fill="white" />
+      <path d="M33 95H113V109H33V95Z" fill="white" />
+      <path d="M14 0L14 200H0L1.59209e-07 0H14Z" fill="white" />
+    </svg>
+  );
 }
 
 // 设备形态只由 index.html 头部脚本判定一次(data-device),渲染期内不变
@@ -4705,7 +4749,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         node.style.filter = `blur(${((1 - intro) * 52).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
-      // 移动端副标 "Four Design"：整行一起入场，时间以 SVG 的 R 字母完成为准(BYLINE_INTRO_START_MS)。
+      // 移动端副标 "Four Design"：逐字左→右入场，起手点以 SVG 的 R「看得见的完成」为准
+      // (BYLINE_INTRO_START_MS)，与上方尚未收尾的字母并行，读作同一个盒子继续往右扫。
       // 位置：把左缘对齐到 R 的右缘，使首字母 F 正好接在 R 结束的位置，上下读作同一处出场。
       const byline = bylineRef.current;
       if (byline) {
@@ -4728,16 +4773,19 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         // 整行容器只负责定位/对齐，本身不参与淡入(避免与逐字叠加)。
         byline.style.opacity = '1';
         byline.style.filter = 'none';
-        // 逐字从左到右入场：与 PORTFOLIO 同节奏(120ms 间隔 / 1800ms 淡入)，从 R 完成时开始，
-        // 与上方尚未走完的字母并行 → 读作同一个盒子继续往右入场。
+        // 逐字从左到右入场：从 R「看得见的完成」开始(见 BYLINE_INTRO_START_MS 注释)，
+        // 与仍在上方的 PORTFOLIO 尾段/welcome 并行 → 读作同一个盒子继续往右入场。
         const chars = bylineCharRefs.current;
         for (let i = 0; i < chars.length; i++) {
           const node = chars[i];
           if (!node) continue;
           const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
+          const miss = 1 - charIntro;
           node.style.opacity = String(charIntro);
-          node.style.filter = `blur(${((1 - charIntro) * 10).toFixed(3)}px)`;
-          node.style.transform = `translate3d(0, ${((1 - charIntro) * 10).toFixed(2)}px, 0)`;
+          // 解模糊按 miss^1.7 衰减(而不是线性)：小字号下线性解模糊会让前 40% 时间都是一个
+          // 看不出内容的糊块，观感上等于把"起手"又推后半秒。幂次衰减让它很快可读。
+          node.style.filter = `blur(${(Math.pow(miss, 1.7) * 7).toFixed(3)}px)`;
+          node.style.transform = `translate3d(0, ${(miss * 6).toFixed(2)}px, 0)`;
         }
       }
       frame = window.requestAnimationFrame(render);
