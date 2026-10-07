@@ -4641,24 +4641,27 @@ function HomePage({ openWorks, paging, active = true }) {
   // 绝对最高，WebGL 编译绝不能抢在它前面（抢了会拖慢视频首帧）。
   const [heroVideoReady, setHeroVideoReady] = useState(false);
   const markHeroVideoReady = useCallback(() => setHeroVideoReady(true), []);
+  const [coversPreloaded, setCoversPreloaded] = useState(false);
   // 首屏 Loading 遮罩只在首页出现（index.html 按 hash 判定），揭幕信号也只由
   // 首页给出：hero 真正播起来 = 首屏内容加载完毕。遮罩里的进度条另有真实来源
   // （preload 资源条目 + <video> buffered），这个事件只是"可以揭幕了"的终判。
   useEffect(() => {
-    if (!heroVideoReady) return undefined;
+    // 揭幕闸门：hero 真正可播「且」所有作品封面已在 loading 阶段预载完成，
+    // 二者皆备才揭幕 —— 进入 hero 后不再有任何加载负载（PC / 移动端一致）。
+    if (!heroVideoReady || !coversPreloaded) return undefined;
     const frame = window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
     return () => window.cancelAnimationFrame(frame);
-  }, [heroVideoReady]);
+  }, [heroVideoReady, coversPreloaded]);
   const [projectsRef, projectsSeen] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);
   useEffect(() => {
     const el = contactRef.current;
     if (!el) return undefined;
-    // 临近视口才预挂载尾屏 iframe：提前 ~1.5 屏触发，既留出 INTRO_BURN_MS(3.2s)
-    // 烧录灯光 intro 的余量，又不会在用户停首屏看视频时白白占用一个 WebGL 上下文。
+    // 尾屏在 loading 阶段就已通过 setContactPreload(true) 挂载（见下方预载 effect），
+    // 这里只负责「临近时确保挂载」，绝不把它设回 false —— 否则会卸载已预热的 WebGL。
     const io = new IntersectionObserver(
-      ([entry]) => setContactPreload(entry.isIntersecting),
+      ([entry]) => { if (entry.isIntersecting) setContactPreload(true); },
       { root: null, rootMargin: '150% 0px 150% 0px', threshold: 0 }
     );
     io.observe(el);
@@ -4684,53 +4687,32 @@ function HomePage({ openWorks, paging, active = true }) {
       }))
   );
 
-  // 揭幕后把「滚动才用得上」的东西提前备好。实测（见 .workbuddy/tools/
-  // probe-postreveal-scroll.mjs）：一揭幕就快速滚动时，7 张作品封面是在滚动那一下
-  // 才开始下载的，尾屏 iframe 也是那一刻才挂载、才编译 Three.js，两件事叠加把主线程
-  // 啃出好几秒长任务。放到空闲时间做，滚动路径上就只剩滚动本身。
-  // 全部走 requestIdleCallback：主线程一忙（用户正在滚、正在交互）回调就自动让路，
-  // 绝不与首屏视频或滚动抢帧。封面是纯下载、最便宜，先做；尾屏要编译着色器，排在
-  // 后面并给更长的 timeout。IntersectionObserver 那条临近挂载路径原样保留作兜底 ——
-  // 用户若立刻就滚，它照样会触发。
+  // 预载全部挪到 loading 阶段：封面 + 尾屏 WebGL 都在首页可见前就绪，
+  // 揭幕进入 hero 后不再有任何网络/编译负载 → 零卡顿（PC 与移动端一致）。
+  // 此 effect 在 HomePage 挂载时（即 loading 遮罩仍可见时）立即执行。
   useEffect(() => {
-    if (!heroVideoReady || !active) return undefined;
     let cancelled = false;
-    const idle = (cb, timeout) => (typeof window.requestIdleCallback === 'function'
-      ? { kind: 'idle', id: window.requestIdleCallback(cb, { timeout }) }
-      : { kind: 'timer', id: window.setTimeout(() => cb({ timeRemaining: () => 0 }), Math.min(timeout, 400)) });
-    const cancelIdle = (handle) => {
-      if (!handle) return;
-      if (handle.kind === 'idle' && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(handle.id);
-      else if (handle.kind === 'timer') window.clearTimeout(handle.id);
-    };
-
-    const covers = (isMobile ? mobileWorksItems : worksItems)
-      .map((item) => item.cover)
-      .filter(Boolean);
-    let index = 0;
-    let pending = null;
-    // 一张一张来，别一口气发七个请求又把首屏带宽抢回去。
-    const prefetchNext = () => {
-      if (cancelled || index >= covers.length) return;
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = covers[index];
-      index += 1;
-      pending = idle(prefetchNext, 1200);
-    };
-    let streetHandle = null;
-    const start = () => {
-      if (cancelled) return;
-      prefetchNext();
-      streetHandle = idle(() => { if (!cancelled) setContactPreload(true); }, 4000);
-    };
-    pending = idle(start, 2000);
-    return () => {
-      cancelled = true;
-      cancelIdle(pending);
-      cancelIdle(streetHandle);
-    };
-  }, [heroVideoReady, active, isMobile]);
+    const covers = [...worksItems, ...mobileWorksItems].map((it) => it.cover).filter(Boolean);
+    let done = 0;
+    const total = covers.length;
+    const finish = () => { if (!cancelled) setCoversPreloaded(true); };
+    if (total === 0) {
+      finish();
+    } else {
+      covers.forEach((src) => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = img.onerror = () => { done += 1; if (done >= total) finish(); };
+        img.src = src;
+      });
+      // 兜底：封面下载过慢也不让 loading 卡死（4s 后强制放行）
+      window.setTimeout(finish, 4000);
+    }
+    // 尾屏 WebGL 在 loading 阶段就挂载并烧录 intro（隐藏于遮罩之下），
+    // 用户抵达尾屏时场景已就绪，无编译/渐入黑屏。
+    setContactPreload(true);
+    return () => { cancelled = true; };
+  }, []);
 
   // Where the controller thinks it is. On a paged home the scroll position is
   // the only thing that can say: the browser may have restored one from an
@@ -5159,7 +5141,7 @@ function HomePage({ openWorks, paging, active = true }) {
             （到尾屏才挂载），无回归。 */}
         <ContactStreet
           active={active && contactVisible}
-          preload={active && heroVideoReady && contactPreload}
+          preload={active && contactPreload}
         />
       </section>
       </div>
