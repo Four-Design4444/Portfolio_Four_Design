@@ -103,9 +103,13 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
 // ① 时机：R 入场完成的同一刻(2040ms)开始 "Four Design" 入场 → 上下看起来在同一位置同步出场。
 // ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(x ≈ 0.368 of SVG 宽度)，使首字母 F 正好
 //    接在 R 结束的地方，形成纵向连续的视觉关系。
-const BYLINE_INTRO_START_MS = 2040;
-const BYLINE_RIGHT_X = 0.368; // R 右缘在 SVG viewBox 宽度里的占比
-const BYLINE_INTRO_DURATION_MS = 900;
+// 把 PORTFOLIO(上) 与 Four Design(下) 视为同一个盒子：盒子从左到右“有序”入场。
+// PORTFOLIO 逐字(index*120 + 1800ms)从左到右出场；当它执行到 R 完成(2040ms)这一程度时，
+// Four Design 从左到右逐字跟上，并且与 PORTFOLIO 尚未走完的字母(welcome 尾段)并行进行，
+// 读作“同一个盒子继续往右走”。因此 Four Design 的逐字节奏与 PORTFOLIO 保持一致(120ms/1800ms)。
+const BYLINE_INTRO_START_MS = 2040; // = R 完成时刻(2*120 + 1800)
+const BYLINE_CHAR_STAGGER_MS = 120;  // 与 PORTFOLIO 逐字节奏一致
+const BYLINE_CHAR_DURATION_MS = 1800; // 与 PORTFOLIO 淡入时长一致
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -1019,6 +1023,64 @@ function App() {
     };
   }, [route.page, sharedImage?.workId]);
 
+  /* 2026-10-07 移动端:二级页 → 一级页的**回程**也走同一套覆盖层。
+     业主诉求:「一级页面进入二级页面时卡片要无缝;二级页面返回一次时,也应该
+     保留这样的动效转场」。起点 rect 由 goHome() 在离开二级页前同步量好,这里
+     只负责补终点 —— 首页卡组里 data-deck-work 等于该作品的那张卡(就是用户
+     点进来的那张,active 没变过,所以它的 rect 就是落点)。
+     ⚠ 只落定一次:CSS 过渡一旦起跑就不能再改目标,否则 width 的 transition
+       反复重启、transitionend(交接信号)被不断顺延,覆盖层与卡片错位。
+     首页层在 route 切回 home 的同一帧就已显示(不是 display:none),所以
+     一次 rAF 之后卡的几何量得到;量不到就放弃覆盖层,不留残影。 */
+  useLayoutEffect(() => {
+    if (!isMobileDevice() || route.page !== 'home' || !sharedImageRef.current) return undefined;
+    const workId = sharedImageRef.current.workId;
+    if (!workId) return undefined;
+
+    let frame = 0;
+    let disposed = false;
+    let attempts = 0;
+    let lastRect = null;
+    const selector = `[data-deck-work="${workId}"]`;
+
+    const updateDeckTarget = () => {
+      if (disposed || !sharedImageRef.current) return;
+      attempts += 1;
+      const card = document.querySelector(selector);
+      const rect = card ? readNavRect(selector) : null;
+      // ⚠ 必须连续两帧量到同一个矩形才落定:回程同一帧还要把 window 滚回
+      // 离开首页时的位置(restoreScroll 两个 rAF),量早了会读到滚动前的
+      // 坐标 → 覆盖层落点与返回后的卡片错位。
+      if (rect && rect.width > 0 && rect.height > 0) {
+        const stable = lastRect &&
+          Math.abs(lastRect.x - rect.x) < 0.5 && Math.abs(lastRect.y - rect.y) < 0.5 &&
+          Math.abs(lastRect.width - rect.width) < 0.5 && Math.abs(lastRect.height - rect.height) < 0.5;
+        if (stable) {
+          rect.radius = getComputedStyle(card).borderRadius;
+          setSharedImage((current) => (current ? { ...current, toRect: rect } : current));
+          return;
+        }
+        lastRect = rect;
+      } else {
+        lastRect = null;
+      }
+      if (attempts >= 150) {
+        setSharedImage(null);
+        return;
+      }
+      frame = window.requestAnimationFrame(updateDeckTarget);
+    };
+
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(updateDeckTarget);
+    });
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [route.page, sharedImage?.workId]);
+
   const restoreScroll = (key, fallback) => {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
@@ -1035,6 +1097,26 @@ function App() {
     setNavMotion(route.page === 'home' ? '' : 'works-to-home');
     setSharedPill(null);
     setWorksActiveLocked(false);
+    // 2026-10-07 移动端回程:离开二级页前把**当前主卡**的几何与封面量好,
+    // 交给 SharedImageTransition 做「缩回首页卡组同一张卡」的无缝转场
+    // (与去程互逆:去程 = 首页卡 → 二级主卡;回程 = 二级主卡 → 首页那张卡)。
+    // 终点由 data-deck-work 的追踪 effect 补;量不到就老实不做覆盖层。
+    if (isMobileDevice() && route.page === 'works') {
+      const selector = '.mw-slide.is-current .mw-card-img';
+      const cardImg = document.querySelector(selector);
+      const cardBox = cardImg ? cardImg.closest('.mw-card') : null;
+      const rect = cardImg && cardBox ? readNavRect(selector) : null;
+      const src = cardImg ? cardImg.currentSrc || cardImg.getAttribute('src') : '';
+      if (rect && rect.width > 0 && rect.height > 0 && src) {
+        setSharedImage({
+          src,
+          fromRect: rect,
+          fromRadius: getComputedStyle(cardBox).borderRadius,
+          toRect: null,
+          workId: cardImg.getAttribute('data-work-image') || ''
+        });
+      }
+    }
     window.location.hash = '';
     setRoute({ page: 'home', category: route.category, workId: '' });
     // The home layer stayed mounted, so its screen index is still the one the
@@ -1251,6 +1333,7 @@ function App() {
                     ? (dir) => goDetailByIndex(activeIndex + dir)
                     : null
                 }
+                onBack={!exitDetail && isMobileDevice() ? goDetailBack : null}
               />
             ) : null}
           </>
@@ -2180,7 +2263,7 @@ function ShowcaseDeck({ items, openWorks }) {
    - Tapping a side card switches to it; tapping the front card opens works.
    - Auto-plays every 2.4s; pauses while dragging.
    The PC ShowcaseDeck (hover fan) is untouched. */
-function MobileShowcaseDeck({ items, openWorks }) {
+function MobileShowcaseDeck({ items, openWorks, active = true }) {
   const deckRef = useRef(null);
   const cardRefs = useRef([]);
   const dimRefs = useRef([]);
@@ -2190,6 +2273,11 @@ function MobileShowcaseDeck({ items, openWorks }) {
   const stripRef = useRef(null);
   const ctxRef = useRef({ items, openWorks });
   ctxRef.current = { items, openWorks };
+  // 自动轮播只在首页可见时推进:此前它在隐藏层里照样每 3.4s 翻一张,
+  // 用户从二级页返回时看到的已经不是离开时那张卡 —— 回程的「卡片缩回首页
+  // 卡组」覆盖层会因为落点卡被换掉而错位(业主 2026-10-07 反馈的跳帧)。
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   const RANGE = 150, COMMIT = 62, FLICK = 0.45;
   const CL = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -2255,7 +2343,13 @@ function MobileShowcaseDeck({ items, openWorks }) {
     cardRefs.current.forEach((el, i) => {
       if (!el) return;
       const r = rel(i, s.active);
-      const isMain = s.isDrag && Math.abs(r) < 0.5;
+      // ⚠ 抬手「抬卡」(scale .985)必须等真的拖动了(s.moved)才生效:
+      //   只按不拖时若立刻缩到 .985,卡片会在按下那一帧**瞬缩 1.5%**
+      //   (render 把 transition 设成 none,是硬跳)。首页点卡放大接入二级页
+      //   的覆盖层起点就是按这个矩形量的 —— 于是「无缝放大」的第一帧先要
+      //   补一个缩小,业主看到的就是一次跳帧。改为意图驱动后,点按(不拖)
+      //   全程停在静止态,覆盖层 rect 与用户看到的那一帧完全一致。
+      const isMain = s.isDrag && s.moved && Math.abs(r) < 0.5;
       let transform, z, dim, op, front = false;
       if (isMain) {
         transform =
@@ -2428,7 +2522,8 @@ function MobileShowcaseDeck({ items, openWorks }) {
       carouselTimerRef.current = window.setTimeout(tickCarousel, CAROUSEL_INTERVAL);
     }
     function tickCarousel() {
-      if (!stateRef.current.isDrag) goToRef.current(stateRef.current.active + 1);
+      // 首页不可见(在二级/三级页)时不推进:见 activeRef 注释。
+      if (activeRef.current && !stateRef.current.isDrag) goToRef.current(stateRef.current.active + 1);
       scheduleCarousel();
     }
     scheduleCarouselRef.current = scheduleCarousel;
@@ -2452,6 +2547,17 @@ function MobileShowcaseDeck({ items, openWorks }) {
       }
     };
   }, []);
+
+  /* 首页可见性变化:回到首页时**重置冷却**。
+     只有一个 tickCarousel 的 if 守卫不够 —— 计时器在离开首页期间照样到点,
+     只是那次被跳过了,下一次到点(≤3.4s 后)完全可能正好落在「刚回到首页」
+     的那一帧:卡组当场翻一张,回程的落点卡被挪走(探针实测交接帧的
+     .mob-card.front 是旋转 8° 的侧位卡,偏差 -75.6px)。这里在 active 翻真
+     的同一提交里重排冷却,回程后 3.4s 内卡组不会自己动。 */
+  useLayoutEffect(() => {
+    if (active && scheduleCarouselRef.current) scheduleCarouselRef.current();
+    return undefined;
+  }, [active]);
 
   /* Thumbnail strip: horizontal drag-to-scroll for mouse/pen pointers (real
      touch devices pan natively via touch-action:pan-x, and the home pager's
@@ -2517,6 +2623,7 @@ function MobileShowcaseDeck({ items, openWorks }) {
               className="mob-card"
               key={project.id}
               data-idx={i}
+              data-deck-work={project.id}
               ref={(el) => { cardRefs.current[i] = el; }}
             >
               <LazyImage className="mob-card-img" src={cover} alt="" />
@@ -3641,9 +3748,10 @@ function HeroSection({ active = true, onVideoReady }) {
   const fallbackAlphaCanvasRef = useRef(null);
   const wrapRef = useRef(null);
   // 移动端副标 "Four Design"：由 hero 的入场 rAF 循环统一驱动，复用同一个揭幕计时起点。
-  // 整行一起入场(时间以 SVG 的 R 字母完成为准)；bylineRef 用于量测 R 右缘以定位其左缘。
+  // bylineRef 量测 R 右缘以定位其左缘；bylineCharRefs 为逐字节点(从左到右有序入场)。
   const bylineRef = useRef(null);
   const bylineAlignRef = useRef(false);
+  const bylineCharRefs = useRef([]);
   const jsmpegCanvasRef = useRef(null);
   const jsmpegPlayerRef = useRef(null);
   const wcCanvasRef = useRef(null);
@@ -4597,21 +4705,34 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       if (byline) {
         if (!bylineAlignRef.current && start !== null) {
           const layer = wrapRef.current;
-          const svg = svgNode;
-          if (layer && svg) {
+          // R = PORTFOLIO 第 3 个字母(paths[2])。直接量它的右缘，而不是硬编码 viewBox 占比，
+          // 这样字形/字距变化也对得上，F 永远紧接 R 结束处。
+          const rNode = paths[2];
+          if (layer && rNode) {
             try {
               const lr = layer.getBoundingClientRect();
-              const sr = svg.getBoundingClientRect();
-              const targetLeft = sr.left + sr.width * BYLINE_RIGHT_X;
-              byline.style.left = `${(targetLeft - lr.left).toFixed(2)}px`;
-              bylineAlignRef.current = true;
+              const rr = rNode.getBoundingClientRect();
+              if (lr.width > 0 && rr.width > 0) {
+                byline.style.left = `${(rr.right - lr.left).toFixed(2)}px`;
+                bylineAlignRef.current = true;
+              }
             } catch (_) { /* 布局还没就绪，下一帧再试 */ }
           }
         }
-        const bylineIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS) / BYLINE_INTRO_DURATION_MS);
-        byline.style.opacity = String(bylineIntro);
-        byline.style.filter = `blur(${((1 - bylineIntro) * 10).toFixed(3)}px)`;
-        byline.style.transform = `translate3d(0, ${((1 - bylineIntro) * 10).toFixed(2)}px, 0)`;
+        // 整行容器只负责定位/对齐，本身不参与淡入(避免与逐字叠加)。
+        byline.style.opacity = '1';
+        byline.style.filter = 'none';
+        // 逐字从左到右入场：与 PORTFOLIO 同节奏(120ms 间隔 / 1800ms 淡入)，从 R 完成时开始，
+        // 与上方尚未走完的字母并行 → 读作同一个盒子继续往右入场。
+        const chars = bylineCharRefs.current;
+        for (let i = 0; i < chars.length; i++) {
+          const node = chars[i];
+          if (!node) continue;
+          const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS - i * BYLINE_CHAR_STAGGER_MS) / BYLINE_CHAR_DURATION_MS);
+          node.style.opacity = String(charIntro);
+          node.style.filter = `blur(${((1 - charIntro) * 10).toFixed(3)}px)`;
+          node.style.transform = `translate3d(0, ${((1 - charIntro) * 10).toFixed(2)}px, 0)`;
+        }
       }
       frame = window.requestAnimationFrame(render);
     };
@@ -4671,7 +4792,16 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
                 ref={wrapRef}
                 dangerouslySetInnerHTML={{ __html: heroTitleMarkup }}
               />
-              <span className="hero-title-byline" ref={bylineRef}>{BYLINE_TEXT}</span>
+              <span className="hero-title-byline" ref={bylineRef} aria-label={BYLINE_TEXT}>
+                {BYLINE_TEXT.split('').map((ch, i) => (
+                  <span
+                    key={i}
+                    ref={(el) => { bylineCharRefs.current[i] = el; }}
+                    className="hero-title-byline-char"
+                    aria-hidden="true"
+                  >{ch === ' ' ? '\u00A0' : ch}</span>
+                ))}
+              </span>
             </div>
           </>
         ) : (
@@ -5274,7 +5404,7 @@ function HomePage({ openWorks, paging, active = true }) {
         </div>
         <div className="project-list">
           {isMobile ? (
-            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} />
+            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} />
           ) : (
             <ShowcaseDeck items={worksItems} openWorks={openWorks} />
           )}
@@ -5473,8 +5603,14 @@ function WorksPage({ activeCategory, goDetail, workId = '', arriving = false, re
   // ⚠ 首帧吸附可能跑在样式/字体就绪之前(--mw-card-* 还没生效,量出 auto 宽),
   //   之后没人再写 transform 就一直停在错位上(探针实测卡片偏出右缘 73px)。
   //   落定后按 80/300/700ms 各重吸一次 + 字体就绪 + resize,无过渡直接归位。
+  // ⚠⚠ 覆盖层飞行期间(arriving=true)绝不能重吸:轨道一旦挪位,二级主卡的真实
+  //   坐标就变了,而 SharedImageTransition 的终点是在量到目标的那一刻落定的 ——
+  //   轨道在飞行中途瞬移,覆盖层要么落后一截、要么被改成新目标重新起跑,交接
+  //   瞬间就会出现「卡片位置对不上 / 像换了一张卡」(业主 2026-10-07 反馈)。
+  //   首帧吸附本身已经写对(生产环境 CSS 先于 JS 就绪),重吸只是保险,挪到
+  //   arriving 结束(arriving 在依赖里,翻 false 会重跑一次)再做完全等价。
   useEffect(() => {
-    if (!isMobile) return undefined;
+    if (!isMobile || arriving) return undefined;
     const reapply = () => mwApply(0, 0, false);
     const timers = [80, 300, 700].map((t) => window.setTimeout(reapply, t));
     if (document.fonts?.ready) document.fonts.ready.then(reapply).catch(() => {});
@@ -5856,9 +5992,10 @@ function DetailScroll({ workId, fallbackImages }) {
   );
 }
 
-function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, flip = '', onSwipeProject = null }) {
+function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, flip = '', onSwipeProject = null, onBack = null }) {
   const pageRef = useRef(null);
   const swipeRef = useRef({ down: false, startX: 0, dx: 0, lastDX: 0, vel: 0, moved: false });
+  const backRef = useRef({ active: false, startY: 0, pulled: 0 });
 
   // 内滚归位:每次切换作品(Last/Next、分类下拉、二级页进入)都回到顶部。
   // ⚠ 返回翻页期间组件**不重挂**、work.id 不变,这个 effect 不会跑 ——
@@ -5867,6 +6004,72 @@ function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, f
     const el = pageRef.current;
     if (el) el.scrollTop = 0;
   }, [work?.id]);
+
+  /* 顶部返回(2026-10-07 业主诉求):详情页停在 0%(顶部)时,
+     ① 鼠标滚轮向上 ② 触摸「下拉」—— 都触发返回二级页面的翻页。
+     ⚠ 为什么是「下拉」而不是「上滑」:详情页是内滚容器,手指上滑在顶部
+       就是**正常的阅读滚动**(内容往下走),拦下它详情页就滚不动了。顶部
+       唯一空着的手势是向下拉(滚动已被 contain 挡住,今天什么都不发生),
+       而它与「滚轮向上」是同一个语义方向(回到上一屏 / 往上一页)。
+     下拉只有越过 64px 才提交,普通滚动完全不受影响;提交时先清掉内联
+     transform 再交给翻页动画(mwFlipBackOut 从 translateY(0) 起跑)。 */
+  useEffect(() => {
+    if (!onBack) return undefined;
+    const el = pageRef.current;
+    if (!el) return undefined;
+
+    const onWheel = (event) => {
+      if (el.scrollTop > 0 || event.deltaY >= 0) return;
+      // 已经在顶部还继续向上滚 → 不是滚动,是明确的“往回一屏”
+      event.preventDefault();
+      onBack();
+    };
+    const onTouchStart = (event) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      backRef.current = { active: el.scrollTop <= 0, startY: touch.clientY, pulled: 0 };
+    };
+    const onTouchMove = (event) => {
+      const state = backRef.current;
+      if (!state.active) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      const dy = touch.clientY - state.startY;
+      if (dy < 0) {
+        // 手指向上 = 正常滚动,退出本手势,不做任何拦截
+        if (dy < -6) state.active = false;
+        return;
+      }
+      if (el.scrollTop > 0) { state.active = false; return; }
+      state.pulled = dy;
+      // 顶部下拉:跟手位移(最多 54px),越过一半就开始压住原生回弹
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${Math.min(dy * 0.45, 54)}px)`;
+      if (dy > 4 && event.cancelable) event.preventDefault();
+    };
+    const finishBack = () => {
+      const state = backRef.current;
+      if (!state.active) return;
+      state.active = false;
+      const commit = state.pulled > 64;
+      el.style.transition = '';
+      el.style.transform = '';
+      if (commit) onBack();
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', finishBack);
+    el.addEventListener('touchcancel', finishBack);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', finishBack);
+      el.removeEventListener('touchcancel', finishBack);
+    };
+  }, [onBack]);
 
   /* 横滑切换项目(移动端,对应设计稿图二的左右滑)。
      层是 touch-action: pan-y 的内滚容器:竖向滚动交给浏览器原生处理,
