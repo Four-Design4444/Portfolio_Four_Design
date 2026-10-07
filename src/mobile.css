@@ -2458,6 +2458,14 @@ html[data-device="mobile"] .mob-profile-skill-card {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  /* 2026-10-07: 蒙版窗口单独提速(业主:「展开或收起时蒙版速度加快一点」)
+     height 620ms → 420ms;下落入场/淡入/芯片形变仍走 --mob-dock-dur,
+     收起走同一条 height 过渡,两个方向一起加快。 */
+  transition:
+    height 420ms var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
+    opacity 420ms cubic-bezier(0.34, 1.2, 0.44, 1),
+    transform var(--mob-dock-dur) var(--mob-dock-ease);
   transform: translateY(-14px) scaleY(0.92);
   transform-origin: bottom center;
 }

@@ -97,13 +97,14 @@ const GROUP10_WELCOME_SUBPATH_CENTERS = [
   { x: 0.776, y: 0.894 }
 ];
 
-// 移动端副标 "Four Design" 的入场时机：等 hero 中心 SVG 的入场接近完成时再开始，且与
-// SVG 一样逐字从左到右有序入场（不是整行同时出现）。
-// SVG 各 path 入场 = introDelay + 1800ms，welcome 最晚 1080 + 6*55 = 1410 → 约 3210ms 收尾。
-// 在 ~2460ms（约 76% 处）起首字，字符间隔 60ms 依次跟上，正好落在 SVG 收尾段。
-const BYLINE_INTRO_START_MS = 2460;
-const BYLINE_CHAR_STAGGER_MS = 60;
-const BYLINE_CHAR_DURATION_MS = 900;
+// 移动端副标 "Four Design" 的入场时机与位置，都以 hero 中心 SVG 的 R 字母为准：
+// PROJECT 字标 = P(0) O(1) R(2) T(3) F(4) O(5) L(6) I(7) O(8)，每个 path 入场 =
+// index*120 + 1800ms；R 是第 3 个字母(index 2) → 2*120 + 1800 = 2040ms 完成。
+// ① 时机：R 入场完成的同一刻(2040ms)开始 "Four Design" 入场 → 上下看起来在同一位置同步出场。
+// ② 位置：把 "Four Design" 左缘对齐到 R 的右缘(x ≈ 0.368 of SVG 宽度)，使首字母 F 正好
+//    接在 R 结束的地方，形成纵向连续的视觉关系。
+const BYLINE_INTRO_START_MS = 2040;
+const BYLINE_RIGHT_X = 0.368; // R 右缘在 SVG viewBox 宽度里的占比
 const BYLINE_TEXT = 'Four Design';
 import figmaIcon from './assets/profile/figma.webp';
 import comfyuiIcon from './assets/profile/comfyui.webp';
@@ -2719,6 +2720,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
   useEffect(() => {
     let ro = null;
     let roTimer = 0; /* RO 回调防抖句柄(此前未声明,RO 一触发就抛 ReferenceError) */
+    let settleTimer = 0; /* 复位形变未落定时的重试句柄 */
     const measure = () => {
       const nodes = [...document.querySelectorAll(selector)];
       if (nodes.length !== count) return;
@@ -2726,6 +2728,24 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
       /* 正在 dock 形变中就别量：此刻的宽度是动画中间值，写回 CSS 会自激。 */
       const row = nodes[0].parentElement;
       if (row && row.classList.contains('is-docked')) return;
+      /* ⚠ 2026-10-07 修 BUG(业主截图:芯片只剩「图标+首字母」,Comfyui 反而完整):
+         is-docked 摘掉后的**复位形变**(width 36px→自然宽, 620ms)不设防 ——
+         手机地址栏伸缩触发 resize / fonts.ready / 挂载 400ms 定时器若恰好落进
+         这个窗口,量到的全是中间值。之前选中的那枚采样时还宽(名字完整),
+         其余采样在 ~40px(名字被裁得只剩首字母),写回 --mob-w 后芯片就停在
+         错误宽度,直到下次重测。修法:渲染宽 ≠ 目标 --mob-w 即形变未落定,
+         改为 150ms 后重试,绝不把中间值写回。
+         ⚠ 只对技能卡(无自定义 measureWidth)生效:经验卡的 measureStatDockWidth
+         按字号量文字自然宽,与形变无关,且其目标宽度本来就不等于静止渲染宽。 */
+      const unsettled = !measureWidth && nodes.some((n) => {
+        const target = parseFloat(n.style.getPropertyValue('--mob-w'));
+        return target > 0 && Math.abs(n.getBoundingClientRect().width - target) > 0.5;
+      });
+      if (unsettled) {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(measure, 150);
+        return;
+      }
       const next = nodes.map((n) => {
         const prev = parseFloat(n.style.getPropertyValue('--mob-w'));
         const cur = measureWidth ? measureWidth(n) : n.getBoundingClientRect().width;
@@ -2758,7 +2778,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
        全为 0(芯片变细条)。RO 方案在预览面板冻结渲染下不可靠,但真实设备上
        RO 会正常触发;不叠加 hashchange 定时重测(路由过渡的瞬态布局
        会量出垃圾值)。 */
-    return () => { window.removeEventListener('resize', measure); clearTimeout(t); clearTimeout(roTimer); if (ro) ro.disconnect(); };
+    return () => { window.removeEventListener('resize', measure); clearTimeout(t); clearTimeout(roTimer); clearTimeout(settleTimer); if (ro) ro.disconnect(); };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [selector, count, ...(deps || [])]);
 
@@ -3562,10 +3582,22 @@ function HeroSection({ active = true, onVideoReady }) {
   // out at the same moment regardless of which decoder won.
   const [canvasPainted, setCanvasPainted] = useState(false);
   const heroTitleMarkup = useMemo(() => {
-    let welcomePart = 0;
+    // welcome 这七个白色 path 在源 SVG 里是「从右到左」排列的(最右侧的 w 在前)。
+    // 入场顺序由 data-welcome-part 决定(值越小越先)，所以这里按 bbox 的 x 从左到右
+    // 重新编号，让最左的字母最先入场 → 修正原来「从右到左」的逆序。
+    const welcomeMatches = [...group10Markup.matchAll(/<path\b(?=[^>]*\bfill="white")([^>]*?)\s*\/>/g)];
+    const xOf = (attributes) => {
+      const nums = attributes.match(/-?\d+\.?\d*/g) || [];
+      return nums.length ? Math.min(...nums.map(Number)) : 0;
+    };
+    const order = new Map();
+    welcomeMatches
+      .map((m) => ({ m, x: xOf(m[1]) }))
+      .sort((a, b) => a.x - b.x)
+      .forEach((entry, rank) => order.set(entry.m[1], rank));
     const splitWelcome = group10Markup.replace(
       /<path\b(?=[^>]*\bfill="white")([^>]*?)\s*\/>/g,
-      (_match, attributes) => `<path${attributes} data-welcome-part="${welcomePart++}"/>`
+      (_match, attributes) => `<path${attributes} data-welcome-part="${order.get(attributes)}"/>`
     );
     return splitWelcome
       .replace('<svg ', '<svg class="hero-title-svg" ')
@@ -4462,6 +4494,9 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     let start = window.__appRevealed ? performance.now() : null;
     const onReveal = () => { if (start === null) start = performance.now(); };
     window.addEventListener('app:ready', onReveal);
+    // welcome 字母的入场次序按 bbox 的 x 从左到右动态计算(不依赖 data-welcome-part 的值)，
+    // 保证无论标记顺序如何，都始终「最左先入场」。refreshPaths 每次算出并缓存。
+    let welcomeOrder = [];
     const smooth = (value) => {
       const t = Math.min(Math.max(value, 0), 1);
       return t * t * t * (t * (t * 6 - 15) + 10);
@@ -4488,6 +4523,14 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           return GROUP10_PATH_CENTERS[index] || GROUP10_WELCOME_SUBPATH_CENTERS[index - GROUP10_PATH_CENTERS.length] || { x: 0.5, y: 0.5 };
         }
       });
+      // 按 bbox.x 从左到右排序 welcome 节点，作为其入场次序(最左最先)。
+      welcomeOrder = paths
+        .filter((node) => node.dataset.welcomePart !== undefined)
+        .map((node) => {
+          try { return { node, x: node.getBBox().x }; } catch { return { node, x: 0 }; }
+        })
+        .sort((a, b) => a.x - b.x)
+        .map((entry) => entry.node);
     };
     const render = (now) => {
       refreshPaths();
@@ -4498,8 +4541,9 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       paths.forEach((node, index) => {
         const center = centers[index] || { x: 0.5, y: 0.5 };
         const isWelcome = node.dataset.welcomePart !== undefined;
-        const welcomeIndex = Number(node.dataset.welcomePart || 0);
-        const introDelay = isWelcome ? 1080 + welcomeIndex * 55 : index * 120;
+        // 从左到右的序号(0 = 最左)，替代原来按源 SVG 逆序的 data-welcome-part。
+        const wIdx = isWelcome ? Math.max(0, welcomeOrder.indexOf(node)) : 0;
+        const introDelay = isWelcome ? 1080 + wIdx * 55 : index * 120;
         const intro = start === null ? 0 : smooth((now - start - introDelay) / 1800);
         const dx = p.x - center.x;
         const dy = p.y - center.y;
