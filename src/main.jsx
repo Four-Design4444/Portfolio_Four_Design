@@ -444,8 +444,8 @@ const projectShowcases = [
     category: 'aigc',
     work: 0,
     index: '09',
-    title: 'AI Workflow',
-    meta: 'ComfyUI 生成工作流',
+    title: 'AIGC工作流',
+    meta: 'ComfyUI商业应用',
     description: '把 AI 能力固化为可复用的视觉生产管线，让创意探索从随机走向可控。',
     deck: { left: DECK_START_X + DECK_STEP_X * 8, rot: 1.4, restY: -1, z: 9 }
   },
@@ -454,8 +454,8 @@ const projectShowcases = [
     category: 'aigc',
     work: 1,
     index: '10',
-    title: 'Model Consistency',
-    meta: 'AIGC 模特一致性',
+    title: 'AI Model',
+    meta: 'AI模特一致性',
     description: '用同一套条件控制锁住人物特征，让批量生成在不同场景下仍是同一个人。',
     deck: { left: DECK_START_X + DECK_STEP_X * 9, rot: 0.3, restY: 4, z: 10 }
   },
@@ -464,8 +464,8 @@ const projectShowcases = [
     category: 'aigc',
     work: 2,
     index: '11',
-    title: 'AIGC Character',
-    meta: 'QQ 形象视觉设计',
+    title: 'AI吉祥物',
+    meta: '吉祥物IP',
     description: '为品牌角色建立可延展的表情与姿态库，让 IP 在各类物料中保持同一性格。',
     deck: { left: DECK_START_X + DECK_STEP_X * 10, rot: 1.8, restY: 2, z: 11 }
   }
@@ -702,42 +702,8 @@ function parseRoute() {
   return { page: 'home', category: 'ui', workId: '' };
 }
 
-// 2026-10-08: 进入三级页前预判目标作品首屏亮度。若顶部约 35% 区域平均亮度
-// 超过阈值,提前给 body 挂上 .nav-on-light,让入场导航玻璃直接以暗态起跑,
-// 避免"先亮后暗"的跳帧。只取已缓存完成的图片同步采样,不阻塞转场;
-// 未缓存时回退 false,由 useDetailNavOnLight 入场后再校正。
-function predictDetailOnLight(work) {
-  if (!work) return false;
-  const LUMA_ON = 0.58;
-  const canvas = document.createElement('canvas');
-  canvas.width = 24;
-  canvas.height = 1;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  const luma = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  for (const src of [work.detailHero, work.image]) {
-    if (!src) continue;
-    const img = new Image();
-    img.src = src;
-    if (img.complete && img.naturalWidth) {
-      const nw = img.naturalWidth;
-      const nh = img.naturalHeight;
-      const stripH = Math.max(1, Math.floor(nh * 0.35));
-      ctx.clearRect(0, 0, 24, 1);
-      ctx.drawImage(img, 0, 0, nw, stripH, 0, 0, 24, 1);
-      try {
-        const d = ctx.getImageData(0, 0, 24, 1).data;
-        let sum = 0;
-        for (let i = 0; i < d.length; i += 4) {
-          sum += luma(d[i], d[i + 1], d[i + 2]);
-        }
-        return (sum / (d.length / 4)) > LUMA_ON;
-      } catch {
-        return false;
-      }
-    }
-  }
-  return false;
-}
+// 2026-10-08: 三级页头图已删,顶部恒为纯黑 ⇒ 导航玻璃不再需要按 hero 亮度预判
+// (predictDetailOnLight 已随之移除);滚动中的实时自适应仍由 useDetailNavOnLight 负责。
 
 // 2026-10-05: 三级导航实时自适应亮背景。详情页滚动时导航条底下掠过的内容亮度
 // 会变化(顶部 hero 暗、下滑大图可能很亮)。用 elementsFromPoint 探测导航带正下方
@@ -1236,82 +1202,9 @@ function App() {
     };
   }, [route.page, activeCategory.id, activeCategory.title]);
 
-  useLayoutEffect(() => {
-    if (route.page !== 'detail' || !sharedImageRef.current) return undefined;
-
-    // The morph target is the detail hero, whose box only becomes meaningful
-    // once its bitmap is in: with `height: auto` an unloaded hero collapses to
-    // a 0px inline or a ~22px alt-text line, and aiming the morph at such a
-    // rect squashed the whole cover onto the top edge (seen on mobile). So:
-    // wait for the real bitmap before aiming, keep re-aiming while the morph
-    // runs (late loads / toolbar resizes then glide instead of snapping), and
-    // never leave the overlay stuck if the bitmap never shows up.
-    let frame = 0;
-    let disposed = false;
-    let attempts = 0;
-    let hasTarget = false;
-    let trackedFrames = 0;
-    const selector = '[data-detail-hero-image="true"]';
-
-    const apply = (rect) => {
-      setSharedImage((current) => {
-        if (!current) return current;
-        const prev = current.toRect;
-        if (
-          prev &&
-          Math.abs(prev.x - rect.x) < 0.5 &&
-          Math.abs(prev.y - rect.y) < 0.5 &&
-          Math.abs(prev.width - rect.width) < 0.5 &&
-          Math.abs(prev.height - rect.height) < 0.5
-        ) return current;
-        return { ...current, toRect: rect };
-      });
-      hasTarget = true;
-    };
-
-    const updateImageTarget = () => {
-      if (disposed || !sharedImageRef.current) return;
-      attempts += 1;
-
-      const hero = document.querySelector(selector);
-      const rect = hero ? readNavRect(selector) : null;
-      const ready = Boolean(hero && hero.complete && hero.naturalWidth > 0);
-
-      if (rect && rect.width > 0 && rect.height > 0 && ready) {
-        // The hero figure is a full-bleed image with square corners, so the
-        // overlay has to unwind to exactly that before handing the frame over.
-        rect.radius = hero ? getComputedStyle(hero).borderRadius : '0px';
-        apply(rect);
-        trackedFrames += 1;
-      } else if (!hasTarget && attempts >= 260) {
-        // Bitmap never arrived (~4s). Derive the hero box from the overlay
-        // image's own ratio, or drop the overlay rather than freezing it.
-        const layerImg = document.querySelector('.shared-image-transition img');
-        if (layerImg && layerImg.naturalWidth > 0 && layerImg.naturalHeight > 0) {
-          const width = window.innerWidth || 390;
-          apply({ x: 0, y: 0, width, height: width * (layerImg.naturalHeight / layerImg.naturalWidth), radius: '0px' });
-        } else {
-          setSharedImage(null);
-          return;
-        }
-      }
-
-      // While the morph runs, keep following the hero for about its duration
-      // so a late layout change retargets the running transition smoothly.
-      if (!hasTarget || trackedFrames < 90) {
-        frame = window.requestAnimationFrame(updateImageTarget);
-      }
-    };
-
-    frame = window.requestAnimationFrame(() => {
-      frame = window.requestAnimationFrame(updateImageTarget);
-    });
-
-    return () => {
-      disposed = true;
-      window.cancelAnimationFrame(frame);
-    };
-  }, [route.page, sharedImage?.workId]);
+  /* 2026-10-08: 三级页头图已删,hero morph 目标([data-detail-hero-image])不存在,
+     原「detail hero 落点追踪」useLayoutEffect 整体移除;sharedImage 现在只服务
+     PC 一级→二级的卡片放大 morph(目标 [data-work-image],见下方 effect)。 */
 
   /* 2026-10-06 移动端:首页卡片 → 二级页的放大落点追踪。
      与上面 detail 的追踪同构,目标是二级页当前主卡里的封面 img
@@ -1587,24 +1480,15 @@ function App() {
     }
   };
 
-  const goDetail = (category, workId, transitionImage) => {
-    const targetWork = worksByCategory[category]?.find((item) => item.id === workId);
-    document.body.classList.toggle('nav-on-light', predictDetailOnLight(targetWork));
+  const goDetail = (category, workId) => {
+    // 2026-10-08: 三级页头图已删,顶部恒为纯黑 ⇒ 导航玻璃固定深色起步;
+    // hero morph 没有落点,二级进三级不再建飞行层(移动端本就是整页翻屏)。
+    document.body.classList.remove('nav-on-light');
     const fromRect = readNavRect(`[data-category-pill="${category}"]`);
     if (fromRect) {
       setSharedPill({ rect: fromRect, title: categories.find((item) => item.id === category)?.title ?? activeCategory.title, mode: 'works' });
     }
-    if (transitionImage?.rect && transitionImage?.src && !isMobileDevice()) {
-      setSharedImage({
-        src: transitionImage.src,
-        fromRect: transitionImage.rect,
-        fromRadius: transitionImage.radius ?? '12px',
-        toRect: null,
-        workId
-      });
-    } else {
-      setSharedImage(null);
-    }
+    setSharedImage(null);
     setWorksActiveLocked(false);
     setNavMotion('to-detail');
     // 2026-10-06 移动端:进入详情改为「下滑翻页」——详情层从顶部滑入盖住二级页,
@@ -1628,7 +1512,8 @@ function App() {
   const goDetailByIndex = (nextIndex) => {
     const target = works[nextIndex];
     if (!target) return;
-    document.body.classList.toggle('nav-on-light', predictDetailOnLight(target));
+    // 头图已删,三级页顶部恒为纯黑,导航玻璃固定深色(见 goDetail 注释)。
+    document.body.classList.remove('nav-on-light');
     window.location.hash = `/detail?category=${activeCategory.id}&work=${target.id}`;
     setRoute({ page: 'detail', category: activeCategory.id, workId: target.id });
     window.scrollTo(0, 0);
@@ -1637,7 +1522,8 @@ function App() {
   const goDetailCategory = (category) => {
     const target = worksByCategory[category]?.[0];
     if (!target) return;
-    document.body.classList.toggle('nav-on-light', predictDetailOnLight(target));
+    // 头图已删,三级页顶部恒为纯黑,导航玻璃固定深色(见 goDetail 注释)。
+    document.body.classList.remove('nav-on-light');
 
     // Keep the current detail pill mounted at its old rect while the new
     // category target is rendered. The tracking effect then updates the rect
@@ -2686,11 +2572,11 @@ function ShowcaseDeck({ items, openWorks }) {
   // cards to its left travel further left, the ones to its right travel further
   // right. That is what makes the row open up, and it is why moving from
   // card 1 to card 2 makes card 1 drop back and slide left again.
-  // 2026-10-08:11 张卡比原先 7 张窄(卡宽 16.72% → 12.2%),推挤与抬起量同比例
-  // 收小,否则邻卡的相对位移会大到把整排扯散。
-  const PUSH = 16;      // px a neighbour shifts away from the hovered card
+  // 2026-10-08:11 张卡比原先 7 张紧(步长 7.0%)，推挤量收小到 22px，避免邻卡
+  // 被推到整排之外；抬起量按卡放大的比例回补到 -44px。
+  const PUSH = 22;      // px a neighbour shifts away from the hovered card
   const PUSH_CAP = 3;   // neighbours further than this many steps move no more
-  const LIFT = -38;     // px the hovered card rises off the floor
+  const LIFT = -44;     // px the hovered card rises off the floor
 
   return (
     <div
@@ -6095,19 +5981,9 @@ function WorksPage({
 
   const openDetail = (work) => {
     if (!work) return;
-    // 2026-10-06 移动端:进详情改为「下滑翻页」,不再做卡片→hero 的图片 morph
-    // (整页翻页动效取代之);PC 端保留原 morph。
-    if (isMobile) {
-      goDetail(work.category ?? activeCategory.id, work.id, null);
-      return;
-    }
-    const image = document.querySelector(`[data-work-image="${work.id}"]`);
-    const rect = image ? readNavRect(`[data-work-image="${work.id}"]`) : null;
-    goDetail(activeCategory.id, work.id, {
-      rect,
-      radius: image ? readClippedRadius(image) : null,
-      src: work.detailHero ?? work.image
-    });
+    // 2026-10-08: 三级页头图已删,hero morph 没有落点 ⇒ PC 与移动端统一直切
+    // (移动端整页翻屏、PC 导航胶囊 morph 照旧),不再查询源卡矩形建飞行层。
+    goDetail(work.category ?? activeCategory.id, work.id);
   };
   const openDetailRef = useRef(openDetail);
   openDetailRef.current = openDetail;
