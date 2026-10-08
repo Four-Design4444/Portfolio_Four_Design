@@ -26,20 +26,21 @@ const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 //     at.emissiveIntensity = n*1.865          // 车灯/腰线光带
 // n=0 在 e=0、4.8…；n=1（最亮）在 e=2.4、7.2…。而 demo 每帧最多推进 dt=0.05s
 // （Math.min((e-rf)/1e3||.016,.05)），所以：
-//     · 烧录档每帧恒定推进 0.05s 场景时间（HOST_JS 的 BURN_STEP_MS）；
+//     · 烧录档的渲染间隔就是 BURN_FRAME_MS(40ms)，回调报真实时钟，于是 dt≈0.04s；
 //     · 配合「armed 之前把场景钟冻住」（见渲染档位 effect），烧录的第 0 帧 nf≈0；
-//     · 于是 48 帧正好推到波峰 2.4s。取 52 帧留 4 帧余量：掉帧只会让 nf 偏小，
-//       而 2.4~2.6s 区间内 n 都在 0.96 以上，肉眼都是"全亮"。
-const BURN_FRAMES = 52;
+//     · 于是 60 帧 ≈ 2.4s，正好推到波峰（52 帧只在 dt 恒为 0.05 时才够，真实
+//       dt≈0.04 时只到 2.08s / n≈0.94，会在波峰前收工 —— 故上调到 60）。
+const BURN_FRAMES = 60;
 // 若能读到 demo 真正的脉冲值 n（HOST_JS 的一次性钩子，见 __streetState），就以它
 // 为准：n≥0.95 即"已经最亮"。读到读数时**不再按帧数提前收工**，而是继续烧到亮为止
 // （上限一个多周期），这样哪怕有帧被 demo 自己丢掉也不会停在半亮。
 const BURN_LIT = 0.95;
 const BURN_MAX_FRAMES = 130;
-// 烧录档的**渲染间隔**（不是场景推进速度 —— 后者恒为 50ms/帧，见 HOST_JS 的
-// BURN_STEP_MS）。帧数由 BURN_FRAMES 定死（52 帧，CPU 总量因此定死 ≈0.5s），
-// 这个值只决定这 0.5s 摊在多少墙钟时间里：40ms ⇒ 约 2s、主线程占用约 25%，
-// 与 loading 动画和平共处；调小能更快揭幕，但占用升高、动画会顿。
+// 烧录档的**渲染间隔**。回调里报的是真实时钟，所以场景推进速度 = 真实 dt
+// （≈ 这个值，且被 demo clamp 到 50ms 上限）—— 不再有独立的"场景步长"概念。
+// 帧数由 BURN_FRAMES 定死（60 帧，CPU 总量因此定死 ≈0.6s），这个值只决定这
+// 0.6s 摊在多少墙钟时间里：40ms ⇒ 约 2.4s、主线程占用约 25%，与 loading 动画
+// 和平共处；调小能更快揭幕，但占用升高、动画会顿。
 const BURN_FRAME_MS = 40;
 // 墙钟兜底：demo 彻底卡死或帧率异常时，加载页也不能被它拖到永远。
 const BURN_MAX_MS = 9000;
@@ -341,49 +342,47 @@ const HOST_JS = `
   //       · 只要渲染间隔 ≤ 50ms，渐入就按真实时间推进，**降帧不降速**，纯赚 CPU。
   //   __streetFrameMs = 0 —— 满帧。
   //
-  // 时间轴：这里不把 rAF 的原生时间戳直接转发给 demo，而是自己维护一条**单调轴**
-  // axis（只保证增量正确）。原因：受控档下回调是被 setTimeout 挪后的，原生时间戳
-  // 会错位（旧时间戳→dt 掉到 0.016 兜底值，渐入直接腰斩）。用自有轴还能把
-  // "每帧推进多少场景时间"与"每帧隔多久渲染"彻底解耦 —— 烧录档每帧推进 50ms
-  // （正好是 clamp 上限，帧数最少、CPU 最省），渲染间隔另由 __streetFrameMs 定。
+  // ⚠⚠⚠ 时间轴铁律（2026-10-09 血泪）：**喂给 demo 的时间戳必须是真实时钟
+  // （performance.now() 域），绝不能是任何自建的"人造累加轴"。**
+  // 原因：demo 的镜头转场（点物体 → 相机推到特写）是这么算进度的：
+  //     bf():  sf = !0; cf = performance.now();        // 起点取真实时钟
+  //     i(e):  n = clamp((e - cf) / (studio?2150:1400), 0, 1)   // e = rAF 回调时间戳
+  // 人造轴每帧只按固定步长递增（满帧档 +16ms、空转档每 1000ms 才 +16ms），
+  // 而尾屏是**预挂载**的：它在首屏/二级页期间已经空转了很久，人造轴会落后
+  // 真实时钟几十秒到几分钟。于是点下去那一刻 (e - cf) 恒为负 → n 恒等于 0 →
+  // 相机永远停在起点，1.4s 的推进动效**整个消失**（表现为"点了没反应/硬切"）。
+  // 降帧只能改"多久回调一次"，不能改"回调里报几点"。两者必须解耦。
   window.__streetPaused = false;
   window.__streetFrameMs = 0;
-  // 累计场景时间（秒）：与 demo 内部的 nf 同源同步（都用"时间轴增量，clamp 到
-  // 0.05s"记账），用于诊断与探针核对；烧录是否收工另有判据（见 BURN_FRAMES）。
+  // 累计场景时间（秒）：用与 demo 相同的 dt 算法（真实时钟差、clamp 到 0.05s）
+  // 记账，用于诊断与探针核对；烧录是否收工另有判据（见 BURN_FRAMES）。
   window.__streetSceneSeconds = 0;
   // 只用于诊断/探针：烧录档实际渲染了多少帧、首帧墙钟时刻。
   window.__streetBurnFrames = 0;
   window.__streetBurnFirstAt = 0;
-  var BURN_STEP_MS = 50;   // 烧录档每帧推进的场景时间（= demo 的 dt 上限）
-  var IDLE_STEP_MS = 16;   // 空转档每帧推进（与旧行为一致）
-  var axis = 0;            // 交给 demo 的时间轴；0 = 尚未与真实时钟对齐
+  var lastTickAt = 0;      // 上一帧交给 demo 的真实时刻
   var nextAt = 0;          // 烧录档的下一帧截止时刻
   var rawRaf = window.requestAnimationFrame.bind(window);
-  var burn = function (cb) {
-    if (!window.__streetBurnFrames) window.__streetBurnFirstAt = window.performance.now();
-    window.__streetBurnFrames += 1;
-    axis += BURN_STEP_MS;
-    window.__streetSceneSeconds += BURN_STEP_MS / 1000;
-    cb(axis);
+  // 统一出口：真实时钟 + 与 demo 同源的 dt 记账。isBurn 只影响烧录帧计数，
+  // 不影响时间戳语义 —— 时间戳恒为"当下"，降帧只由上面的 setTimeout 负责。
+  var emit = function (cb, isBurn) {
+    var at = window.performance.now();
+    var dt = lastTickAt ? (at - lastTickAt) / 1000 : 0.016;
+    if (!(dt > 0)) dt = 0.016;
+    if (dt > 0.05) dt = 0.05;                 // 与 demo 自己的 clamp 上限一致
+    lastTickAt = at;
+    window.__streetSceneSeconds += dt;
+    if (isBurn) {
+      if (!window.__streetBurnFrames) window.__streetBurnFirstAt = at;
+      window.__streetBurnFrames += 1;
+    }
+    cb(at);
   };
   window.requestAnimationFrame = function (cb) {
-    return rawRaf(function (t) {
-      // 首帧：把自有时间轴**对齐到 demo 已经用过的真实 rAF 时间戳**，本帧原样转发。
-      // 这一步是必须的：demo 的 dt = (e-rf)/1e3、rf 是它上一帧收到的时间戳。若这里
-      // 从 0 起算，第一帧就会递过去一个远小于 rf 的时间戳，dt 直接为负 —— nf（场景
-      // 时间）被凭空推走一大截，灯光相位随之错开（实测 1.37s），"烧到最亮"就永远
-      // 对不准了。
-      if (!axis) {
-        axis = t;
-        window.__streetSceneSeconds = 0;
-        cb(axis);
-        return;
-      }
+    return rawRaf(function () {
       if (window.__streetPaused) {
         nextAt = 0;
-        axis += IDLE_STEP_MS;
-        window.__streetSceneSeconds += IDLE_STEP_MS / 1000;
-        window.setTimeout(function () { cb(axis); }, 1000);
+        window.setTimeout(function () { emit(cb, false); }, 1000);
         return;
       }
       var frameMs = window.__streetFrameMs;
@@ -393,17 +392,15 @@ const HOST_JS = `
         // 场景时间只以 76% 的速度推进，灯光烧录被白白拖长近 1s。
         var now = window.performance.now();
         if (now < nextAt) {
-          window.setTimeout(function () { burn(cb); }, nextAt - now);
+          window.setTimeout(function () { emit(cb, true); }, nextAt - now);
           return;
         }
         nextAt = now + frameMs;
-        burn(cb);
+        emit(cb, true);
         return;
       }
       nextAt = 0;
-      axis += IDLE_STEP_MS;   // 满帧档每帧 ~16ms（轴只保证增量语义，不必等于真实时刻）
-      window.__streetSceneSeconds += IDLE_STEP_MS / 1000;
-      cb(axis);
+      emit(cb, false);
     });
   };
 

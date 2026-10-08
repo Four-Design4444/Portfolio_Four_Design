@@ -6652,13 +6652,15 @@ function WorksPage({
           aria-label="下滑查看设计详情"
           onClick={() => openDetailRef.current(workAt(posRef.current))}
         >
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {/* 2026-10-09 按业主设计稿调整：文字在上、双箭头 icon 在下（原先是
+              icon 在上），整体抬高不再贴底（bottom 28px → 60px），icon 22→16、
+              文字 10→11px，间距 3→8px —— 比例对齐设计稿（390×845 基准：
+              文案底≈760、icon 底≈784、屏底留白≈61px）。 */}
+          <span className="mw-hint-text" aria-hidden="true">下滑查看详情</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M6 6.5l6 6 6-6" />
             <path d="M6 12.5l6 6 6-6" />
           </svg>
-          {/* 2026-10-08 第十二轮：翻页提示 = icon + 文字，同一容器一起循环动效
-              （淡入 → 下移 → 淡出，与 Hero 区下拉动效同构，见 mobile.css mwHintLoop）。 */}
-          <span className="mw-hint-text" aria-hidden="true">下滑查看详情</span>
         </button>
       </section>
     );

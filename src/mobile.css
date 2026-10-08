@@ -1793,14 +1793,16 @@ html[data-device="mobile"] .works-side-rays { transition: opacity 260ms ease; }
 html[data-device="mobile"] .mw-hint {
   position: absolute;
   left: 50%;
-  bottom: calc(28px + env(safe-area-inset-bottom));
+  /* 2026-10-09 按设计稿抬高：28px 时提示块贴着屏底（业主：「不应该这么贴着下面」）。
+     设计稿（390×845 基准）文案底≈760 / icon 底≈784 / 屏底留白≈61px，取 60px。 */
+  bottom: calc(60px + env(safe-area-inset-bottom));
   width: max-content;
-  height: 36px;
+  height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 8px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1819,7 +1821,7 @@ html[data-device="mobile"] .mw-hint {
 }
 
 html[data-device="mobile"] .mw-hint-text {
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   letter-spacing: 0.18em;
   color: rgba(255, 255, 255, 0.66);
