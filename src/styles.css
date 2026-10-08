@@ -4850,8 +4850,17 @@ html[data-paging="on"] .contact-page {
   /* 2026-10-08:地面盒 = **卡片外框**盒。倒影要连卡片的 12px padding + 1px 描边
      + 15px 圆角一起反射,所以不能再按 cover 盒定位(旧值 left/right:13px 与
      top 再减 13px,对齐的是 cover 盒;卡片外框那 13px 圈被 overflow 裁掉了)。 */
-  left: 0;
-  right: 0;
+  /* ⚠⚠ 2026-10-08 二次修(业主:主卡 hover 时倒影被裁切 + 露出裁切框的底色):
+     地面盒的左右边界**不是**卡片边界,而是比卡片外扩 26px。原因有两条:
+     ① hover 时卡片 scale(1.025) → 镜像比地面盒宽 11px/侧,被 overflow:hidden
+        连同遮罩一起切掉(遮罩的水平覆盖范围恒等于地面盒,`mask-size` 改不动它,
+        实测 mask-size:130% 无效),表现为"倒影左右各被切一条 + 出硬边";
+        倾角最大时(rotateY 11° + perspective 1300)实测还多出 ~22px。
+     ② 26px 余量同时盖住 ① 的两种情形,渲染上不可见(遮罩是纵向渐变,
+        横向均匀,外扩区拿到同样的纵深 alpha)。
+     配套三处必须同值 26px:镜像/地平线/接触投影(见下),否则几何错位。 */
+  left: -26px;
+  right: -26px;
   /* 接触线 = 卡片底边。100% 是 focus 的 padding 盒(含下方 64px 留白),
      减去 64px 留白就落在卡片外框的底边。 */
   top: calc(100% - var(--focus-pb));
@@ -4866,27 +4875,29 @@ html[data-paging="on"] .contact-page {
   mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
 }
 
-/* 地平线:一条冷光亮带,读出"地面在这里"(压暗,避免蓝雾感) */
-.works-orbit-floor::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 64px;
-  background:
-    linear-gradient(180deg, rgba(196, 220, 255, 0.055), transparent 55%),
-    radial-gradient(ellipse 90% 100% at 50% 0%, rgba(150, 190, 255, 0.045), transparent 78%);
-  filter: blur(1px);
-  z-index: 3;
-}
+/* ⚠⚠ 2026-10-08 第三次修(业主:「反射层这里的底部还是能看到一个底色,没有排除干净」)
+   —— 原「地平线亮带」(`::before`)已**整体移除**。
+   它本来是一条 64px 高、卡片宽的冷光亮带,用来读出"地面在这里"。但倒影外框改
+   成完全透明(`background:none`)之后就没有东西再盖住它了,于是它在**框内 padding
+   环 + hover 下沉产生的缝隙**里裸露出来,读成反射层里的一块"底色"。
+   为什么以前看不出:① 外框还带玻璃底时它只是"玻璃底的一部分";② 静止时外框的
+   1px 上边框正好压在亮带的顶边上(top 都是接触线),硬边被描边盖住 —— 只有 hover
+   时镜像下沉 7.6px,亮带顶边才赤裸地露在缝里,顶边处亮度从 12 阶跃到 19。
+   实测(业主那张 COOMO HOME 智能中控,hover,视口 1414×900):带子在 y667..697
+   贡献 +9~+12(峰值 22,24,32,偏蓝 b−r=10);**关掉后同一批像素回到 (12,12,17)
+   = 页面底色,与整块 `.works-orbit-floor` 隐藏时的值逐像素相同 ⇒ 零残留**。
+   地面感改由镜像本体 + 外框 1px 描边 + 接触投影(`::after`)承担。
+   注:地面盒仍保持左右各外扩 26px(`left/right:-26px`),那是给 hover 镜像留的,
+   与本条无关,不要一起回退。 */
+
 
 /* 接触投影:悬浮物挡光留下的暗斑,压在倒影上方;卡片上浮时变淡扩散 */
 .works-orbit-floor::after {
   content: '';
   position: absolute;
-  left: 10%;
-  right: 10%;
+  /* 26px = 地面盒外扩量;+10% 保持接触投影原有的内缩比例 */
+  left: calc(26px + 10%);
+  right: calc(26px + 10%);
   top: 1px;
   height: 22px;
   border-radius: 50%;
@@ -4908,8 +4919,10 @@ html[data-paging="on"] .contact-page {
    —— 卡片的宽高比是 16:9 再各加 26px,不是固定比。 */
 .works-orbit-floor-mirror {
   position: absolute;
-  left: 0;
-  right: 0;
+  /* 26px = 地面盒的左右外扩量,镜像仍然只占**卡片外框盒**那 861.5px,
+     于是 hover 放大后的镜像能完整落在地面盒内,不再被切。 */
+  left: 26px;
+  right: 26px;
   top: 0;
   /* 共轭:rotateX 取反、rotateY 同号、translateY 反向(translate 属性在翻转之外) */
   translate: 0 var(--bob-mirror, 0px);
@@ -4936,7 +4949,11 @@ html[data-paging="on"] .contact-page {
   border: 1px solid rgba(205, 225, 255, 0.2);
   border-radius: 15px;
   overflow: hidden;
-  background: linear-gradient(132deg, rgba(231, 242, 255, 0.1), rgba(186, 203, 232, 0.04) 33%, rgba(185, 201, 224, 0.028) 70%, rgba(219, 234, 255, 0.07));
+  /* ⚠ 2026-10-08 业主:「裁切框不能出现底色,应是无颜色透明状态」。
+     旧值是与主卡同形的玻璃底(0.10~0.03 的白蓝渐变),叠在地面盒里会读成
+     一块"带底色的矩形"。现改为**完全透明**,倒影外框只由 1px 描边 + 内侧
+     1px 明暗边(inset shadow)构成,框内透出页面底色。 */
+  background: none;
   box-shadow:
     inset 0 0 0 1px rgba(244, 250, 255, 0.02),
     inset 0 1px 1px rgba(244, 250, 255, 0.06),
@@ -5411,6 +5428,18 @@ html[data-paging="on"] .contact-page {
   position: relative;
   /* 下方留白:给整列的地面倒影留出空间 */
   padding-bottom: 30px;
+  /* ⚠⚠ 2026-10-08 修(业主:选中项列表左移,但它的倒影被裁切):
+     `-webkit-box-reflect` 的倒影被**裁到元素 border box**,而选中卡
+     `.is-selected` 有 `translateX(-7px)`(hover 非选中卡 -3px)→ 卡片左缘
+     比列表盒左缘还靠左 7px,镜像那 7px 直接被切掉。
+     这里给盒子左右各留 12px 呼吸位,再用等量负外边距把版式**原样**抵消:
+     内容盒宽/位置完全不变(实测卡片仍是 l=1036 w=270,选中卡 l=1029),
+     只有 reflect 用的 border box 变宽(1024..1318),倒影不再被切。
+     注意必须 padding + 负 margin 成对出现,单独加 padding 会把卡片压窄。 */
+  padding-left: 12px;
+  padding-right: 12px;
+  margin-left: -12px;
+  margin-right: -12px;
 }
 
 /* 整列地面倒影(2026-10-08 修):倒影加在**列表整体** .works-orbit-rail 上,
