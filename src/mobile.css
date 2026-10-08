@@ -1217,7 +1217,13 @@ html[data-device="mobile"] .mob-card {
   height: 100%;
   aspect-ratio: 3 / 5;
   margin: 0;
-  will-change: transform, opacity;
+  /* ⚠ 只保留 transform,不给 opacity(2026-10-08 第14轮):will-change:opacity 会把
+     这一层标记为「将来会变透明」,Chrome 于是不再把它当作不透明层来合成;二级卡的
+     变换层是 .mw-slide(will-change:transform),两层的不透明标记不同 → 同一张卡在
+     两级下颜色/亮度有极细微差别,落定帧读成「副卡明亮变了一下」。
+     真正淡出的那一两次(卡片绕回卡组背后)opacity 变化本身就会即时触发提升,
+     不需要常驻提示。 */
+  will-change: transform;
   box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
 }
 html[data-device="mobile"] .mob-dim {
@@ -1499,8 +1505,8 @@ html[data-device="mobile"] .mob-thumb {
   /* 4:3. Only aspect-ratio is declared (width derives from it) so the ratio has
      a single source of truth — declaring `height` alongside would win over
      aspect-ratio and silently drift back to a fixed px box.
-     `cover` crops the 16:9 source covers horizontally (12.5% per side);
-     swap in 4:3 assets to stop that. */
+     素材已换成原生 4:3(cover-43.webp),不再需要 `cover` 去横向裁 16:9
+     (原先每侧裁 12.5%,标题字位被二次裁掉)。 */
   width: 50px;
   aspect-ratio: 4 / 3;
   border-radius: 6px;

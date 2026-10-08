@@ -197,15 +197,26 @@ const categories = [
 ];
 
 
-// Covers are cropped from the exported long scrolls (see
-// .workbuddy/tools/build-detail-covers.py). The gallery itself is served by the
-// tiled scrolls in DETAIL_SCROLLS, so no work needs a hand-picked image set.
+// Covers are exported per aspect ratio by .workbuddy/tools/build-cover-set.py
+// (q85 WebP from the 封面合集 material; the long-scroll gallery itself is served by
+// DETAIL_SCROLLS, so no work needs a hand-picked image set).
+//
+// Three ratios, three different card slots — the CSS aspect-ratio is the contract,
+// and object-fit:cover would silently re-crop a mismatched source:
+//
+//   cover43  4:3   PC 首页卡组 .showcase-deck-card + 移动端缩览图 .mob-thumb
+//   detailHero 16:9 PC 二级主卡 / 二级列表缩览 / 地面倒影 + 详情页 hero
+//   image    3:5   移动端一级卡组主卡·副卡 + 移动端二级轨道卡 .mw-card
+//
+// ⚠ 移动端一级与二级必须共用 image(3:5):跨级转场是**同一张卡面**在飞,
+//   两端比例不同会让卡片在交接瞬间换形(见 WorksPage 的跨级转场注释)。
 const worksByCategory = {
   ui: [
     {
       id: 'coomo-home-mini',
       title: 'COOMO HOME',
       subtitle: '家居购物小程序',
+      cover43: '/detail/coomo-home-mini/v1/cover-43.webp',
       image: '/detail/coomo-home-mini/v1/cover-portrait.webp',
       detailHero: '/detail/coomo-home-mini/v1/cover.webp'
     },
@@ -213,6 +224,7 @@ const worksByCategory = {
       id: 'smart-home-platform',
       title: 'COOMO HOME',
       subtitle: '智能家居中控平台',
+      cover43: '/detail/smart-home-platform/v1/cover-43.webp',
       image: '/detail/smart-home-platform/v1/cover-portrait.webp',
       detailHero: '/detail/smart-home-platform/v1/cover.webp'
     },
@@ -220,6 +232,7 @@ const worksByCategory = {
       id: 'coomo-official',
       title: 'COOMO 官网',
       subtitle: '家居品牌官网',
+      cover43: '/detail/coomo-official/v1/cover-43.webp',
       image: '/detail/coomo-official/v1/cover-portrait.webp',
       detailHero: '/detail/coomo-official/v1/cover.webp'
     },
@@ -227,6 +240,7 @@ const worksByCategory = {
       id: 'muguan-official',
       title: '慕冠家居官网',
       subtitle: '家具品牌官网',
+      cover43: '/detail/muguan-official/v1/cover-43.webp',
       image: '/detail/muguan-official/v1/cover-portrait.webp',
       detailHero: '/detail/muguan-official/v1/cover.webp'
     }
@@ -236,6 +250,7 @@ const worksByCategory = {
       id: 'brand-summer',
       title: 'Brand 觅野',
       subtitle: '品牌视觉系统',
+      cover43: '/detail/brand-summer/v1/cover-43.webp',
       image: '/detail/brand-summer/v1/cover-portrait.webp',
       detailHero: '/detail/brand-summer/v1/cover.webp'
     },
@@ -243,6 +258,7 @@ const worksByCategory = {
       id: 'campaign-visual',
       title: '商业活动视觉',
       subtitle: '画册 / KV',
+      cover43: '/detail/campaign-visual/v1/cover-43.webp',
       image: '/detail/campaign-visual/v1/cover-portrait.webp',
       detailHero: '/detail/campaign-visual/v1/cover.webp'
     },
@@ -250,6 +266,7 @@ const worksByCategory = {
       id: 'packaging-system',
       title: '运营设计',
       subtitle: '海报视觉系统',
+      cover43: '/detail/packaging-system/v1/cover-43.webp',
       image: '/detail/packaging-system/v1/cover-portrait.webp',
       detailHero: '/detail/packaging-system/v1/cover.webp'
     }
@@ -259,6 +276,7 @@ const worksByCategory = {
       id: 'future-chair',
       title: 'Future Chair',
       subtitle: '产品 3D 渲染',
+      cover43: '/detail/future-chair/v1/cover-43.webp',
       image: '/detail/future-chair/v1/cover-portrait.webp',
       detailHero: '/detail/future-chair/v1/cover.webp'
     }
@@ -268,6 +286,7 @@ const worksByCategory = {
       id: 'ai-poster-lab',
       title: 'AI Workflow',
       subtitle: 'ComfyUI 工作流实验',
+      cover43: '/detail/ai-poster-lab/v1/cover-43.webp',
       image: '/detail/ai-poster-lab/v1/cover-portrait.webp',
       detailHero: '/detail/ai-poster-lab/v1/cover.webp'
     },
@@ -275,6 +294,7 @@ const worksByCategory = {
       id: 'aigc-model',
       title: 'Model Consistency',
       subtitle: 'AIGC 模特一致性',
+      cover43: '/detail/aigc-model/v1/cover-43.webp',
       image: '/detail/aigc-model/v1/cover-portrait.webp',
       detailHero: '/detail/aigc-model/v1/cover.webp'
     },
@@ -282,6 +302,7 @@ const worksByCategory = {
       id: 'aigc-style',
       title: 'AIGC Character',
       subtitle: 'QQ 形象视觉设计',
+      cover43: '/detail/aigc-style/v1/cover-43.webp',
       image: '/detail/aigc-style/v1/cover-portrait.webp',
       detailHero: '/detail/aigc-style/v1/cover.webp'
     }
@@ -2799,7 +2820,16 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
         'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease,' +
         ' box-shadow .52s cubic-bezier(.22,1,.36,1), border-radius .52s cubic-bezier(.22,1,.36,1)';
       el.style.transform = transform;
-      el.style.opacity = op;
+      /* ⚠ opacity === 1 时必须**摘掉**内联值、不能写死 1(2026-10-08 第14轮):
+         元素一旦带 opacity 属性(哪怕值就是 1),加上 CSS 的 will-change,
+         这一层会被标记成「可能带透明」,合成时走非不透明路径;而二级卡的
+         transform 挂在父级 .mw-slide(只有 will-change:transform,层是不透明的)。
+         两级的合成路径不同 → 落定帧上整张卡的颜色/亮度有极细微差异,
+         正是业主第14轮反馈的「副卡不是位置变了,而是明亮变了一点」。
+         值为 1 时摘属性,让一级卡与二级卡走同一条不透明合成路径;
+         真正要淡出(eff > 1,卡片绕到卡组背后)时再写回。 */
+      if (op >= 1) el.style.removeProperty('opacity');
+      else el.style.opacity = op;
       el.style.zIndex = z;
       const dimEl = dimRefs.current[i];
       if (dimEl) dimEl.style.opacity = dim;
@@ -3122,14 +3152,16 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
         查看全部
       </button>
       <div className="mob-thumbs" ref={stripRef}>
-        {items.map(({ project, cover }, i) => (
+        {items.map(({ project, cover43 }, i) => (
           <div
             className="mob-thumb"
             key={project.id}
             ref={(el) => { thumbRefs.current[i] = el; }}
             onClick={() => { goToRef.current(i); if (scheduleCarouselRef.current) scheduleCarouselRef.current(); }}
           >
-            <LazyImage src={cover} alt="" />
+            {/* 缩览图是 4:3(.mob-thumb aspect-ratio: 4/3),与主卡的 3:5 不同,
+                所以单独取 cover43 —— 原先与主卡共用一张 16:9,每侧被裁掉 12.5%。 */}
+            <LazyImage src={cover43} alt="" />
           </div>
         ))}
       </div>
@@ -5427,9 +5459,12 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // Mobile shows the three-card poker stack; desktop keeps the hover-fan deck.
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
 
+  // PC 首页卡组是 4:3(.showcase-deck-card aspect-ratio: 4/3),用 cover43。
+  // ⚠ 不要再回落 detailHero(16:9):比例不符 → object-fit:cover 每侧裁 12.5%,
+  //   构图(标题字位)被浏览器二次裁掉,不是设计稿的样子。
   const worksItems = projectShowcases.map((project) => {
     const work = worksByCategory[project.category]?.[project.work];
-    return { project, cover: work?.detailHero ?? work?.image };
+    return { project, cover: work?.cover43 ?? work?.detailHero };
   });
 
   // Mobile shows every real work (the placeholder Motion Space is excluded), so
@@ -5437,9 +5472,12 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // ⚠ 2026-10-07:一级卡组与二级轨道必须是**同一批卡、同一个顺序**(跨级转场是
   //   同一张卡在动),所以这里直接复用 WORKS_RAIL,不再各写一份 flatMap ——
   //   两份数据一旦顺序错开,放大/收回的落点就会落到另一张卡上。
+  // 一级卡组主卡/副卡 = 3:5(.mob-card),底部队列是 .mw-card(同样 3:5,
+  // 跨级要求同一张卡面) → 两者都取 image(cover-portrait)。
   const mobileWorksItems = WORKS_RAIL.map((work) => ({
     project: { id: work.id, category: work.category, title: work.title, meta: work.subtitle },
-    cover: work.detailHero ?? work.image
+    cover: work.image ?? work.detailHero,
+    cover43: work.cover43 ?? work.detailHero
   }));
 
   // 预载全部挪到 loading 阶段：封面 + 尾屏 WebGL 都在首页可见前就绪，
@@ -5447,7 +5485,16 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // 此 effect 在 HomePage 挂载时（即 loading 遮罩仍可见时）立即执行。
   useEffect(() => {
     let cancelled = false;
-    const covers = [...worksItems, ...mobileWorksItems].map((it) => it.cover).filter(Boolean);
+    // 预载**三个比例**:PC 卡组用 4:3、移动卡组用 3:5、二级用 16:9。
+    // 同设备下只用得到其中两个,但 loading 阶段一次下完成本极低(全量 1.5MB),
+    // 换来「跨端/改窗口尺寸后零加载负载」。Set 去重,同一 URL 不重复请求。
+    const set = new Set();
+    for (const it of [...worksItems, ...mobileWorksItems]) {
+      if (it.cover) set.add(it.cover);
+      if (it.cover43) set.add(it.cover43);
+    }
+    for (const work of WORKS_RAIL) if (work.detailHero) set.add(work.detailHero);
+    const covers = [...set];
     const total = covers.length;
     let done = 0;
     // 把封面预载进度并回首屏 loading 进度条（见 index.html 的 loading:progress 监听）。
@@ -5489,14 +5536,23 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // wheel and the view disagreeing for the rest of the session.
   const startIndexRef = useRef(null);
   if (startIndexRef.current === null) {
-    // Always open a fresh page load on the hero (screen 0). The pager owns the
-    // scroll position, so trusting window.scrollY here would let a browser-
-    // restored offset (or an address-bar layout shift) become the starting
-    // screen and get "aligned" to on mount — which read as the page opening
-    // already scrolled down to the works showcase on phones. The component is
-    // kept mounted (page-keep), so this branch only runs on the initial load;
-    // returning from works/detail preserves the last index via state instead.
-    startIndexRef.current = 0;
+    /* 2026-10-08 PC 业主反馈「二级页刷新后返回一级,SELECTED WORK 标题消失」。
+       成因:goWorks 离开一级时把入口屏号写进 sessionStorage(portfolioHomeEntryIndex),
+       回程也靠 restoreScroll 滚回那一屏 —— 但**在二级页刷新**时,首页层是**新挂载**的,
+       startIndex 恒取 0、hasEnteredPage 恒 false。于是回程把窗口滚回屏 2(作品屏),
+       分屏控制器却以为自己停在屏 0:`projectsVisible = hasEnteredPage && index===2`
+       永远不成立 → 整个 motion-reveal-section 不带 is-visible,
+       .display-reveal-title 停在 opacity:0 / clip-path:inset(0 100% 0 0) —— 标题整块消失。
+       (不刷新时首页层保持挂载、index 还是 2,所以复现不出来。)
+       修法:落地时**不在一级**(hash 是 #/works 或 #/detail,就是刷新后的落点)才读回
+       入口屏号。注意不能改成读 window.scrollY —— 首页层此刻是 .is-hidden,文档高度塌成 0,
+       scrollY 会被浏览器钳回 0,那正是当初把它钉死为 0 的原因。 */
+    const landedOffHome = parseRoute().page !== 'home';
+    const saved = landedOffHome
+      ? Number(window.sessionStorage.getItem('portfolioHomeEntryIndex') ?? 0)
+      : 0;
+    const safe = Number.isFinite(saved) ? saved : 0;
+    startIndexRef.current = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, Math.round(safe)));
   }
 
   const [index, setIndex] = useState(startIndexRef.current);
@@ -6596,11 +6652,17 @@ function WorksPage({
             </div>
             {current ? (
               <div className="works-orbit-floor" aria-hidden="true">
-                {/* 真实 DOM 镜像:img 与卡片 cover 同宽高同 object-fit,
-                    间距与卡片 1:1 对齐;超出地面的部分由 floor overflow 裁掉 */}
+                {/* 真实 DOM 镜像:与卡片同宽同高,外框(12px padding + 1px 描边 +
+                    15px 圆角)与内层 16:9 画面逐项复刻主卡,使倒影也是一张"卡片",
+                    翻转后底面与主卡底边相接。超出地面的部分由 floor overflow 裁掉。 */}
                 <div className="works-orbit-floor-mirror">
-                  <img className="works-orbit-floor-mirror-far" src={current.detailHero ?? current.image} alt="" />
-                  <img className="works-orbit-floor-mirror-near" src={current.detailHero ?? current.image} alt="" />
+                  <div className="works-orbit-floor-frame">
+                    <div className="works-orbit-floor-media">
+                      <img className="works-orbit-floor-mirror-far" src={current.detailHero ?? current.image} alt="" />
+                      <img className="works-orbit-floor-mirror-near" src={current.detailHero ?? current.image} alt="" />
+                    </div>
+                    <span className="works-orbit-floor-sheen" />
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -6629,7 +6691,11 @@ function WorksPage({
                   <span className="works-orbit-sheen" />
                   <span className="works-orbit-glow" />
                 </span>
-                <div className="works-orbit-cover"><img src={work.image} alt={work.subtitle} /></div>
+                {/* 列表缩览是 16:9(.works-orbit-rail-card .works-orbit-cover 继承
+                    .works-orbit-cover 的 16/9),必须取 detailHero。原先取的是
+                    work.image —— 那个字段现在是 3:5 的移动端卡面素材,放进 16:9 的
+                    盒子里会每侧裁掉 33%(object-fit:cover)。 */}
+                <div className="works-orbit-cover"><img src={work.detailHero ?? work.image} alt={work.subtitle} /></div>
                 <div className="works-orbit-rail-copy">
                   <span>{String(i + 1).padStart(2, '0')}</span>
                   <div>
