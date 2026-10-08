@@ -6586,10 +6586,13 @@ function WorksPage({
                   >
                     {/* ⚠ 只给活跃窗口挂 src:33 个节点同时挂上会让首帧一次性解码
                          全部封面,正好压在动画起跑那一帧上(实测多花 ~85ms)。
-                         远处副本要么被主卡盖住、要么远在屏外,不需要位图。 */}
+                         远处副本要么被主卡盖住、要么远在屏外,不需要位图。
+                         ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,
+                           塞 16:9 会被 object-fit:cover 每侧裁掉 33%。且跨级转场
+                           要求一级 .mob-card 与二级 .mw-card 是同一张卡面。 */}
                     <img
                       className="mw-card-img"
-                      src={live ? (work.detailHero ?? work.image) : undefined}
+                      src={live ? (work.image ?? work.detailHero) : undefined}
                       alt=""
                       decoding="async"
                     />
