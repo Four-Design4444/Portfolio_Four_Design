@@ -229,6 +229,21 @@ const HOST_CSS = `
 .panel-signature .ps-name { color: #f0f1f1; font-weight: 600; }
 .panel-signature .ps-sub { color: #4e6b82; }
 
+/* ── ⑧ 2026-10-09 二轮修正 ───────────────────────────────────────────────── */
+/* 修2：面板正文垂直居中。#detail 原本是从顶往下排（padding-top 132px/18vh），
+   内容短时整块偏上。flex 列 + 正文上下 margin:auto：返回按钮仍钉顶、落款仍
+   钉底、正文以剩余空间垂直居中。只在桌面段生效，移动端面板是底部 57% 抽屉，
+   保持原版式。 */
+@media (min-width: 701px) {
+  #detail { display: flex; flex-direction: column; }
+  #detail-content { margin-top: auto !important; margin-bottom: auto !important; }
+}
+/* 修3：demo 打开面板会编程 focus「返回街角」，:focus-visible 的 2px 描边框
+   （outline 2px var(--accent)）在参考图里没有 —— 去掉。 */
+.back:focus, .back:focus-visible { outline: none !important; }
+/* 修4：复制直进剪贴板，邮箱不出现文字选中态（demo 的 fallback 会选中文本）。 */
+.contact-value { -webkit-user-select: none; user-select: none; }
+
 /* ── ⑤ 棕黄点缀 → 冷蓝点缀（锚点 #6784A6，明度不变） ─────────────────────── */
 :root { --accent: #a4c2e4; }
 .tiny-line { background: #6784A6 !important; }
@@ -631,26 +646,31 @@ function formatStreetPhone(p) {
 
 function detailHtmlFor(mode) {
   const mailHref = `mailto:${streetCfg.email}?subject=${encodeURIComponent('你好 Four Design，聊聊一个新想法')}`;
-  if (mode === 'studio') return '<p class="detail-kicker">FOUR DESIGN</p>'
-    + '<h2 id="detail-title" class="detail-title">让想法，<br>有自己的样子。</h2>'
+  // ⚠ 每个面板的第一个元素都带 data-host-copy="1" —— 它是「这一版内容是宿主写的」
+  //   的子元素级标记：demo 每次重写 #detail-content 的 innerHTML 都会把我们的
+  //   子节点全部换掉，标记随之下消失 ⇒ observer 下一轮必然重新替换。不要改成
+  //   挂在 #detail-content 自身的 attribute —— 那正是「返回街角再进来就显示
+  //   旧文案」的根因（attribute 在 demo 重写后仍残留， observer 被它挡住）。
+  if (mode === 'studio') return '<p class="detail-kicker" data-host-copy="1">FOUR DESIGN</p>'
+    + '<h2 id="detail-title" class="detail-title">以设计，<br>点亮未知的旷野。</h2>'
     + '<div class="detail-rule"></div>'
     + '<div class="services"><span>品牌设计</span><span>产品设计</span><span>视觉叙事</span></div>'
     + '<div class="actions"><button class="primary-action" data-switch="mail">聊聊你的想法 <span>↗</span></button></div>';
-  if (mode === 'phone') return `<p class="detail-kicker">LET&#39;S TALK</p>`
+  if (mode === 'phone') return `<p class="detail-kicker" data-host-copy="1">LET&#39;S TALK</p>`
     + '<h2 id="detail-title" class="detail-title">链接，<br>从此刻开启。</h2>'
     + '<div class="detail-rule"></div>'
     + '<div class="contact-label">GIVE ME A CALL</div>'
     + `<a class="contact-value" href="tel:${streetCfg.phone}">${formatStreetPhone(streetCfg.phone)}</a>`
     + `<div class="actions"><a class="primary-action" href="tel:${streetCfg.phone}">拨打电话 <span>↗</span></a>`
     + '<button class="copy" data-copy>复制号码 ↗</button></div>';
-  if (mode === 'mail') return '<p class="detail-kicker">WRITE A LETTER</p>'
+  if (mode === 'mail') return '<p class="detail-kicker" data-host-copy="1">WRITE A LETTER</p>'
     + '<h2 id="detail-title" class="detail-title">把想法，<br>轻轻寄到这里。</h2>'
     + '<div class="detail-rule"></div>'
     + '<div class="contact-label">A LETTER TO FOUR</div>'
     + `<a class="contact-value email" href="${mailHref}">${streetCfg.email}</a>`
     + `<div class="actions"><a class="primary-action" href="${mailHref}">写一封信 <span>↗</span></a>`
     + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
-  if (mode === 'car') return '<p class="detail-kicker">FOUR DESIGN</p>'
+  if (mode === 'car') return '<p class="detail-kicker" data-host-copy="1">FOUR DESIGN</p>'
     + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'
     + '<div class="detail-rule"></div>'
     + '<p class="detail-copy">每一次停歇，都是为了更远的抵达。<br>积蓄能量，勇敢奔赴那个你期待的未来。</p>'
@@ -663,11 +683,68 @@ function applyDetailCopy(doc) {
   if (!dc) return;
   const mode = doc.body.getAttribute('data-mode');
   if (!mode || mode === 'overview') return;
-  if (dc.getAttribute('data-host-detail') === mode) return;
+  // 防回环判据是「子元素里还有没有我们的标记」（见 detailHtmlFor 注释）：
+  // demo 重写 innerHTML 会把标记节点一并清掉，所以这里必然重新接管；
+  // 我们自己写完触发的下一轮 observer 也能正确跳过。
+  if (dc.querySelector('[data-host-copy]')) return;
   const html = detailHtmlFor(mode);
   if (!html) return;
-  dc.setAttribute('data-host-detail', mode);
   dc.innerHTML = html;
+}
+
+// 修4：复制必须直进剪贴板。demo 的 data-copy 委托在 clipboard API 不可用时
+// 会 fallback 成「选中文本 + 请复制已选中的联系方式」，还把邮箱染成选中态 ——
+// 这里在 document 捕获阶段拦下 data-copy（祖先捕获先于 demo 的目标阶段委托），
+// 阻断 demo 路径，自实现复制：clipboard API → 失败退 execCommand + 隐藏
+// textarea（不碰可见文本）；toast 复用 demo 的 #toast（.show 样式同源）。
+let streetCopyToastTimer = 0;
+function streetToast(doc, msg) {
+  try {
+    const t = doc.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(streetCopyToastTimer);
+    streetCopyToastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  } catch (_) { /* noop */ }
+}
+
+function streetCopyText(doc, text) {
+  const done = () => streetToast(doc, '已复制，期待你的消息');
+  const fail = () => streetToast(doc, '复制失败，请手动复制');
+  const legacy = () => {
+    try {
+      const ta = doc.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      doc.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = doc.execCommand('copy');
+      doc.body.removeChild(ta);
+      ok ? done() : fail();
+    } catch (_) { fail(); }
+  };
+  if (doc.defaultView.navigator.clipboard && doc.defaultView.navigator.clipboard.writeText) {
+    doc.defaultView.navigator.clipboard.writeText(text).then(done, legacy);
+  } else legacy();
+}
+
+function bindStreetCopy(doc) {
+  if (doc.__streetCopyBound) return;
+  doc.__streetCopyBound = true;
+  doc.addEventListener('click', (ev) => {
+    let btn = null;
+    try { btn = ev.target && ev.target.closest ? ev.target.closest('[data-copy]') : null; } catch (_) { return; }
+    if (!btn) return;
+    const dc = doc.getElementById('detail-content');
+    if (!dc || !dc.contains(btn)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const mode = doc.body.getAttribute('data-mode');
+    streetCopyText(doc, mode === 'phone' ? streetCfg.phone : streetCfg.email);
+  }, true);
 }
 
 function injectDetailCopy(doc) {
@@ -678,6 +755,7 @@ function injectDetailCopy(doc) {
   if (ps && !ps.querySelector('.ps-name')) {
     ps.innerHTML = '<span class="ps-name">FOUR DESIGN</span><span class="ps-sub">INDEPENDENT CREATIVE STUDIO</span>';
   }
+  bindStreetCopy(doc);
   const dc = doc.getElementById('detail-content');
   if (!dc) return false;
   if (!dc.__hostDetailObserver) {

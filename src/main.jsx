@@ -2365,6 +2365,24 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
     goHome();
   };
 
+  // 修6（2026-10-09）：尾屏处于交互状态（demo 面板打开）时，点 FOUR 不回 hero，
+  // 而是退出面板返回街角 —— 转发一次 click 给 iframe 内 demo 自己的 #back
+  // （它的监听就是 demo 的 xf()：退出面板 + 相机平滑回程，转场动画原样保留）。
+  // 同源 iframe，body[data-mode] 直读；iframe 未挂载/异常时照常回 hero。
+  const goHomeFromLogo = (event) => {
+    try {
+      const frame = document.querySelector('iframe.street-contact-frame');
+      const mode = frame && frame.contentDocument && frame.contentDocument.body.getAttribute('data-mode');
+      if (mode && mode !== 'overview') {
+        event.preventDefault();
+        const back = frame.contentDocument.getElementById('back');
+        if (back) back.click();
+        return;
+      }
+    } catch (_) { /* iframe 未就绪，走常规回 hero */ }
+    goHomeWithScroll(event);
+  };
+
   const scrollToHomeSection = (event, id) => {
     event.preventDefault();
     // On a paged home the pager owns the scroll, and a raw scrollIntoView would
@@ -2383,7 +2401,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
       className={`morph-nav nav-${page} motion-${navMotion}${isHome ? ' nav-home-shared' : ''}${hasSharedWorksPill ? ' has-shared-works-pill' : ''}${categoryOpen ? ' category-menu-open' : ''}`}
       style={{ '--active-index': activeCategoryIndex }}
     >
-      {!isDetail && <button type="button" className="morph-logo" data-shared-logo-anchor="true" onClick={goHomeWithScroll} aria-label="FOUR Home"><LogoMark /></button>}
+      {!isDetail && <button type="button" className="morph-logo" data-shared-logo-anchor="true" onClick={goHomeFromLogo} aria-label="FOUR Home"><LogoMark /></button>}
       {isHome && (
         <>
           <nav className="home-primary-items" aria-label="Primary navigation" ref={homeNavRef}>
