@@ -826,6 +826,12 @@ function useDetailNavOnLight(isDetail) {
   }, [isDetail]);
 }
 
+/* PC 二级页离场（回一级）的挂载时长：卡片反向坠下 340ms + 反向错峰 120ms
+   = 460ms，底衬溶解到 500ms，这里留 60ms 余量。到点才把二级层卸下。
+   时间轴写在这里、动画时长写在 styles.css 的 .orbit-fall 规则里，
+   两边改动要同步（差值只影响"最后会不会截到动画尾巴"）。 */
+const PC_WORKS_EXIT_MS = 560;
+
 function App() {
   const [route, setRoute] = useState(parseRoute);
   const [homeActiveSection, setHomeActiveSection] = useState('hero');
@@ -854,6 +860,14 @@ function App() {
        由二级轨道自己在原地做(缩回首页那张卡),结束后才卸下。 */
   const [worksEntry, setWorksEntry] = useState(null);
   const [exitWorks, setExitWorks] = useState(false);
+  /* 2026-10-08 第八轮 PC 离场:一级↔二级在 PC 上是同一批 orbit 卡面,业主要求
+     离场走与入场相反的一套动效(卡片反向坠下淡出)。移动端用 exitWorks 让二级页
+     在原地收拢;**PC 单独用一个 pcWorksExit**,不复用 exitWorks —— 后者会顺带
+     翻动 HomePage 的 revealProjects / deckVeiled(移动端语义),PC 上没必要动它们。
+     期间二级层浮到首页之上(fixed, z-index 30),路由与导航立刻切回一级,
+     等坠下动画演完再卸层。 */
+  const [pcWorksExit, setPcWorksExit] = useState(false);
+  const pcWorksExitTimerRef = useRef(null);
   const [deckFocusId, setDeckFocusId] = useState('');
   /* 2026-10-07 业主第四轮:一级页「其余元素」(Project Display 标题 / 计数器 /
      圆点 / 查看全部 / 缩略图条)在跨级时必须有自己的入场 / 离场动效。
@@ -1413,6 +1427,17 @@ function App() {
       return;
     }
 
+    /* 2026-10-08 第八轮 PC 回程:二级页不立刻卸下,而是浮到首页之上把坠落
+       动画演完(见 .orbit-fall)。路由 / 导航 / 滚动恢复全部照常、同帧发生,
+       所以导航的 morph 不会被这 560ms 拖慢;二级层是 fixed,不占文档流,
+       一级页的滚动位置也不受影响。 */
+    const leavingWorksOnPc = route.page === 'works' && !isMobileDevice();
+    if (leavingWorksOnPc) {
+      setPcWorksExit(true);
+      window.clearTimeout(pcWorksExitTimerRef.current);
+      pcWorksExitTimerRef.current = window.setTimeout(() => setPcWorksExit(false), PC_WORKS_EXIT_MS);
+    }
+
     window.location.hash = '';
     setRoute({ page: 'home', category: route.category, workId: '' });
     // The home layer stayed mounted, so its screen index is still the one the
@@ -1622,7 +1647,7 @@ function App() {
           位置/层级/视觉一律沿用一级原样(fixed inset:0、z-index 20、mask 78%、
           mix-blend:screen、移动端 opacity .8),所以二级换用它等于"二级改用一级那道光"。
           首次点亮后常驻,跨级来回不重建。 */}
-      <div className={`home-rays-layer${raysLit ? ' is-on' : ''}`} ref={appRaysLayerRef} aria-hidden="true">
+      <div className={`home-rays-layer${raysLit ? ' is-on' : ''}${pcWorksExit ? ' is-over-works-exit' : ''}`} ref={appRaysLayerRef} aria-hidden="true">
         {raysMounted && (
           <SideRays
             className="home-rays"
@@ -1696,7 +1721,7 @@ function App() {
                 2026-10-07 exitWorks:二级 → 一级的回程期间同样**保持挂载** ——
                 收拢动画由轨道在原地执行,动画结束(onLeavingDone)才卸下,
                 所以返回一级时看到的是同一张卡缩回去,而不是它先消失。 */}
-            {route.page === 'works' || exitWorks ? (
+            {route.page === 'works' || exitWorks || pcWorksExit ? (
               <WorksPage
                 activeCategory={activeCategory}
                 goDetail={goDetail}
@@ -1704,7 +1729,7 @@ function App() {
                 arriving={Boolean(sharedImage && sharedImage.workId)}
                 returning={mobileFlip === 'exit'}
                 entry={worksEntry}
-                leaving={exitWorks}
+                leaving={exitWorks || pcWorksExit}
                 handingOff={homeHandoff}
                 onEntryArmed={() => setWorksEntry(null)}
                 onLeavingDone={() => {
@@ -5930,6 +5955,21 @@ function WorksPage({
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const [landed, setLanded] = useState(false);
+  /* ---- PC 入场动效的重放计数（2026-10-08 第八轮）-------------------------
+     「一级进二级」与「切换分类」都要让主卡 + 列表重新入场。列表槽位是**新节点**
+     （key = work.id）⇒ 切分类时自己就重放了；但主卡容器 .works-orbit-focus 与
+     rail 标签是**同一批 DOM**，CSS 动画只在 animation-name 变化或元素重建时
+     重启 —— 所以这里让 a / b 两个**同内容**的 keyframes 名交替，靠「名字变了」
+     重放。比「先摘类、下一帧再挂」少一帧露静止态的闪烁。
+     ⚠ 必须 useLayoutEffect：分类切换的 state 要在**绘制前**改完 className；
+       useEffect 已经画过一帧原始姿态了。 */
+  const [risePass, setRisePass] = useState(0);
+  const riseCategoryRef = useRef(activeCategory.id);
+  useLayoutEffect(() => {
+    if (riseCategoryRef.current === activeCategory.id) return;
+    riseCategoryRef.current = activeCategory.id;
+    setRisePass((pass) => pass + 1);
+  }, [activeCategory.id]);
   const stageRef = useRef(null);
   const pageRef = useRef(null);
   const orbitRef = useRef(null);
@@ -6640,35 +6680,60 @@ function WorksPage({
           onClick: () => setActiveIndex(i),
         };
     return (
-      <Tag
+      /* 入场/离场动效的外层槽位（2026-10-08 第八轮）。
+         卡片自己的两条动画通道都被占了 —— transform 归「选中位移
+         translateX(-7px) / hover」、translate 归常驻慢浮 works-orbit-rail-bob
+         —— 入场动画若直接写在卡片上，动画结束那一帧会从 translateY(0)
+         硬跳到 translateX(-7px)（动画不参与 transition，是硬切）。
+         所以照 PC 个人信息屏的老办法：每张卡配一个**独立入场包装层**，
+         动效只碰包装层，卡片两条通道原样不动。
+         ⚠ 槽位就是 rail 的 flex item：间距仍由 rail 的 gap:7px 决定，
+           几何与不加槽位时逐像素相同。--i 挂在这里，卡片慢浮靠继承取值；
+           槽位本身也是新节点（key=work.id）⇒ 切分类时入场动效自动重放。 */
+      <div
         key={mirror ? `mirror-${work.id}` : work.id}
-        className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
+        className="works-orbit-rail-slot"
         style={{ '--i': i }}
-        {...attrs}
       >
-        <span className="works-orbit-clip" aria-hidden="true">
-          <span className="works-orbit-sheen" />
-          <span className="works-orbit-glow" />
-        </span>
+        <Tag
+          className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
+          {...attrs}
+        >
+          <span className="works-orbit-clip" aria-hidden="true">
+            <span className="works-orbit-sheen" />
+            <span className="works-orbit-glow" />
+          </span>
         {/* 列表缩览是 16:9(.works-orbit-rail-card .works-orbit-cover 继承
             .works-orbit-cover 的 16/9),必须取 detailHero。原先取的是
             work.image —— 那个字段现在是 3:5 的移动端卡面素材,放进 16:9 的
             盒子里会每侧裁掉 33%(object-fit:cover)。 */}
-        <div className="works-orbit-cover"><img src={work.detailHero ?? work.image} alt={mirror ? '' : work.subtitle} /></div>
-        <div className="works-orbit-rail-copy">
-          <span>{String(i + 1).padStart(2, '0')}</span>
-          <div>
-            <h3>{work.title}</h3>
-            <p>{work.subtitle}</p>
+          <div className="works-orbit-cover"><img src={work.detailHero ?? work.image} alt={mirror ? '' : work.subtitle} /></div>
+          <div className="works-orbit-rail-copy">
+            <span>{String(i + 1).padStart(2, '0')}</span>
+            <div>
+              <h3>{work.title}</h3>
+              <p>{work.subtitle}</p>
+            </div>
+            <span className="works-orbit-rail-arrow">{orbitArrow}</span>
           </div>
-          <span className="works-orbit-rail-arrow">{orbitArrow}</span>
-        </div>
-      </Tag>
+        </Tag>
+      </div>
     );
   };
 
   return (
-    <section className="works-index-page works-index-page--orbit">
+    /* PC 入场/离场动效的相位类（2026-10-08 第八轮）：
+         orbit-rise-a / -b —— 同一套入场 keyframes 的两个名字，靠交替重放
+                              （见 risePass 注释）；挂在这里而不是元素上，
+                              是为了让「主卡 + rail 整个列表」用同一批规则。
+         orbit-fall        —— 离场（回一级）：把整层浮到首页上方，
+                              卡片按反向错峰坠下淡出、底衬与装饰随后溶解。
+       ⚠ 这两个类都带 --orbit 前缀，移动端渲染的是另一个根类（不带 --orbit），
+         所以 PC 动效一行都漏不到移动端。 */
+    <section
+      className={`works-index-page works-index-page--orbit orbit-rise-${risePass % 2 === 0 ? 'a' : 'b'}${!isMobile && leaving ? ' orbit-fall' : ''}`}
+      style={{ '--orbit-n': works.length }}
+    >
       <div className="works-container works-orbit-container">
         <div className="works-orbit-stage" ref={stageRef}>
           <div className="works-orbit" ref={orbitRef}>

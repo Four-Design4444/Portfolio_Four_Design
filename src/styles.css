@@ -5673,6 +5673,152 @@ html[data-paging="on"] .contact-page {
   box-shadow: 0 26px 42px -24px rgba(0, 0, 0, 0.8), 0 0 22px -18px rgba(164, 204, 255, 0.3);
 }
 
+/* ===========================================================================
+   PC 二级页入场 / 离场动效（2026-10-08 第八轮）
+   业主：一级进二级、以及切换分类时，主卡与右侧列表都要「由下往上位移淡入」，
+   列表逐项有序入场；离场反向（向下坠落 + 淡出）。
+
+   ⚠ 动效只碰**空闲的动画通道**，这是整套写法成立的前提：
+     - 主卡 .works-orbit-focus：自身没有任何 transform / translate 声明
+       （tilt 的 --rx/--ry 写在它身上，但由子级消费），可直接用 transform。
+       它是「卡片 + 地面倒影」的**共同父级** ⇒ 两者一起升起，倒影不脱节。
+     - 列表卡 .works-orbit-rail-card：transform 归「选中位移 translateX(-7px)
+       / hover」、translate 归常驻慢浮 works-orbit-rail-bob —— **两条都占满**。
+       所以入场写在新增的 .works-orbit-rail-slot（卡片的独立包装层）上。
+       若直接写在卡片上，动画结束那一帧会从 translateY(0) 硬跳到
+       translateX(-7px)（CSS 动画不参与 transition，是硬切）。
+     - rail 的倒影副本（.works-orbit-rail-mirror 里的同一套槽位）走**同一套
+       规则**：父级 scaleY(-1) 会自动把 translateY 翻成镜像方向，倒影跟着走，
+       不需要单独写一份。
+
+   ⚠ 重放：切分类时列表槽位是**新节点**（key = work.id）会自己重放；主卡容器与
+     rail 标签是同一批 DOM，靠 root 上 a / b 两个**同内容**的 keyframes 名交替
+     重启（见 main.jsx 的 risePass 注释）。
+   =========================================================================== */
+
+/* 入场包装层：只做定位，不碰卡片自身的任何样式。
+   它接替卡片成为 rail 的 flex item ⇒ 间距仍归 rail 的 gap:7px，
+   几何与「不加槽位」时逐像素相同。
+   ⚠ 必须 `display:flex` 而不能是 block：卡片本体是 `<button>`，
+     button 的 `width:auto` 走 shrink-to-fit，**不会**在普通块级父级里撑满
+     （普通 div 会）。实测槽位写成 block 时四张卡的宽从 235 塌成
+     198/198/186/183（随文字长度各不相同）。写成 flex 后卡片是 flex item、
+     交叉轴按默认 stretch 撑满，与原来是 rail 的直接 flex item 时一致。 */
+.works-orbit-rail-slot { display: flex; flex-direction: column; min-width: 0; }
+
+/* 位移距离按元素分档：主卡最大，列表次之，底部文字行最小（跟着飘会显乱） */
+.works-index-page--orbit .works-orbit-focus { --orbit-rise-y: 34px; }
+.works-index-page--orbit .works-orbit-rail-label,
+.works-index-page--orbit .works-orbit-rail-slot { --orbit-rise-y: 26px; }
+.works-index-page--orbit .works-orbit-stage-meta,
+.works-index-page--orbit .works-orbit-footer { --orbit-rise-y: 14px; }
+
+@keyframes works-orbit-rise {
+  from { opacity: 0; transform: translateY(var(--orbit-rise-y, 30px)); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 与 works-orbit-rise 逐字相同、只换名字：CSS 动画只在 animation-name 变化
+   或元素重建时重启，主卡容器 / rail 标签靠这两个名字交替来「零闪烁重放」。 */
+@keyframes works-orbit-rise-b {
+  from { opacity: 0; transform: translateY(var(--orbit-rise-y, 30px)); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes works-orbit-scene-out { to { opacity: 0; } }
+
+/* ---- 入场：主卡（含倒影）第一个起跑 → rail 标签 → 列表逐项 70ms 错峰 ---- */
+.works-index-page--orbit.orbit-rise-a .works-orbit-focus,
+.works-index-page--orbit.orbit-rise-a .works-orbit-stage-meta,
+.works-index-page--orbit.orbit-rise-a .works-orbit-footer {
+  animation-name: works-orbit-rise;
+  animation-duration: 780ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: backwards;
+}
+
+.works-index-page--orbit.orbit-rise-b .works-orbit-focus,
+.works-index-page--orbit.orbit-rise-b .works-orbit-stage-meta,
+.works-index-page--orbit.orbit-rise-b .works-orbit-footer {
+  animation-name: works-orbit-rise-b;
+  animation-duration: 780ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: backwards;
+}
+
+/* 底部两行文字晚 320ms 才淡上来，让视线先落在卡片上 */
+.works-index-page--orbit.orbit-rise-a .works-orbit-stage-meta,
+.works-index-page--orbit.orbit-rise-a .works-orbit-footer { animation-delay: 320ms; }
+.works-index-page--orbit.orbit-rise-b .works-orbit-stage-meta,
+.works-index-page--orbit.orbit-rise-b .works-orbit-footer { animation-delay: 320ms; }
+
+.works-index-page--orbit.orbit-rise-a .works-orbit-rail-label {
+  animation: works-orbit-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+}
+.works-index-page--orbit.orbit-rise-b .works-orbit-rail-label {
+  animation: works-orbit-rise-b 620ms cubic-bezier(0.22, 1, 0.36, 1) 80ms backwards;
+}
+
+/* 列表：--i 由 main.jsx 写在槽位上；倒影槽位同值 ⇒ 倒影与本体同步升起 */
+.works-index-page--orbit .works-orbit-rail-slot {
+  animation: works-orbit-rise 620ms cubic-bezier(0.22, 1, 0.36, 1)
+    calc(80ms + var(--i, 0) * 70ms) backwards;
+}
+
+/* ---- 离场（回一级）：反向 —— 入场最后一个起跑的，离场第一个走 ---- */
+.works-index-page--orbit.orbit-fall {
+  /* 浮到一级页之上演坠落：高于一级内容(≤20)与 hero 视频(20)，低于导航(40)。
+     必须在文档流之外，否则它会作为第 5 屏把一级页顶下去；
+     fixed 也不占文档流 ⇒ 一级页的滚动恢复（restoreScroll）不受影响。 */
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  overflow: clip;
+  /* 不透明的页面底搬去 ::before，好让它能单独溶解 —— 见下方注释 */
+  background: none;
+}
+
+/* 只溶解「不透明的页面底」，露出底下的一级页；卡片继续走自己的坠落动画。
+   ⚠ 不给整层加 opacity：层里有两处 backdrop-filter 卡片（主卡 blur(28px)、
+     列表卡 blur(20px)），对祖先 opacity 做动画会让它们整段重新采样，
+     更容易掉帧 / 闪。 */
+.works-index-page--orbit.orbit-fall::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 82% 0%, rgba(150, 200, 255, 0.16), transparent 30rem),
+    radial-gradient(circle at 64% 24%, rgba(234, 179, 8, 0.05), transparent 20rem),
+    #0d0c12;
+  animation: works-orbit-scene-out 360ms cubic-bezier(0.4, 0, 1, 1) 140ms forwards;
+}
+
+/* 纵深暗角（::after）跟着页面底一起溶解 */
+.works-index-page--orbit.orbit-fall::after {
+  animation: works-orbit-scene-out 360ms cubic-bezier(0.4, 0, 1, 1) 140ms forwards;
+}
+
+/* 主卡 + rail 标签 + 底部两行：入场最早 ⇒ 离场最晚（延迟 = 列表最后一个的延迟） */
+.works-index-page--orbit.orbit-fall .works-orbit-focus,
+.works-index-page--orbit.orbit-fall .works-orbit-rail-label,
+.works-index-page--orbit.orbit-fall .works-orbit-stage-meta,
+.works-index-page--orbit.orbit-fall .works-orbit-footer {
+  animation: works-orbit-rise 340ms cubic-bezier(0.55, 0, 0.85, 0.3)
+    calc((var(--orbit-n, 4) - 1) * 40ms) reverse both;
+}
+
+/* 列表：反向错峰 —— 入场时最后一张先走 ⇒ 离场时最后一张先坠 */
+.works-index-page--orbit.orbit-fall .works-orbit-rail-slot {
+  animation: works-orbit-rise 340ms cubic-bezier(0.55, 0, 0.85, 0.3)
+    calc((var(--orbit-n, 4) - 1 - var(--i, 0)) * 40ms) reverse both;
+}
+
+/* 离场期间把共用环境光抬到二级层之上：保住「光打在二级页上」的原始层序
+   （常态也是光在二级页之上、导航之下），不然这 560ms 里二级页会忽然掉一档亮度。 */
+.home-rays-layer.is-over-works-exit { z-index: 38; }
+
 @media (max-width: 1280px) {
   .works-orbit { grid-template-columns: minmax(0, 1fr) 235px; column-gap: 38px; }
   .works-orbit-rail-card .works-orbit-cover { width: 62px; flex-basis: 62px; }
@@ -5693,5 +5839,14 @@ html[data-paging="on"] .contact-page {
   html[data-device="mobile"] .work-detail-page.mw-flip-exit { animation: none; }
   html[data-device="mobile"] .mw-hint { animation: none; }
   html[data-device="mobile"] .mw-slide { transition: none; }
+  /* 2026-10-08 第八轮:PC 二级页入场/离场一并降级。用 !important 是因为
+     入场规则挂在 a/b 相位类上、选择器权重比这里的组合更高。 */
+  .works-index-page--orbit .works-orbit-focus,
+  .works-index-page--orbit .works-orbit-rail-label,
+  .works-index-page--orbit .works-orbit-rail-slot,
+  .works-index-page--orbit .works-orbit-stage-meta,
+  .works-index-page--orbit .works-orbit-footer,
+  .works-index-page--orbit.orbit-fall::before,
+  .works-index-page--orbit.orbit-fall::after { animation: none !important; }
 }
 
