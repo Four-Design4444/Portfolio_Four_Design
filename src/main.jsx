@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createPortal } from 'react-dom';
 import { Copy, House, Mail, Phone } from 'lucide-react';
@@ -5443,14 +5443,21 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   const markHeroVideoReady = useCallback(() => setHeroVideoReady(true), []);
   const [coversPreloaded, setCoversPreloaded] = useState(false);
   const [tailReady, setTailReady] = useState(false);
+  const [tailBurned, setTailBurned] = useState(false);
   // 首屏 Loading 遮罩只在首页出现（index.html 按 hash 判定），揭幕信号也只由
   // 首页给出：hero 真正播起来 = 首屏内容加载完毕。遮罩里的进度条另有真实来源
   // （preload 资源条目 + <video> buffered），这个事件只是"可以揭幕了"的终判。
-  // 揭幕闸门：首屏可播 + 封面预载完 = 进入 hero 后零加载负载（PC / 移动端一致）。
-  // 尾屏 WebGL 仍在 loading 期预载/编译（onTailReady 上报进度条），但它是一路滚到
-  // 最后的屏，用户抵达前必然编译完，不应作为硬闸门 —— 否则低端 GPU 上着色器编译
-  // 耗时数秒会直接拖住首屏揭幕（表现为进度条卡在 9x%）。故加 2s 兜底：首屏内容就绪后
-  // 最多再等 2s 让尾屏编译，超时即揭幕，尾屏继续在后台编译。
+  //
+  // 揭幕闸门：首屏可播 + 封面预载完 + 尾屏编译完 + 尾屏灯光烧完。
+  // 尾屏 WebGL 既然在 loading 期就预载/编译，就应该**连它的 2.7s 灯光渐入一起
+  // 在遮罩里做完**：实测（outputs/perf-reveal）它满帧烧录时在揭幕后 3.2s 窗口里
+  // 吃掉主线程 2095ms（65%），正好压住首屏入场动画 —— 这就是"loading 结束后 hero
+  // 依旧长时间卡顿"的根因。现在烧录改在遮罩期以 20fps 受控帧率跑完（见
+  // Street.jsx 的 BURN_FRAME_MS），揭幕时尾屏已经"熟"了，且它在此之前绝不跑满帧。
+  //
+  // 兜底仍然是 5s：低端 GPU 上着色器编译 + 灯光烧录可能偏慢，但**绝不能让某一闸门
+  // 异常时把 loading 永久卡住**。正常路径由上面的闸门触发。
+  const markTailBurned = useCallback(() => setTailBurned(true), []);
   const revealedRef = useRef(false);
   const reveal = useCallback(() => {
     if (revealedRef.current) return;
@@ -5458,11 +5465,11 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
   }, []);
   useEffect(() => {
-    if (heroVideoReady && coversPreloaded && tailReady) reveal();
-  }, [heroVideoReady, coversPreloaded, tailReady, reveal]);
+    if (heroVideoReady && coversPreloaded && tailReady && tailBurned) reveal();
+  }, [heroVideoReady, coversPreloaded, tailReady, tailBurned, reveal]);
   useEffect(() => {
     if (!heroVideoReady || !coversPreloaded) return undefined;
-    const t = window.setTimeout(reveal, 2000);
+    const t = window.setTimeout(reveal, 6000);
     return () => window.clearTimeout(t);
   }, [heroVideoReady, coversPreloaded, reveal]);
   const [projectsRef, projectsSeen, projectsResync] = useRevealOnView();

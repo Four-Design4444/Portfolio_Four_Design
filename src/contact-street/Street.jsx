@@ -6,9 +6,72 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 
-// 尾屏 intro 灯光渐入时长（demo scene.js: intro += dt/2.7，约 2.7s）。揭幕后趁用户
-// 滚动下行的空档满帧烧掉，留足余量避免「刚好滑到尾屏时还在烧」。
-const INTRO_BURN_MS = 3200;
+// 尾屏 intro 灯光渐入时长（demo scene.js 里按真实 dt 累加，约 2.7s；dt 被 clamp 到
+// 0.05s 所以无法快进）。烧录**必须在首屏 loading 遮罩期间完成**，否则它会正好压
+// 在首屏入场动画上：实测满帧烧录在揭幕后 3200ms 窗口里吃掉主线程 2095ms（65%），
+// 这就是"loading 结束后 hero 依旧长时间卡顿"的根因。
+// 烧录档帧率 = 50ms/帧（20fps）。因为 demo 的 dt 上限就是 0.05s，20fps 恰好让
+// 灯光渐入按真实时间走，而渲染帧数只有满帧的 ~1/3，主线程占用从 65% 降到 ~21%。
+const BURN_FRAME_MS = 50;
+// 烧录墙钟预算：20fps × 0.05s/帧 = 每 50ms 推进 0.05s 场景时间，3.4s 可推进
+// ~3.4s ≥ 2.7s，留 ~26% 余量吸收 setTimeout 抖动（抖大时 dt 被 clamp，推进变慢）。
+const INTRO_BURN_MS = 3400;
+
+export default function ContactStreet({ active, preload, onTailReady, onTailBurned }) {
+  // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
+  // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
+  const [mounted, setMounted] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const frameRef = useRef(null);
+  const everActive = useRef(false);
+  // demo 是否已冷启动完成（compileAsync 完成 / canvas 已画出）。烧录只在这之后开始，
+  // 因为 demo 的动画循环是编译完成后才起的。
+  const [armed, setArmed] = useState(false);
+  // 灯光是否已烧完。烧完 = 尾屏进入瞬间就是"满亮度满帧"，不会再有提速跳变。
+  const [burned, setBurned] = useState(false);
+  const burnedRef = useRef(false);
+
+  useEffect(() => {
+    if (active) everActive.current = true;
+    if (active || preload) setMounted(true);
+  }, [active, preload]);
+
+  // 烧录计时：冷启动完成 → 受控帧率烧 INTRO_BURN_MS → 熄灭（除非用户已在尾屏）。
+  // 它完全发生在首屏 loading 遮罩期间，用户看不到，但揭幕时尾屏已经"熟"了。
+  useEffect(() => {
+    if (!mounted || !armed || burnedRef.current) return undefined;
+    const timer = window.setTimeout(() => {
+      burnedRef.current = true;
+      setBurned(true);
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 1 } })); } catch (_) {}
+      try { if (onTailBurned) onTailBurned(); } catch (_) { /* noop */ }
+    }, INTRO_BURN_MS);
+    return () => window.clearTimeout(timer);
+  }, [mounted, armed, onTailBurned]);
+
+  // 渲染档位（P-04 + 2026-10-08 修正）：
+  //   ① 用户已在尾屏(active)          → 满帧
+  //   ② 尚未烧完                       → 受控帧率烧录（只在 loading 遮罩期，或
+  //                                      兜底期；**绝不**满帧）
+  //   ③ 其余（烧完且不在尾屏）         → 空转保活 ~1fps
+  // 不变量：尾屏只有在 ① 才满帧。所以无论时序如何，它都不可能再去抢首屏的主线程。
+  useEffect(() => {
+    if (!mounted) return undefined;
+    let stopped = false;
+    let timer = null;
+    const apply = () => {
+      if (stopped) return;
+      const win = frameRef.current && frameRef.current.contentWindow;
+      if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
+      const burning = !burnedRef.current;
+      try {
+        win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
+        win.__streetPaused = !active && !burning;
+      } catch (_) { /* 已销毁 / 跨域时静默 */ }
+    };
+    apply();
+    return () => { stopped = true; if (timer) window.clearTimeout(timer); };
+  }, [mounted, active, burned]);
 
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
 // ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header）。
@@ -166,15 +229,30 @@ const HOST_JS = `
   // 甚至已经翻到二级/三级页（那时 HomePage 只是被 display:none，同源 iframe 的
   // rAF 照样跑），它也在烧 CPU —— 实测占满主线程 80%~87%。
   // three 的 WebGLAnimation 是 "requestAnimationFrame(i)" 递归，每帧都会重新
-  // 查全局，所以在这里包一层就能控帧：__streetPaused 时把回调交给 setTimeout，
-  // 循环不断 —— WebGL 上下文、已编译的 shader、已加载的纹理全部保活，回到尾屏
-  // 立刻满帧，预挂载红利一点不丢 —— 但 CPU 从"每帧渲染"降到 ~4fps 空转。
+  // 查全局，所以在这里包一层就能控帧。
+  //
+  // 两种降频档（都由宿主写 window 上的开关）：
+  //   __streetFrameMs > 0 —— 受控帧率（把回调延后 N 毫秒）。这是"烧录档"：
+  //     demo 的 dt 取的是回调时间戳之差、并被 clamp 到 0.05s（见其
+  //     `Math.min((e-rf)/1e3||.016,.05)`），所以延后到 50ms 时 dt 正好=0.05，
+  //     灯光渐入仍按**真实时间**推进 —— 渲染帧数砍到 1/3，观感进度一点不慢。
+  //     ⚠ 必须传 performance.now()，不能把 rAF 那个旧时间戳转发下去：
+  //     同一轮里 rawRaf 可能先于 setTimeout 触发一次，旧时间戳会让 dt 掉到
+  //     0.016 的兜底值，渐入速度直接腰斩（实测 50% 速）。
+  //   __streetPaused —— 空转保活（约 1fps）。WebGL 上下文、已编译的 shader、
+  //     已加载的纹理全部保活，回到尾屏立刻满帧，预挂载红利一点不丢。
   window.__streetPaused = false;
+  window.__streetFrameMs = 0;
   var rawRaf = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = function (cb) {
     return rawRaf(function (t) {
       if (window.__streetPaused) {
         window.setTimeout(function () { cb(t); }, 1000);
+        return;
+      }
+      var frameMs = window.__streetFrameMs;
+      if (frameMs > 0) {
+        window.setTimeout(function () { cb(window.performance.now()); }, frameMs);
         return;
       }
       cb(t);
@@ -433,73 +511,6 @@ function useStreetWheelBridge(enabled) {
   }, [enabled]);
 }
 
-// demo 的夜街有 2.7s 的 intro 灯光渐入（scene.js: intro += dt/2.7），intro 没走
-// 完时灯只有 35% 亮度。尾屏挂载已提前到 loading 阶段（见 HomePage），但其渲染在
-// 不可见时一律空转（__streetPaused）：灯光烧录只在真正进入尾屏（active=true）时
-// 满帧播放，避免提前烧录的满帧渲染漏进 hero 播放期抢主线程/GPU。
-
-export default function ContactStreet({ active, preload, onTailReady }) {
-  // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
-  // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
-  const [mounted, setMounted] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const frameRef = useRef(null);
-  const everActive = useRef(false);
-  // 首屏 loading 是否已揭幕：尾屏的 intro 灯光烧录要等揭幕后才开始（趁用户滚动下行的
-  // 空档烧掉），既不让它在 loading 期抢首屏视频，也不让它在「滑到尾屏那一刻」才开始
-  // 烧录（那会造成进入瞬间的提速跳变 / 卡顿）。
-  const [heroRevealed, setHeroRevealed] = useState(
-    (typeof window !== 'undefined' && window.__appRevealed) || false
-  );
-  const burnedRef = useRef(false);
-
-  useEffect(() => {
-    if (active) everActive.current = true;
-    if (active || preload) setMounted(true);
-  }, [active, preload]);
-
-  useEffect(() => {
-    const onReady = () => setHeroRevealed(true);
-    if (typeof window !== 'undefined') {
-      if (window.__appRevealed) setHeroRevealed(true);
-      else window.addEventListener('app:ready', onReady);
-    }
-    return () => { if (typeof window !== 'undefined') window.removeEventListener('app:ready', onReady); };
-  }, []);
-
-  // 降频开关（P-04）：尾屏不在视口内时，3D 渲染立即压到空转保活，绝不跑满帧
-  // intro 烧录。原因：尾屏挂载已提前到 loading 阶段（见 HomePage），而 loading 通常
-  // 比尾屏 intro 烧录（约 3.2s）短 —— 若此时满帧烧录，会漏进 hero 播放的头几秒，
-  // 与首屏视频抢同一条主线程/GPU 造成卡顿（iframe 与父页面同源，JS 跑在同一条主线程上）。
-  // shader 编译在 iframe 加载时一次性完成，与 __streetPaused 无关，所以"提前挂载"的
-  // 预编译红利照样保留；灯光烧录改到真正进入尾屏（active=true）时再满帧播放即可。
-  //
-  // ⚠ 时序：HOST_JS 在 iframe 文档加载时把 window.__streetPaused 初始化为 false，
-  // 若这里在文档就绪前就写 true，会写在与正式文档不同的 window 上、随后被 HOST_JS
-  // 覆盖回 false —— 于是尾屏始终满帧。所以必须等 __streetHostHooked(=HOST_JS 已注入)
-  // 之后再写；active 变化时本 effect 重跑会重新写入。
-  useEffect(() => {
-    if (!mounted) return undefined;
-    let stopped = false;
-    let timer = null;
-    let burnTimer = null;
-    const apply = () => {
-      if (stopped) return;
-      const win = frameRef.current && frameRef.current.contentWindow;
-      if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
-      // 满帧条件：① 已在尾屏(active) ② loading 已揭幕且 intro 尚未烧完（趁滚动期烧掉）。
-      // 这样用户滑到尾屏时 intro 已=1，进入瞬间是「已就绪满帧」，不再有烧录+提速跳变。
-      const full = active || (heroRevealed && !burnedRef.current);
-      try { win.__streetPaused = !full; } catch (_) { /* 已销毁 / 跨域时静默 */ }
-      if (!active && heroRevealed && !burnedRef.current && !burnTimer) {
-        // 揭幕后最多烧 INTRO_BURN_MS 便降频空转；用户滚动到达时早就烧完
-        burnTimer = window.setTimeout(() => { burnedRef.current = true; apply(); }, INTRO_BURN_MS);
-      }
-    };
-    apply();
-    return () => { stopped = true; if (timer) window.clearTimeout(timer); if (burnTimer) window.clearTimeout(burnTimer); };
-  }, [mounted, active, heroRevealed]);
-
   useStreetWheelBridge(mounted && active);
 
   // 揭幕协调器（P-03 的核心）。
@@ -527,13 +538,16 @@ export default function ContactStreet({ active, preload, onTailReady }) {
     let readyDone = false;
     let elapsed = 0;
     // 把尾屏 WebGL 预载进度并回首屏 loading 进度条（见 index.html 监听）：
-    // 挂载即登记 0，编译完成（#loading.loaded / canvas 已绘制）登记 1，并通知父页面。
+    // 挂载即登记 0，编译完成（#loading.loaded / canvas 已绘制）登记 0.75，
+    // 灯光烧录完成再登记 1 —— 于是条子在烧录那几秒里仍在真实爬升，而不是干等。
     let tailReported = false;
     const reportTailReady = () => {
       if (tailReported) return;
       tailReported = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 1 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0.75 } })); } catch (_) {}
       try { if (onTailReady) onTailReady(); } catch (_) {}
+      // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
+      try { setArmed(true); } catch (_) {}
     };
     try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0 } })); } catch (_) {}
 
@@ -581,7 +595,10 @@ elapsed += 1;
           if (elapsed > 900) { readyDone = true; reportTailReady(); }
    }
       }
-      if (cssDone && readyDone) {
+      // 遮罩多留一段：等灯光烧录完再揭幕（burned）。烧录期用户本来就还在看
+      // 首屏 loading，尾屏挡住没有任何损失；反过来，若在烧录映到一半就揭幕，
+      // 万一用户直接跳到尾屏就会看到"灯还没亮满"。失败方向必须是安全的。
+      if (cssDone && readyDone && burned) {
         setRevealed(true);
         try { win && win.scrollTo(0, 0); } catch (_) { /* 未就绪 */ }
         return;
@@ -591,7 +608,7 @@ elapsed += 1;
 
     raf = window.requestAnimationFrame(attempt);
     return () => { stopped = true; window.cancelAnimationFrame(raf); };
-  }, [mounted]);
+  }, [mounted, burned]);
 
   const handleLoad = useCallback(() => {
     // 文档已就位：补一次注入（幂等）。真正的揭幕由上面的协调器负责。
