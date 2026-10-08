@@ -107,10 +107,13 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
 
   // 渲染档位（P-04 + 2026-10-08 修正）：
   //   ① 用户已在尾屏(active)          → 满帧
-  //   ② 尚未烧完                       → 受控帧率烧录（只在 loading 遮罩期，或
+  //   ② 冷启动完成且尚未烧完           → 受控帧率烧录（只在 loading 遮罩期，或
   //                                      兜底期；**绝不**满帧）
-  //   ③ 其余（烧完且不在尾屏）         → 空转保活 ~1fps
+  //   ③ 其余（未冷启动 / 烧完且不在尾屏）→ 空转保活 ~1fps
   // 不变量：尾屏只有在 ① 才满帧。所以无论时序如何，它都不可能再去抢首屏的主线程。
+  // ② 的 armed 门控还有一个作用：**把 demo 的场景钟在冷启动期间冻住**（空转档每
+  // 帧只推进 16ms、且 1fps）。这样烧录的第一帧 nf≈0，BURN_FRAMES 帧的账才算得准，
+  // 正好把灯光推到脉冲波峰；否则冷启动那几秒会偷偷把相位推走。
   useEffect(() => {
     if (!mounted) return undefined;
     let stopped = false;
@@ -119,7 +122,7 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
       if (stopped) return;
       const win = frameRef.current && frameRef.current.contentWindow;
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
-      const burning = !burnedRef.current;
+      const burning = armed && !burnedRef.current;
       try {
         win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
@@ -127,7 +130,7 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
     };
     apply();
     return () => { stopped = true; if (timer) window.clearTimeout(timer); };
-  }, [mounted, active, burned]);
+  }, [mounted, active, armed, burned]);
 
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
 // ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header）。
