@@ -5040,7 +5040,15 @@ html[data-paging="on"] .contact-page {
    修法:这里把渐变方向写成 to top,翻转后视觉上才回到"上实下虚=距离优先"。
    (整面地的纵深主控在 .works-orbit-floor 那层,方向天然正确;本层只做清晰度。) */
 .works-orbit-floor-mirror-near {
-  filter: blur(0.5px) brightness(0.9) saturate(1.05);
+  /* ⚠ 2026-10-08 业主:「现在开始给PC端二级页面的反射内容加高斯模糊,营造反射氛围」。
+     旧值 0.5px 是**近乎镜面**的 —— 倒影能逐像素读出卡片内容,读起来像"复制了一份"
+     而不是"反射"。这里提到 **4px**:贴接触线处仍保留可辨认度(高反射地面的特征),
+     但整体已化为柔光,不再与主卡抢注意力。
+     取值依据:outputs/probe-blur.mjs 跑 0.5/2/3/5/8 五档,4px 落在"MILD(2)"与
+     "STRONG(5)"之间 —— 再糊就丢掉贴合处的可辨性,再清就回到镜面感。
+     ⚠ 模糊不会透底:img 有 scale(1.015) 余量(水平 6.3px / 垂直 3.6px),
+       实测整条镜像(667..1080)平均亮度相对 0.5px 基线 Δ<0.15,边缘只是正常平滑。 */
+  filter: blur(4px) brightness(0.9) saturate(1.05);
   opacity: 1;
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
@@ -5049,7 +5057,9 @@ html[data-paging="on"] .contact-page {
 /* 远层:仅作柔光景深陪衬(压暗 + 模糊),不能盖过近层,否则倒影糊成一片。
    同样因父级 scaleY(-1) 需写成 to top。 */
 .works-orbit-floor-mirror-far {
-  filter: blur(9px) brightness(0.45) saturate(1.02);
+  /* 9px → 16px(2026-10-08 同上):远端彻底化开成"光雾",与近层拉开景深差(1:4),
+     倒影不再有可辨认的轮廓,只留一团随卡片明暗呼吸的冷光。 */
+  filter: blur(16px) brightness(0.45) saturate(1.02);
   opacity: 0.42;
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
