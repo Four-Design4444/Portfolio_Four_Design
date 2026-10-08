@@ -4850,22 +4850,34 @@ html[data-paging="on"] .contact-page {
   /* 2026-10-08:地面盒 = **卡片外框**盒。倒影要连卡片的 12px padding + 1px 描边
      + 15px 圆角一起反射,所以不能再按 cover 盒定位(旧值 left/right:13px 与
      top 再减 13px,对齐的是 cover 盒;卡片外框那 13px 圈被 overflow 裁掉了)。 */
-  /* ⚠⚠ 2026-10-08 二次修(业主:主卡 hover 时倒影被裁切 + 露出裁切框的底色):
-     地面盒的左右边界**不是**卡片边界,而是比卡片外扩 26px。原因有两条:
-     ① hover 时卡片 scale(1.025) → 镜像比地面盒宽 11px/侧,被 overflow:hidden
-        连同遮罩一起切掉(遮罩的水平覆盖范围恒等于地面盒,`mask-size` 改不动它,
-        实测 mask-size:130% 无效),表现为"倒影左右各被切一条 + 出硬边";
-        倾角最大时(rotateY 11° + perspective 1300)实测还多出 ~22px。
-     ② 26px 余量同时盖住 ① 的两种情形,渲染上不可见(遮罩是纵向渐变,
-        横向均匀,外扩区拿到同样的纵深 alpha)。
-     配套三处必须同值 26px:镜像/地平线/接触投影(见下),否则几何错位。 */
-  left: -26px;
-  right: -26px;
+  /* ⚠⚠⚠ 2026-10-08 第五轮（业主：「这里仍然能看到剪切蒙版的切割痕迹，需要大幅
+     放大这个限制，因为我还要不断加模糊，模糊改大后这些边缘必然会被切掉的」）：
+     裁切方式由 `overflow: hidden` 换成 **`clip-path`**，并且地面盒回到与
+     `.works-orbit-focus` 同宽（`left/right: 0`）。
+     为什么不再"左右外扩"：模糊加在镜像层上，镜像的模糊结果会向外扩散 ~3σ
+     （blur 24px ⇒ 每侧 ±72px），地面盒不够宽就把这圈扩散硬切掉 —— 这就是业主
+     看到的"剪切蒙版切割痕迹"。而地面盒**不能靠外扩解决**：它外扩多少就会顶出
+     页面左边界（实测 1414 视口下 focus.left 只有 108px，页面 `.works-index-page--orbit`
+     自己还有 `overflow: clip`，会再补一刀）。
+     改法：地面盒回位到卡片宽度，改用
+     `clip-path: inset(0 -240px 0 -240px)` —— 左右各**放开 240px**
+     （≫ blur 扩散 72px + hover 外溢 33px，此后业主继续加大模糊也不会切），
+     **顶部仍精确裁在接触线**（`top:0`，倒影不得往上蔓延到卡片上），
+     底部同样裁在接触线下方 `height` 处（那里遮罩已淡到 0，裁切不可见，
+     同时避免遮罩在盒外重复）。`clip-path` 在 `filter` 之后应用，
+     所以它放开的余量就是 blur 真正可用的采样空间。
+     配套：`.works-orbit-floor::after` 回到 `left/right:10%`（不再需要补偿外扩），
+     `.works-orbit-floor-mirror` 回到 `left/right:0`（= 卡片外框盒）。 */
+  left: 0;
+  right: 0;
   /* 接触线 = 卡片底边。100% 是 focus 的 padding 盒(含下方 64px 留白),
      减去 64px 留白就落在卡片外框的底边。 */
   top: calc(100% - var(--focus-pb));
   height: clamp(260px, 46vh, 560px);
-  overflow: hidden; /* 溢出即裁切,绝不产生滚动条 */
+  /* 只裁上/下（接触线 → 倒影可见高度），左右放开 240px 给 blur 采样。
+     不产生滚动条，也不影响布局。 */
+  clip-path: inset(0 -240px 0 -240px);
+  -webkit-clip-path: inset(0 -240px 0 -240px);
   pointer-events: none;
   /* 整面地的纵深衰减:接触线最实,越远越淡。
      ⚠ 这一层**没有**被翻转(翻转在子级 .works-orbit-floor-mirror 上),
@@ -4873,6 +4885,11 @@ html[data-paging="on"] .contact-page {
      是整个反射唯一的纵深主控。子级两层只负责"清晰度分层"(见下)。 */
   -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
   mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
+  /* ⚠ 遮罩必须 no-repeat：镜像高(≈494px)常大于地面盒高(clamp(260px,46vh,560px))，
+     默认 repeat 会让溢出的那段**重新从 #000 开始**，在倒影中段横出一道亮带。
+     no-repeat 时盒外取值 = 渐变末端 = transparent。 */
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
 /* ⚠⚠ 2026-10-08 第三次修(业主:「反射层这里的底部还是能看到一个底色,没有排除干净」)
@@ -4895,9 +4912,9 @@ html[data-paging="on"] .contact-page {
 .works-orbit-floor::after {
   content: '';
   position: absolute;
-  /* 26px = 地面盒外扩量;+10% 保持接触投影原有的内缩比例 */
-  left: calc(26px + 10%);
-  right: calc(26px + 10%);
+  /* 地面盒已回到卡片宽度(见上)，接触投影回到 10% 内缩 */
+  left: 10%;
+  right: 10%;
   top: 1px;
   height: 22px;
   border-radius: 50%;
@@ -4919,10 +4936,11 @@ html[data-paging="on"] .contact-page {
    —— 卡片的宽高比是 16:9 再各加 26px,不是固定比。 */
 .works-orbit-floor-mirror {
   position: absolute;
-  /* 26px = 地面盒的左右外扩量,镜像仍然只占**卡片外框盒**那 861.5px,
-     于是 hover 放大后的镜像能完整落在地面盒内,不再被切。 */
-  left: 26px;
-  right: 26px;
+  /* 地面盒已回到卡片宽度(见上)，所以镜像也归位到 0 —— 仍只占**卡片外框盒**
+     那 861.5px，与主卡逐像素对齐。blur 的采样空间改由地面盒的 clip-path
+     左右 240px 余量提供，不再依赖这里的外扩。 */
+  left: 0;
+  right: 0;
   top: 0;
   /* 共轭:rotateX 取反、rotateY 同号、translateY 反向(translate 属性在翻转之外) */
   translate: 0 var(--bob-mirror, 0px);
@@ -4932,6 +4950,19 @@ html[data-paging="on"] .contact-page {
   transition: transform 0.48s cubic-bezier(0.23, 0.76, 0.25, 1);
   animation: works-orbit-bob-mirror 7.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   will-change: transform;
+  /* ⚠ 2026-10-08 第四轮（业主：「反射似乎卡片的外边框都是实的，这个外边框也是要
+     跟里面的图片一起高斯模糊的。现在大量提高反射的高斯模糊，现在太实了」）：
+     模糊**统一提到这一层**——它包住整张倒影（frame 的 1px 描边 + 15px 圆角 +
+     12px padding + 内层画面），于是外框与图片拿到**同一个模糊**，不再出现
+     "图糊了、框还锐利"的割裂。
+     为什么加在 mirror 而不是 frame：mirror 外面有地面盒 `clip-path` 放开的
+     240px 横向余量供 blur 采样，水平边缘不会透底；frame 的边界则紧贴镜像边界，
+     blur 会让描边外缘半透明。
+     ⚠ 2026-10-08 第五轮（业主：「大幅放大这个限制……限制把模糊改到 24PX」）：
+     11px → **24px**，同时地面盒换成 `clip-path: inset(0 -240px 0 -240px)`
+     （见 `.works-orbit-floor`），左右各放开 240px ≫ blur 扩散 72px，
+     所以 24px 的模糊结果完整落在裁切区内，**不再出现被切的硬边**。 */
+  filter: blur(24px);
   z-index: 2;
 }
 
@@ -5040,15 +5071,10 @@ html[data-paging="on"] .contact-page {
    修法:这里把渐变方向写成 to top,翻转后视觉上才回到"上实下虚=距离优先"。
    (整面地的纵深主控在 .works-orbit-floor 那层,方向天然正确;本层只做清晰度。) */
 .works-orbit-floor-mirror-near {
-  /* ⚠ 2026-10-08 业主:「现在开始给PC端二级页面的反射内容加高斯模糊,营造反射氛围」。
-     旧值 0.5px 是**近乎镜面**的 —— 倒影能逐像素读出卡片内容,读起来像"复制了一份"
-     而不是"反射"。这里提到 **4px**:贴接触线处仍保留可辨认度(高反射地面的特征),
-     但整体已化为柔光,不再与主卡抢注意力。
-     取值依据:outputs/probe-blur.mjs 跑 0.5/2/3/5/8 五档,4px 落在"MILD(2)"与
-     "STRONG(5)"之间 —— 再糊就丢掉贴合处的可辨性,再清就回到镜面感。
-     ⚠ 模糊不会透底:img 有 scale(1.015) 余量(水平 6.3px / 垂直 3.6px),
-       实测整条镜像(667..1080)平均亮度相对 0.5px 基线 Δ<0.15,边缘只是正常平滑。 */
-  filter: blur(4px) brightness(0.9) saturate(1.05);
+  /* 2026-10-08 第四/五轮：模糊已统一上移到 `.works-orbit-floor-mirror`
+     （现为 24px），这一层只保留色调与遮罩 —— 若再加 blur 会与外框的模糊
+     叠加成 24px+，又变回"框比图清"的错位。 */
+  filter: brightness(0.9) saturate(1.05);
   opacity: 1;
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
@@ -5057,9 +5083,10 @@ html[data-paging="on"] .contact-page {
 /* 远层:仅作柔光景深陪衬(压暗 + 模糊),不能盖过近层,否则倒影糊成一片。
    同样因父级 scaleY(-1) 需写成 to top。 */
 .works-orbit-floor-mirror-far {
-  /* 9px → 16px(2026-10-08 同上):远端彻底化开成"光雾",与近层拉开景深差(1:4),
-     倒影不再有可辨认的轮廓,只留一团随卡片明暗呼吸的冷光。 */
-  filter: blur(16px) brightness(0.45) saturate(1.02);
+  /* 9px → 16px → 12px(2026-10-08 第四轮):模糊主体已上移到 mirror(现 24px),
+     这一层再叠 12px ⇒ 远景合计 ≈27px(√(24²+12²)),与近景 24px 拉开景深,
+     只留一团随卡片明暗呼吸的冷光。 */
+  filter: blur(12px) brightness(0.45) saturate(1.02);
   opacity: 0.42;
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
@@ -5322,12 +5349,20 @@ html[data-paging="on"] .contact-page {
 
 .works-orbit-cover {
   position: relative;
-  width: 100%;
-  /* ⚠ 2026-10-08:这里原来是 min(96%, 16/9 上限),96% 让封面比卡片内容盒窄 4%,
-     于是卡片"内框"左右各留出 29.7px、而上下只有 13px —— 业主截图指出左右间距偏宽。
-     卡片宽度本就由"16/9 上限"反推(max-content),去掉 96% 后封面正好铺满内容盒,
-     左右间距 = 12px padding + 1px border = 上下间距,版式其余尺寸不变。 */
-  max-width: calc(min(58vh, 470px) * 16 / 9);
+  /* ⚠⚠ 2026-10-08 修（业主：「一级进二级的瞬间会出现这个过渡状态，不能常出现」）：
+     原写法 `width:100%` + `max-width:calc(min(58vh,470px)*16/9)` —— 宽度依赖**内容**，
+     而 .works-orbit 是 fit-content 居中（flex item + grid `minmax(0,1fr)` 列）。
+     主卡封面走 LazyImage：**初次渲染的 <img> 没有 src**（等 IntersectionObserver
+     回调才赋值）⇒ 无固有尺寸 ⇒ cover 的 max-content 塌成 0 ⇒ focus 列塌到 138px
+     ⇒ 整个 .works-orbit 从 1198px 塌到 474px 并居中 ⇒ 右侧 rail 被挤到**画面正中**
+     （实测 rail.left 1024 → 662.2），直到封面图加载完成才跳回。
+     改成**确定宽度**（由高度上限按 16:9 反推）：布局不再看图片是否就绪。
+     实测：清掉封面 src 后 orbit 恒为 l=108 w=1198（改前 l=469.8 w=474.5）。
+     上一轮"去掉 96%"的结论不变 —— 卡片宽度仍由 16:9 上限反推，封面正好铺满
+     内容盒，左右间距 = 12px padding + 1px border = 上下间距。
+     `max-width:100%` 保留给窄视口（flex-shrink 后列宽变窄时封面跟着收）。 */
+  width: calc(min(58vh, 470px) * 16 / 9);
+  max-width: 100%;
   margin: 0 auto;
   aspect-ratio: 16 / 9;
   max-height: min(58vh, 470px);
@@ -5438,36 +5473,59 @@ html[data-paging="on"] .contact-page {
   position: relative;
   /* 下方留白:给整列的地面倒影留出空间 */
   padding-bottom: 30px;
-  /* ⚠⚠ 2026-10-08 修(业主:选中项列表左移,但它的倒影被裁切):
-     `-webkit-box-reflect` 的倒影被**裁到元素 border box**,而选中卡
-     `.is-selected` 有 `translateX(-7px)`(hover 非选中卡 -3px)→ 卡片左缘
-     比列表盒左缘还靠左 7px,镜像那 7px 直接被切掉。
-     这里给盒子左右各留 12px 呼吸位,再用等量负外边距把版式**原样**抵消:
-     内容盒宽/位置完全不变(实测卡片仍是 l=1036 w=270,选中卡 l=1029),
-     只有 reflect 用的 border box 变宽(1024..1318),倒影不再被切。
-     注意必须 padding + 负 margin 成对出现,单独加 padding 会把卡片压窄。 */
-  padding-left: 12px;
-  padding-right: 12px;
-  margin-left: -12px;
-  margin-right: -12px;
 }
 
-/* 整列地面倒影(2026-10-08 修):倒影加在**列表整体** .works-orbit-rail 上,
-   落在列表下方的「地面」上 —— 不是加在卡片之间。列表间距/版式保持原样。
-   ⚠ 旧写法 `rgba(0,0,0,0.16), transparent 30%` 的遮罩在整条倒影 30% 处
-   (≈71px,刚够最底卡的镜像)就淡没了 → 只有最底一张卡看得出倒影,上面两张
-   等于没有反射。现把渐变铺满**整条倒影**(= 整列高 ≈238px):三张卡的倒影
-   自上而下依次可见、逐层变淡,读作「列表在下方地面上的倒影」。
-   Chromium/Safari 生效;Firefox 优雅降级(仅无反射)。 */
-@supports (-webkit-box-reflect: below 0) {
-  .works-orbit-rail {
-    -webkit-box-reflect: below 3px linear-gradient(to bottom,
-      rgba(0, 0, 0, 0.40) 0%,
-      rgba(0, 0, 0, 0.32) 32%,
-      rgba(0, 0, 0, 0.21) 58%,
-      rgba(0, 0, 0, 0.10) 82%,
-      transparent 100%);
-  }
+/* 整列地面倒影（2026-10-08 第五轮重写）。
+   ⚠ 由 `-webkit-box-reflect` 换成**真实 DOM 镜像副本**，原因是业主这次的两条
+   要求 reflect 都做不到：
+   ① 「右边的列表反射也是要加高斯模糊的」—— box-reflect 只吃渐变遮罩，
+      **不接受 filter**；
+   ② 「需要大幅放大这个限制，因为我还要不断加模糊」—— reflect 的快照被裁死在
+      元素 border box（上一轮正是为此给 rail 加 12px padding + 等量负 margin，
+      才把选中卡 translateX(-7px) 的那 7px 镜像救回来），没有可放大的余量。
+   副本由 main.jsx 在 rail 内渲染（同一份 works、同一套 class，选中态自动同步），
+   绝对定位到 rail 下方，整体翻转 + blur，遮罩照样铺满整条倒影（≈238px）：
+   三张卡的倒影自上而下依次可见、逐层变淡。
+   ⚠ 父级 scaleY(-1) 会镜像子级遮罩，故这里必须写 **to top**
+     （与 .works-orbit-floor-mirror-near/far 同一个坑）。
+   ⚠ left/right:0 相对 rail 的 padding box；rail 的左右 padding 已随
+     box-reflect 一起删除，所以副本宽 = 卡片宽，与 rail 卡片逐像素对齐。 */
+.works-orbit-rail-mirror {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* rail 底边 + 3px（与原 `-webkit-box-reflect: below 3px` 的观感一致） */
+  top: calc(100% + 3px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  /* 复刻原来倒影顶部的 30px 空隙（= rail 的 padding-bottom 被镜像的那一段） */
+  padding: 0 0 30px;
+  pointer-events: none;
+  /* origin 放在顶边：先按顶边向上镜像，再整体下移自身高度，
+     使翻折线正好落在 rail 底边。 */
+  transform-origin: 50% 0;
+  transform: translateY(100%) scaleY(-1);
+  /* 业主：「右边的列表反射也是要加高斯模糊的」—— 与主卡倒影同值 24px */
+  filter: blur(24px);
+  -webkit-mask-image: linear-gradient(to top,
+    rgba(0, 0, 0, 0.40) 0%,
+    rgba(0, 0, 0, 0.32) 32%,
+    rgba(0, 0, 0, 0.21) 58%,
+    rgba(0, 0, 0, 0.10) 82%,
+    transparent 100%);
+  mask-image: linear-gradient(to top,
+    rgba(0, 0, 0, 0.40) 0%,
+    rgba(0, 0, 0, 0.32) 32%,
+    rgba(0, 0, 0, 0.21) 58%,
+    rgba(0, 0, 0, 0.10) 82%,
+    transparent 100%);
+}
+
+/* 副本只作视觉：不参与交互，也不需要错峰浮动 */
+.works-orbit-rail-mirror .works-orbit-rail-card {
+  animation: none;
+  pointer-events: none;
 }
 
 .works-orbit-rail-label {

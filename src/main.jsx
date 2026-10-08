@@ -6622,6 +6622,51 @@ function WorksPage({
     );
   }
 
+  /* 右侧「IN THIS COLLECTION」列表卡片的渲染器：渲染两份 ——
+     本体（button，可交互）+ 倒影副本（div，纯视觉）。
+     副本走同一套 class，所以 is-selected 位移、封面、排版全部自动同步；
+     翻转 / 高斯模糊 / 遮罩由 CSS 的 .works-orbit-rail-mirror 负责。
+     （2026-10-08 第五轮：倒影从 -webkit-box-reflect 换成真实 DOM 副本，
+       因为 box-reflect 既不支持高斯模糊，也没有可供放大的裁切余量。） */
+  const renderRailCard = (work, i, mirror) => {
+    const Tag = mirror ? 'div' : 'button';
+    const attrs = mirror
+      ? { 'aria-hidden': true }
+      : {
+          type: 'button',
+          'aria-pressed': i === index,
+          'aria-label': `选择 ${work.title}`,
+          onPointerEnter: () => setActiveIndex(i),
+          onClick: () => setActiveIndex(i),
+        };
+    return (
+      <Tag
+        key={mirror ? `mirror-${work.id}` : work.id}
+        className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
+        style={{ '--i': i }}
+        {...attrs}
+      >
+        <span className="works-orbit-clip" aria-hidden="true">
+          <span className="works-orbit-sheen" />
+          <span className="works-orbit-glow" />
+        </span>
+        {/* 列表缩览是 16:9(.works-orbit-rail-card .works-orbit-cover 继承
+            .works-orbit-cover 的 16/9),必须取 detailHero。原先取的是
+            work.image —— 那个字段现在是 3:5 的移动端卡面素材,放进 16:9 的
+            盒子里会每侧裁掉 33%(object-fit:cover)。 */}
+        <div className="works-orbit-cover"><img src={work.detailHero ?? work.image} alt={mirror ? '' : work.subtitle} /></div>
+        <div className="works-orbit-rail-copy">
+          <span>{String(i + 1).padStart(2, '0')}</span>
+          <div>
+            <h3>{work.title}</h3>
+            <p>{work.subtitle}</p>
+          </div>
+          <span className="works-orbit-rail-arrow">{orbitArrow}</span>
+        </div>
+      </Tag>
+    );
+  };
+
   return (
     <section className="works-index-page works-index-page--orbit">
       <div className="works-container works-orbit-container">
@@ -6679,36 +6724,12 @@ function WorksPage({
             <div className="works-orbit-rail-label">
               IN THIS COLLECTION <span>{String(works.length).padStart(2, '0')}</span>
             </div>
-            {works.map((work, i) => (
-              <button
-                key={work.id}
-                type="button"
-                className={`works-orbit-rail-card${i === index ? ' is-selected' : ''}`}
-                aria-pressed={i === index}
-                aria-label={`选择 ${work.title}`}
-                style={{ '--i': i }}
-                onPointerEnter={() => setActiveIndex(i)}
-                onClick={() => setActiveIndex(i)}
-              >
-                <span className="works-orbit-clip" aria-hidden="true">
-                  <span className="works-orbit-sheen" />
-                  <span className="works-orbit-glow" />
-                </span>
-                {/* 列表缩览是 16:9(.works-orbit-rail-card .works-orbit-cover 继承
-                    .works-orbit-cover 的 16/9),必须取 detailHero。原先取的是
-                    work.image —— 那个字段现在是 3:5 的移动端卡面素材,放进 16:9 的
-                    盒子里会每侧裁掉 33%(object-fit:cover)。 */}
-                <div className="works-orbit-cover"><img src={work.detailHero ?? work.image} alt={work.subtitle} /></div>
-                <div className="works-orbit-rail-copy">
-                  <span>{String(i + 1).padStart(2, '0')}</span>
-                  <div>
-                    <h3>{work.title}</h3>
-                    <p>{work.subtitle}</p>
-                  </div>
-                  <span className="works-orbit-rail-arrow">{orbitArrow}</span>
-                </div>
-              </button>
-            ))}
+            {works.map((work, i) => renderRailCard(work, i, false))}
+            {/* 倒影：真实 DOM 镜像副本（取代 `-webkit-box-reflect` —— 后者既不
+                支持高斯模糊，也没有可供放大的裁切余量）。纯视觉、不可交互。 */}
+            <div className="works-orbit-rail-mirror" aria-hidden="true">
+              {works.map((work, i) => renderRailCard(work, i, true))}
+            </div>
           </div>
           </div>
         </div>
