@@ -5114,6 +5114,7 @@ html[data-paging="on"] .contact-page {
    令二者相等即可严丝合缝：`--lift` 就是**卡片的 translateY 值**。
    ⚠ 以后改卡片 hover 的 translateY，这里必须同步改成同一个数。 */
 .works-orbit-float:hover ~ .works-orbit-floor .works-orbit-floor-mirror,
+.works-orbit-float:has(.works-orbit-card:hover) ~ .works-orbit-floor .works-orbit-floor-mirror,
 .works-orbit-float:has(.works-orbit-card:focus-visible) ~ .works-orbit-floor .works-orbit-floor-mirror {
   --lift: -14px;
   --mz: 1.025;
@@ -5368,7 +5369,6 @@ html[data-paging="on"] .contact-page {
   background: linear-gradient(132deg, rgba(231, 242, 255, 0.11), rgba(186, 203, 232, 0.043) 33%, rgba(185, 201, 224, 0.03) 70%, rgba(219, 234, 255, 0.075));
   box-shadow:
     inset 0 0 0 1px rgba(244, 250, 255, 0.02),
-    inset 0 1px 1px rgba(244, 250, 255, 0.07),
     inset 0 -1px 1px rgba(9, 19, 33, 0.53),
     0 18px 36px -24px rgba(0, 0, 0, 0.68);
   backdrop-filter: blur(28px) saturate(125%);
@@ -5382,7 +5382,6 @@ html[data-paging="on"] .contact-page {
   transform: perspective(1300px) translateY(-14px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(1.025);
   border-color: rgba(210, 232, 255, 0.46);
   box-shadow:
-    inset 0 1px 1px rgba(244, 250, 255, 0.14),
     0 31px 48px -22px rgba(0, 0, 0, 0.87),
     0 0 25px -19px rgba(164, 204, 255, 0.33);
 }
