@@ -19,6 +19,14 @@ html[data-device="mobile"] {
      min 约束),圆角跨级交接时按此比例做缩放补偿,使视觉圆角在落定帧一致。 */
   --mob-card-w: calc(min(42vh, 354px) * 0.6);
   --works-card-w: calc(min(58vh, 500px, calc(74vw * 5 / 3)) * 0.6);
+  /* 跨级缩放补偿系数 = 二级卡面宽 / 一级卡面宽(≈1.41)。
+     卡面内所有**固定 px** 的光影量(box-shadow 的偏移/模糊、text-shadow 的模糊)
+     都会被卡面自身的 transform:scale() 一起缩放。两级卡面 base 宽度不同 →
+     同一个声明值在屏幕上并不等值(一级副卡 scale .86、二级收拢终点 scale .61,
+     同一 16/40 的投影屏幕上分别是 13.8/34.4 与 9.7/24.4,差 29%)。跨级态把 base
+     乘上该系数,×scale 之后的**视觉**量才与一级静止态完全一致。
+     圆角走的是同一条思路(见「圆角跨级连续」一节)。 */
+  --cross-scale: calc(var(--works-card-w) / var(--mob-card-w));
   /* ⚠ 不要在这里加 overscroll-behavior-y: none(2026-10-03 实测踩坑):
      移动端模式下 html+body 一起设 none 会让**滚轮完全失效**(works 页滚不动,
      同一页面把属性改回 auto 立刻恢复 0->487)。橡皮筋另想办法。 */
@@ -1634,6 +1642,17 @@ html[data-device="mobile"] .mw-card {
   padding: 0;
   border: 0;
   cursor: pointer;
+  /* ⚠ button 的 UA 外观必须显式清空(与 .morph-logo 第七轮同一个坑):
+     一级卡是 <div>、二级卡是 <button>,而合成层会在跨级交接的那一帧被重建。
+     button 默认的 appearance/outline/居中排版在这类重建里可能绘出一层 UA
+     backing,表现为业主第14轮反馈的「副卡落定后明亮又变了一点」——
+     一级副卡(div)没有这层,两边于是不等。清空后两边渲染路径一致。 */
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
 }
 
 /* 圆角跨级连续(2026-10-08 第七轮「主副卡圆角跳帧」):
@@ -1662,6 +1681,49 @@ html[data-device="mobile"] .works-index-page.mw-entering .mw-slide:not(.is-curre
 }
 html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide .mw-card {
   border-radius: calc(20px * var(--works-card-w) / var(--mob-card-w));
+}
+
+/* 投影 / 文字阴影跨级连续(2026-10-08 第14轮「副卡落定后明亮又变了一点」):
+   box-shadow 的偏移与模糊、text-shadow 的模糊都是**固定 px**,会随卡面自身的
+   transform:scale() 一起缩放。一级副卡 scale 0.86、二级收拢终点 scale ≈0.61
+   (二级卡面宽是一级的 ~1.41 倍,收拢后视觉尺寸与一级相同 ⇒ scale 必然小一档)。
+   于是同一个 `0 16px 40px` 的声明值,屏幕上分别是 13.8/34.4 与 9.7/24.4 —— 差 29%;
+   文字阴影 12px 也只剩 7.3px。落定那一帧二级层卸载、一级层现身,副卡周围的光影
+   硬切一档,读起来就是「动效执行完之后副卡明亮变了一下」。主卡同理(24/56 → 17/39.6)。
+
+   ⭐ 第 5 轮漏掉的正是这一层:当时只比对了 CSS **声明值**(把二级副卡的 24/56 改成
+      16/40,与一级"同档"),宣称已修 —— 但两边 scale 不同,同档声明 ≠ 同档观感。
+
+   修法:跨级态(armed / leaving)把 base 乘上 --cross-scale(≈1.41),令 ×scale 之后
+   的视觉量与一级静止态逐值相同(副卡 22.6×0.61=13.8、主卡 33.9×0.708=24)。
+     · armed 只存在一帧、且统一卡面那条 `transition:none` 已覆盖 transition ⇒ 直接落位不补间;
+     · leaving 由统一卡面的 box-shadow 520ms 过渡接管,与 560ms 收拢基本同步;
+     · entering / 落定后类名摘除,自动回落静止档并补间回去,全程连续。 */
+html[data-device="mobile"] .works-index-page.mw-armed .mw-slide:not(.is-current) .mw-card,
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide:not(.is-current) .mw-card {
+  box-shadow: 0 calc(16px * var(--cross-scale)) calc(40px * var(--cross-scale)) rgba(0, 0, 0, .55);
+}
+html[data-device="mobile"] .works-index-page.mw-armed .mw-slide.is-current .mw-card,
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide.is-current .mw-card {
+  box-shadow: 0 calc(24px * var(--cross-scale)) calc(56px * var(--cross-scale)) rgba(0, 0, 0, .55);
+}
+/* 文字阴影同一病根,补上过渡让它在 entering/leaving 里平滑补间(否则会硬切)。 */
+html[data-device="mobile"] .mw-card-copy strong,
+html[data-device="mobile"] .mw-card-copy b {
+  transition: text-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-device="mobile"] .works-index-page.mw-armed .mw-card-copy strong,
+html[data-device="mobile"] .works-index-page.mw-armed .mw-card-copy b {
+  /* armed 帧必须 instantly 落在补偿值上(否则会从基态 12px 反向补间)。 */
+  transition: none;
+}
+html[data-device="mobile"] .works-index-page.mw-armed .mw-card-copy strong,
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-card-copy strong {
+  text-shadow: 0 calc(1px * var(--cross-scale)) calc(12px * var(--cross-scale)) rgba(0, 0, 0, .45);
+}
+html[data-device="mobile"] .works-index-page.mw-armed .mw-card-copy b,
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-card-copy b {
+  text-shadow: 0 calc(1px * var(--cross-scale)) calc(8px * var(--cross-scale)) rgba(0, 0, 0, .4);
 }
 
 /* ---- 入场:轨道自身就是那张在飞的卡(2026-10-07 重做) --------------------
