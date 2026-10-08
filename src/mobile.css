@@ -1283,8 +1283,12 @@ html[data-device="mobile"] .mob-thumbs {
   touch-action: pan-x;
   cursor: grab;
   /* 恢复原始版式间距(缩览图下方 24px)。⚠ 与"色块"无关:色块来自 min-height
-     塌缩(已修),这里只是业主要求的视觉留白,勿再归 0。 */
-  padding: 4px 0 24px;
+     塌缩(已修),这里只是业主要求的视觉留白,勿再归 0。
+     ⚠ padding-top 28px(2026-10-09 业主反馈):「查看全部」删除后,该屏内容高
+     ≥ min-height,margin-top:auto 吸收量≈0,缩览图条会贴死上方圆点条 ——
+     原来这段间距一直由按钮的 margin 兜着。padding-top 提供保底间距
+     (圆点底 → 缩览图顶),不依赖 auto 是否有剩余。 */
+  padding: 28px 0 24px;
   scroll-behavior: smooth;
   margin-top: auto;
   width: 100%;
