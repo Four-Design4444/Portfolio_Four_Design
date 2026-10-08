@@ -15,6 +15,10 @@ html[data-device="mobile"] {
   text-size-adjust: 100%;
   scrollbar-gutter: auto;
   overflow-y: auto;
+  /* 卡片宽度变量:一级/二级卡面 base 宽度不同(一级由舞台高 3:5、二级由视口
+     min 约束),圆角跨级交接时按此比例做缩放补偿,使视觉圆角在落定帧一致。 */
+  --mob-card-w: calc(min(42vh, 354px) * 0.6);
+  --works-card-w: calc(min(58vh, 500px, calc(74vw * 5 / 3)) * 0.6);
   /* ⚠ 不要在这里加 overscroll-behavior-y: none(2026-10-03 实测踩坑):
      移动端模式下 html+body 一起设 none 会让**滚轮完全失效**(works 页滚不动,
      同一页面把属性改回 auto 立刻恢复 0->487)。橡皮筋另想办法。 */
@@ -274,6 +278,16 @@ html[data-device="mobile"] .mobile-menu a.is-active::after {
 html[data-device="mobile"] .morph-logo {
   width: 40px;
   height: 12px;
+  /* LOGO 黑框再修:button 默认背景/边框在频繁切换触发的合成层重建中,
+     偶发以暗色填充 backing store,用户高频来回切换后截图四周会出现近黑矩形。
+     显式清空所有默认绘制属性,并把点击高亮也设透明,避免合成器拿任何暗色衬底。 */
+  background: transparent;
+  border: none;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* The mark keeps the SVG's own 701:200 ratio on EVERY level.
@@ -1072,6 +1086,9 @@ html[data-device="mobile"] .mw-card {
   box-shadow: 0 24px 56px rgba(0, 0, 0, .55);
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* 圆角跨级连续(2026-10-08):base 圆角可能在 armed/entering/leaving 态被覆盖为
+     缩放补偿值,加过渡避免硬切。一级卡平时无覆盖,值恒为 20px,不额外动画。 */
+  transition: border-radius 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 html[data-device="mobile"] .mob-card-img,
 html[data-device="mobile"] .mw-card-img {
@@ -1539,6 +1556,34 @@ html[data-device="mobile"] .mw-card {
   padding: 0;
   border: 0;
   cursor: pointer;
+}
+
+/* 圆角跨级连续(2026-10-08 第七轮「主副卡圆角跳帧」):
+   一级/二级卡面 base 宽度不同(一级 212px 左右、二级 297px 左右),固定 20px 圆角
+   在交接帧会因卡片缩放比例不同,导致视觉圆角从 20px 突然跳到 14px(主卡)或
+   17px→12px(副卡)。修复思路与阴影/压暗一致:让交接两端 base 圆角经缩放补偿后
+   视觉圆角完全相同。
+     · 二级副卡静止态:base 圆角 = 20px × (一级副卡缩放 0.86 / 二级副卡缩放 0.75)
+       = 22.93px,视觉圆角与一级副卡同为 17.2px。
+     · 跨级 armed/leaving/entering 各态:主副卡统一用 20px × (--works-card-w /
+       --mob-card-w) ≈ 28px,与一级落定帧视觉圆角同值(主卡 20px、副卡 17.2px)。
+   统一卡面已加 border-radius transition,这些覆盖值会平滑补间,不再硬切。 */
+html[data-device="mobile"] .mw-slide:not(.is-current) .mw-card {
+  border-radius: calc(20px * 0.86 / 0.75);
+}
+html[data-device="mobile"] .works-index-page.mw-armed .mw-slide .mw-card {
+  border-radius: calc(20px * var(--works-card-w) / var(--mob-card-w));
+  /* armed 只存在一帧,必须 instantly 落到源卡姿态,不加过渡。 */
+  transition: none;
+}
+html[data-device="mobile"] .works-index-page.mw-entering .mw-slide.is-current .mw-card {
+  border-radius: 20px;
+}
+html[data-device="mobile"] .works-index-page.mw-entering .mw-slide:not(.is-current) .mw-card {
+  border-radius: calc(20px * 0.86 / 0.75);
+}
+html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide .mw-card {
+  border-radius: calc(20px * var(--works-card-w) / var(--mob-card-w));
 }
 
 /* ---- 入场:轨道自身就是那张在飞的卡(2026-10-07 重做) --------------------
