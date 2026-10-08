@@ -6657,6 +6657,9 @@ function WorksPage({
             <path d="M6 6.5l6 6 6-6" />
             <path d="M6 12.5l6 6 6-6" />
           </svg>
+          {/* 2026-10-08 第十二轮：翻页提示 = icon + 文字，同一容器一起循环动效
+              （淡入 → 下移 → 淡出，与 Hero 区下拉动效同构，见 mobile.css mwHintLoop）。 */}
+          <span className="mw-hint-text" aria-hidden="true">下滑查看详情</span>
         </button>
       </section>
     );

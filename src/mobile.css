@@ -1776,39 +1776,51 @@ html[data-device="mobile"] .works-index-page.mw-leaving .mw-hint { opacity: 0; a
 html[data-device="mobile"] .works-index-page.mw-leaving .works-side-rays { opacity: 0; }
 html[data-device="mobile"] .works-side-rays { transition: opacity 260ms ease; }
 
-/* 落位后的余韵:只剩下滑提示淡入(卡片的入场已由轨道自己完成,见上方
-   mw-entering —— 主卡与副卡同帧张开,这里不再对任何卡片做二次淡入,
-   那正是「主卡站好了副卡才出来」的来源)。keyframes 只定义 from,
-   动画到元素自身的静止值,结束帧不跳变(提示自带 bob 含 translateX 居中)。 */
-html[data-device="mobile"] .mw-landed .mw-hint {
-  animation: mwHintIn 520ms ease backwards;
-}
-
-@keyframes mwHintIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
-  to { opacity: 0.7; transform: translateX(-50%) translateY(0); }
-}
-
-/* 底部下滑提示:双 V,慢速上下浮动 */
+/* ⚠⚠⚠ 2026-10-08 第十二轮（业主两条）：
+   ① 修「icon 出来后往右偏、然后固定不动」：.mw-landed 用单次 mwHintIn
+     **替换**了 bob 动画，而基态没有 translateX(-50%) —— 520ms 一过（无 fill）
+     居中位移消失 ⇒ 右偏半个自身宽（24px），bob 也没了 ⇒ 定死不动。
+     现在居中改由基态 `transform` 承担（循环 keyframe 的每一帧都带同一个
+     translateX），动画结束/被 reduced-motion 关掉都不会再偏。
+   ② 翻页提示 = icon + 文字（业主：「翻页icon和文字都是有动效的，动效参考
+     现在移动端 Hero 区的下拉动效，文字和icon一起出现并位移然后消失，循环执行」）
+     → 换用 mwHintLoop（与 heroScrollArrowMobile 同构：淡入 → 下移 → 淡出 →
+     静默 → 循环）。icon 与文字在同一容器里整体动；首帧 opacity 0，
+     mw-landed 落定、隐藏类一摘即自然淡入，mwHintIn 单次入场不再需要。 */
 html[data-device="mobile"] .mw-hint {
   position: absolute;
   left: 50%;
   bottom: calc(20px + env(safe-area-inset-bottom));
-  width: 48px;
+  width: max-content;
   height: 36px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   padding: 0;
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, 0.75);
-  animation: mwHintBob 2.1s ease-in-out infinite;
+  transform: translateX(-50%);
+  animation: mwHintLoop 2.4s linear 350ms infinite backwards;
 }
 
-@keyframes mwHintBob {
-  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 0.7; }
-  50% { transform: translateX(-50%) translateY(6px); opacity: 1; }
+@keyframes mwHintLoop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+  12% { opacity: 0.85; transform: translateX(-50%) translateY(-3px); }
+  62% { opacity: 0.85; transform: translateX(-50%) translateY(7px); }
+  70% { opacity: 0; transform: translateX(-50%) translateY(9px); }
+  /* 完全隐没一段：明确的静止节拍后再从顶部重新进入（与 Hero 提示同构）。 */
+  100% { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+}
+
+html[data-device="mobile"] .mw-hint-text {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.66);
+  white-space: nowrap;
 }
 
 /* 详情页在底下时的二级页宿主:enter 期间可见(详情层从顶部滑入尚未盖满),

@@ -2414,7 +2414,7 @@ h2 {
   clip-path: inset(0 round 12px);
   pointer-events: none;
   opacity: 0;
-  transform: translateX(var(--mirror-push)) rotate(calc(var(--rot) * 1deg));
+  transform: translateX(var(--mirror-push)) translateY(calc(var(--y) * -1px)) rotate(calc(var(--rot) * 1deg));
   transform-origin: 50% 0;
   transition:
     opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -2502,7 +2502,7 @@ h2 {
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  filter: saturate(0.9) contrast(1.04) brightness(1.06);
+  filter: saturate(0.9) contrast(1.04);
   transition:
     transform 680ms cubic-bezier(0.22, 1, 0.36, 1),
     filter 680ms ease;
@@ -2510,7 +2510,7 @@ h2 {
 
 .showcase-deck-card.is-active .showcase-deck-button img {
   transform: scale(1.06);
-  filter: saturate(1.06) contrast(1.06) brightness(1.16);
+  filter: saturate(1.06) contrast(1.06);
 }
 
 .showcase-deck-scrim {
@@ -2519,7 +2519,7 @@ h2 {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(4, 4, 7, 0.04) 0%,
+    transparent 0%,
     rgba(4, 4, 7, 0) 46%,
     rgba(4, 4, 7, 0.58) 76%,
     rgba(4, 4, 7, 0.9) 100%
@@ -2701,7 +2701,7 @@ h2 {
 
   .showcase-deck .showcase-deck-reflection {
     opacity: 1 !important;
-    transform: translateX(var(--mirror-push)) rotate(calc(var(--rot) * 1deg)) !important;
+    transform: translateX(var(--mirror-push)) translateY(calc(var(--y) * -1px)) rotate(calc(var(--rot) * 1deg)) !important;
   }
 
   .showcase-deck .showcase-deck-reflection img {
@@ -4879,9 +4879,12 @@ html[data-paging="on"] .contact-page {
      外侧**那圈空白里（卡片盖不到的地方）就是一条笔直的横线，实测接触线处
      一行内 L 从 14 直接跳到 16→20（x 越靠外跳得越多），把地面盒隐藏后同一批像素
      完全平坦、无任何阶跃 ⇒ 唯一来源就是这道裁切。
-     修法＝把盒子向上长 `--floor-pad-top`，并让遮罩在新顶边处收敛到 transparent，
-     于是向上扩散从"硬切"变成"羽化"。
-     取值 72px = blur 3σ(48px) + hover scale 外溢 ~6px + 余量。
+    修法＝把盒子向上长 `--floor-pad-top`，让盒顶远离 blur 扩散的可见范围。
+    ⚠⚠ 第十二轮修正：当初"遮罩在新顶边处收敛到 transparent"是**错的** ——
+    那条 transparent→#000 的坡铺在接触线上方，恰好把向上的扩散重新压死，
+    就是业主一直看到的"剪切痕迹"（坡才是切源，盒顶不是）。现在遮罩从盒顶
+    就不透明（见下 vmask），只靠盒顶位置（3σ 的 3 倍远）天然兜底。
+    取值 72px = blur 3σ(24px，CSS blur 半径=2σ) 的 3 倍 + hover 外溢 + 余量。
      ⚠ 加模糊要同步加大这个值（与 `--floor-pad-x` 同理）。
      ⚠ 配套三处必须一起改，否则接触线会整体错位：
        ① `height` 加同样的量；② `.works-orbit-floor-mirror` 的 top 由 0 改成
@@ -4902,41 +4905,27 @@ html[data-paging="on"] .contact-page {
      ⚠ 这一层**没有**被翻转(翻转在子级 .works-orbit-floor-mirror 上),
      所以这里的 to bottom / 180deg 就是视觉上的"上实下虚",方向天然正确,
      是整个反射唯一的纵深主控。子级两层只负责"清晰度分层"(见下)。
-     ⚠ 2026-10-08 第九轮：第一个 stop 改成 `transparent 0`（盒顶已上移到接触线
-     上方 72px），中间每个 stop 都要补上 `--floor-pad-top` 才保持"接触线最实、
-     越远越淡"的原语义不变。pos = pad-top + (100% − pad-top) × 原比例。 */
-  /* ① 竖向羽化（唯一纵深主控）：接触线最实、越远越淡。
-     首 stop `transparent 0`（盒顶已上移到接触线上方 `--floor-pad-top`）。 */
-  --floor-vmask: linear-gradient(180deg, transparent 0, #000 var(--floor-pad-top), rgba(0, 0, 0, 0.72) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.32), rgba(0, 0, 0, 0.40) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.60), rgba(0, 0, 0, 0.13) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.84), transparent 100%);
-  /* ② 横向抑制：**只在顶部 `--floor-pad-top` 这条带里生效**（见下面的 `mask-size`，
-     带外因 no-repeat 取值 0 = 不减任何东西，所以接触线以下完全不受影响）。
-     带内：卡片脚印范围（左右各内缩 `--floor-pad-x`）为 #000 = 减掉 —— 否则
-     镜面 blur(16px) 向上扩散的那 48px 会从**卡片底边那圈 12px padding + 1px 描边
-     的透明留白环**里透出来（实测整条卡宽被提亮 +5~18）。卡外 32px 内渐隐到
-     transparent = 保留羽化 ⇒ 业主看到的「剪切痕迹」在卡外才真正消失。
-     两层用 `subtract`（= 层① − 层②）合并。 */
-  --floor-hmask: linear-gradient(90deg, transparent 0, transparent calc(var(--floor-pad-x) - 32px), #000 var(--floor-pad-x), #000 calc(100% - var(--floor-pad-x)), transparent calc(100% - var(--floor-pad-x) + 32px), transparent 100%);
-  -webkit-mask-image: var(--floor-vmask), var(--floor-hmask);
-  mask-image: var(--floor-vmask), var(--floor-hmask);
-  /* 层② 的高度被压成 `--floor-pad-top`（= 盒顶到接触线那一段），它只作用在这一条带里。
-     ⚠ 若把 size 写成 100%/auto，层② 会铺满全盒 ⇒ 卡片脚印范围内的**真实倒影也被扣掉**。 */
-  -webkit-mask-size: 100% 100%, 100% var(--floor-pad-top);
-  mask-size: 100% 100%, 100% var(--floor-pad-top);
-  -webkit-mask-position: 0 0, 0 0;
-  mask-position: 0 0, 0 0;
+     ⚠⚠⚠ 2026-10-08 第十二轮（业主：「把裁切的范围大幅拉大，避免高斯模糊后
+     图形扩散后被裁切」）：第九轮的首 stop `transparent 0 → #000 72px` 方向**错了**
+     —— 整条羽化坡都铺在接触线**上方**，等于把 blur(16px) 向上的扩散在接触线处
+     重新压死：实测同一批像素 2px 内 9 → 25 阶跃（= 业主看到的"剪切痕迹"），
+     且 pad-top 拉到 300 毫无改善（+39.4 → +38.6）⇒ 切的根本不是盒子，是这条坡。
+     第九轮的层②横向抑制（为压"留白环透光 +18"自检回归而加）同样在切向上的
+     扩散，一并删除（那 +18 是我要的"扩散可见"，不是回归）。
+     现在：盒顶（接触线上方 72px）起就全不透明 `#000 0`。blur(16px) ⇒ σ=8、
+     3σ=24px，向上扩散尾迹在到达盒顶（= 3σ 的 3 倍）前已衰减到 ≈0，
+     坡与盒顶都切不到它 ⇒ 接触线两侧的模糊**对称**，顶部是自然的高斯过渡。 */
+  --floor-vmask: linear-gradient(180deg, #000 0, #000 var(--floor-pad-top), rgba(0, 0, 0, 0.72) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.32), rgba(0, 0, 0, 0.40) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.60), rgba(0, 0, 0, 0.13) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.84), transparent 100%);
+  -webkit-mask-image: var(--floor-vmask);
+  mask-image: var(--floor-vmask);
   /* ⚠⚠ 遮罩必须 no-repeat：镜像高(≈494px)常大于地面盒高(clamp(260px,46vh,560px))，
      纵向若 repeat，溢出的那段会**重新从 #000 开始**，在倒影中段横出一道亮带；
-     no-repeat 时盒外取值 = 渐变末端 = transparent（层② 因此只在顶部那条带内有效）。
-     ⚠⚠⚠ 同时记住：**遮罩盒恒等于元素 border box，且横向铺不出盒外**
-     （`mask-size` 放大 / `mask-repeat: repeat-x` 实测都无效）。
-     地面盒能显示的横向范围 = 遮罩盒范围 ⇒ 想要 blur 扩散不被切，
-     只能把地面盒本身做宽（`--floor-pad-x`）、做高（`--floor-pad-top`），没有别的办法。 */
+     no-repeat 时盒外取值 = 渐变末端 = transparent。
+     ⚠⚠⚠ 同时记住：**遮罩盒恒等于元素 border box，且铺不出盒外** ——
+     想让 blur 扩散不被切，只能把地面盒本身做大（--floor-pad-x / --floor-pad-top），
+     没有别的办法（clip-path 负值被钳 0 / repeat-x 均实测无效）。 */
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  /* 层① − 层②（subtract）。⚠ 两个前缀属性名不是同一个 CSS 属性：Chrome 认后写的
-     标准 `mask-composite`，旧 WebKit 认 `-webkit-mask-composite`，故顺序不能反。 */
-  -webkit-mask-composite: source-out;
-  mask-composite: subtract;
 }
 
 /* ⚠⚠ 2026-10-08 第三次修(业主:「反射层这里的底部还是能看到一个底色,没有排除干净」)
@@ -5106,23 +5095,19 @@ html[data-paging="on"] .contact-page {
   animation: works-orbit-sweep 1250ms cubic-bezier(0.25, 0.5, 0.3, 1);
 }
 
-/* ⚠⚠⚠ 2026-10-08 第十一轮（业主：「鼠标移入主卡底部后、主卡发生位移就能看到接缝」）：
-   旧值 `--lift: 14px` 是**反向下沉**（"卡片上浮 14 → 倒影下沉 14"），
-   叠加卡片 `scale(1.025)` 把底边往下推的 6.2px，卡底与影顶之间裂开 15.6px。
-   现在两者支点都在接触线上（`transform-origin` 分别 50% 100% / 50% 0），
-   于是卡片底边只剩 translateY(-14px)、镜像顶边只剩 `--lift` 一项，
-   令二者相等即可严丝合缝：`--lift` 就是**卡片的 translateY 值**。
-   ⚠ 以后改卡片 hover 的 translateY，这里必须同步改成同一个数。 */
+/* 2026-10-08：hover 时卡片向上浮起，倒影作为镜面反向下沉，
+   形成卡片"离地"的浮起感（`--lift` 与卡片 translateY 同值、反向）。
+   之前为严丝合缝把倒影改成同向跟随；现按业主反馈改为镜面反方向位移。 */
 .works-orbit-float:hover ~ .works-orbit-floor .works-orbit-floor-mirror,
 .works-orbit-float:has(.works-orbit-card:hover) ~ .works-orbit-floor .works-orbit-floor-mirror,
 .works-orbit-float:has(.works-orbit-card:focus-visible) ~ .works-orbit-floor .works-orbit-floor-mirror {
-  --lift: -14px;
+  --lift: 14px;
   --mz: 1.025;
 }
 
 /* 漂浮呼吸：物上浮 6px，像也上浮 6px（同一块"卡片+倒影"整体呼吸）。
    ⚠ 旧值 `+6px` 是反向下沉 ⇒ 每个 7.5s 周期里缝从 0 涨到 12px。
-   与 hover 同理，必须同向跟随才能保持拼接。 */
+   呼吸状态保持拼接；hover 时卡片离地、倒影反向下沉，形成镜面"浮起"效果。 */
 @keyframes works-orbit-bob-mirror {
   0%, 100% { translate: 0 0; }
   50% { translate: 0 -6px; }
