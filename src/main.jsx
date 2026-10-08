@@ -630,6 +630,43 @@ function parseRoute() {
   return { page: 'home', category: 'ui', workId: '' };
 }
 
+// 2026-10-08: 进入三级页前预判目标作品首屏亮度。若顶部约 35% 区域平均亮度
+// 超过阈值,提前给 body 挂上 .nav-on-light,让入场导航玻璃直接以暗态起跑,
+// 避免"先亮后暗"的跳帧。只取已缓存完成的图片同步采样,不阻塞转场;
+// 未缓存时回退 false,由 useDetailNavOnLight 入场后再校正。
+function predictDetailOnLight(work) {
+  if (!work) return false;
+  const LUMA_ON = 0.58;
+  const canvas = document.createElement('canvas');
+  canvas.width = 24;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const luma = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  for (const src of [work.detailHero, work.image]) {
+    if (!src) continue;
+    const img = new Image();
+    img.src = src;
+    if (img.complete && img.naturalWidth) {
+      const nw = img.naturalWidth;
+      const nh = img.naturalHeight;
+      const stripH = Math.max(1, Math.floor(nh * 0.35));
+      ctx.clearRect(0, 0, 24, 1);
+      ctx.drawImage(img, 0, 0, nw, stripH, 0, 0, 24, 1);
+      try {
+        const d = ctx.getImageData(0, 0, 24, 1).data;
+        let sum = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          sum += luma(d[i], d[i + 1], d[i + 2]);
+        }
+        return (sum / (d.length / 4)) > LUMA_ON;
+      } catch {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
 // 2026-10-05: 三级导航实时自适应亮背景。详情页滚动时导航条底下掠过的内容亮度
 // 会变化(顶部 hero 暗、下滑大图可能很亮)。用 elementsFromPoint 探测导航带正下方
 // 当前盖着的元素,图片用 canvas 采样真实像素估算平均亮度;超阈值给 body 挂
@@ -1454,6 +1491,8 @@ function App() {
   };
 
   const goDetail = (category, workId, transitionImage) => {
+    const targetWork = worksByCategory[category]?.find((item) => item.id === workId);
+    document.body.classList.toggle('nav-on-light', predictDetailOnLight(targetWork));
     const fromRect = readNavRect(`[data-category-pill="${category}"]`);
     if (fromRect) {
       setSharedPill({ rect: fromRect, title: categories.find((item) => item.id === category)?.title ?? activeCategory.title, mode: 'works' });
@@ -1492,6 +1531,7 @@ function App() {
   const goDetailByIndex = (nextIndex) => {
     const target = works[nextIndex];
     if (!target) return;
+    document.body.classList.toggle('nav-on-light', predictDetailOnLight(target));
     window.location.hash = `/detail?category=${activeCategory.id}&work=${target.id}`;
     setRoute({ page: 'detail', category: activeCategory.id, workId: target.id });
     window.scrollTo(0, 0);
@@ -1500,6 +1540,7 @@ function App() {
   const goDetailCategory = (category) => {
     const target = worksByCategory[category]?.[0];
     if (!target) return;
+    document.body.classList.toggle('nav-on-light', predictDetailOnLight(target));
 
     // Keep the current detail pill mounted at its old rect while the new
     // category target is rendered. The tracking effect then updates the rect

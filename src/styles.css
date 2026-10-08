@@ -589,6 +589,12 @@ body.nav-on-light .morph-nav.nav-detail {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
+/* 2026-10-08: 三级导航暗调模式下,Last(上一张) 文字与左三角标可视度偏低,
+   提为 #cccccc;Back/Next 保持原色不变。 */
+body.nav-on-light .morph-nav.nav-detail .detail-pager button:first-child {
+  color: #cccccc;
+}
+
 /* 2026-10-04: 三级页触发胶囊在任何背景都用与二级导航**完全相同**的样式
    (基础 .shared-active-pill 浅色玻璃),不再做亮背景翻转;
    文字与箭头固定白色(业主要求),直接写在下面这条规则里。 */

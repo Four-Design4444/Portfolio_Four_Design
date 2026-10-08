@@ -823,6 +823,8 @@ html[data-device="mobile"] .detail-pager button {
   font-size: 9px;
   font-weight: 300;
   gap: 5px;
+  /* 亮/暗导航切换时,Last 的 #cccccc 覆盖需要 color 过渡才没有硬切。 */
+  transition: color 260ms ease;
 }
 
 /* 9px 文字下三角形同步缩小(PC 7x8),避免比文字还显眼。 */
@@ -1292,6 +1294,12 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-heading { transition
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter { transition-delay: 40ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots { transition-delay: 80ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs { transition-delay: 160ms; }
+/* 底部缩略图条在最底端,若跟随其他元素一起向上移 14px,会掀开它遮挡的 body
+   黑色背景,视觉上就是"底部色块往上缩"。所以缩略图条只淡出、保持原位,
+   不露底。 */
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs {
+  transform: none;
+}
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
   opacity: 0;
   transform: translate3d(0, -14px, 0) scale(0.96);
