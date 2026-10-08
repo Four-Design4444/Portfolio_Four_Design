@@ -1263,29 +1263,8 @@ html[data-device="mobile"] .mob-dots i.on {
   border-radius: 5px;
 }
 
-/* Outlined pill "view all" action under the dots (per the iPhone 17 mock). */
-html[data-device="mobile"] .mob-viewall {
-  appearance: none;
-  margin-top: clamp(26px, 5.4vh, 48px);
-  /* Minimum air between the button and the thumbnail strip below it: the
-     strip's margin-top:auto eats all free space and would bottom out at 0
-     on short viewports. */
-  margin-bottom: clamp(22px, 4vh, 40px);
-  padding: 8px 34px;
-  border: 1px solid rgba(255, 255, 255, .38);
-  border-radius: 999px;
-  background: transparent;
-  color: #fff;
-  font-family: inherit;
-  font-size: 12px;
-  letter-spacing: 2px;
-  cursor: pointer;
-  transition: background .25s ease, border-color .25s ease;
-}
-html[data-device="mobile"] .mob-viewall:active {
-  background: rgba(255, 255, 255, .1);
-  border-color: rgba(255, 255, 255, .6);
-}
+/* 2026-10-09 「查看全部」按钮已按业主反馈移除(JSX + 本样式全清),
+   一级页纵向预算让给缩览图条与底部间距。 */
 
 /* Horizontal scroller: NO justify-content here — centring inside an
    overflow-x container clips the left overflow and makes those thumbnails
@@ -1342,16 +1321,6 @@ html[data-device="mobile"] .mob-dots { transition-delay: 80ms; }
 html[data-device="mobile"] .mob-counter { transition-delay: 120ms; }
 html[data-device="mobile"] .mob-heading { transition-delay: 160ms; }
 
-/* 「查看全部」自带按压反馈(background / border-color),必须把新旧过渡**合并**,
-   不能直接覆盖 —— 覆盖掉就把按下变色的过渡弄丢了。 */
-html[data-device="mobile"] .mob-viewall {
-  transition:
-    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1) 40ms,
-    transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 40ms,
-    background 250ms ease,
-    border-color 250ms ease;
-}
-
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-heading,
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter,
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots,
@@ -1373,15 +1342,6 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs { transition-
    不露底。 */
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs {
   transform: none;
-}
-html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
-  opacity: 0;
-  transform: translate3d(0, -14px, 0) scale(0.96);
-  transition:
-    opacity 240ms cubic-bezier(0.4, 0, 0.7, 1) 120ms,
-    transform 240ms cubic-bezier(0.4, 0, 0.7, 1) 120ms,
-    background 250ms ease,
-    border-color 250ms ease;
 }
 
 /* ===== 回程入场改用 CSS animation (2026-10-07 业主第五轮第 1 条) =====
@@ -1407,17 +1367,15 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots,
-html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-viewall,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs {
   /* both:延迟期间先保持 from(否则延迟的这 160ms 里元素是全亮的,起跑时
      又归零 —— 那本身就是一次跳帧),演完再停在 to。 */
   animation: mob-chrome-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-/* 入场顺序 = 退场顺序的镜像:缩略图条 0ms → 查看全部 40ms → 圆点 80ms →
-   计数器 120ms → 标题 160ms。与基础态的 transition-delay 同值,所以
-   animation 起跑与 transition 兜底两条路径读出来是同一节奏。 */
+/* 入场顺序 = 退场顺序的镜像:缩略图条 0ms → 圆点 80ms →
+   计数器 120ms → 标题 160ms(「查看全部」已删)。与基础态的 transition-delay
+   同值,所以 animation 起跑与 transition 兜底两条路径读出来是同一节奏。 */
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs { animation-name: mob-chrome-in-thumbs; animation-delay: 0ms; }
-html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-viewall { animation-delay: 40ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots { animation-delay: 80ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter { animation-delay: 120ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading { animation-delay: 160ms; }
@@ -1586,6 +1544,9 @@ html[data-device="mobile"] .mw-track {
   top: 0;
   left: 0;
   height: 100%;
+  /* 2026-10-09 业主反馈:画面上方留白偏多 ⇒ 卡组整体上移。
+     flex 内容在 content box 内居中,padding-bottom 把中心抬高其一半。 */
+  padding-bottom: 64px;
   display: flex;
   align-items: center;
   gap: 0;
@@ -1803,8 +1764,9 @@ html[data-device="mobile"] .mw-hint {
   position: absolute;
   left: 50%;
   /* 2026-10-09 按设计稿抬高：28px 时提示块贴着屏底（业主：「不应该这么贴着下面」）。
-     设计稿（390×845 基准）文案底≈760 / icon 底≈784 / 屏底留白≈61px，取 60px。 */
-  bottom: calc(60px + env(safe-area-inset-bottom));
+     设计稿（390×845 基准）文案底≈760 / icon 底≈784 / 屏底留白≈61px，原取 60px;
+     同日业主再反馈整体上移（卡片 padding-bottom:64px 同轮），hint 抬到 96px。 */
+  bottom: calc(96px + env(safe-area-inset-bottom));
   width: max-content;
   height: auto;
   display: flex;

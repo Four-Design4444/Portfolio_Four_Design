@@ -3136,13 +3136,8 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
           <i key={i} ref={(el) => { dotRefs.current[i] = el; }} />
         ))}
       </div>
-      <button
-        type="button"
-        className="mob-viewall"
-        onClick={() => ctxRef.current.openWorks('ui')}
-      >
-        查看全部
-      </button>
+      {/* 2026-10-09 业主反馈:移除「查看全部」按钮(一级页元素过多、缩览图条被顶到贴底)。
+          onClick 原走 ctxRef.current.openWorks('ui'),二级页入口仍由主卡上滑/点卡承担。 */}
       <div className="mob-thumbs" ref={stripRef}>
         {items.map(({ project, cover43 }, i) => (
           <div

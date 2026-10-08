@@ -274,6 +274,17 @@ const HOST_CSS = `
     background: linear-gradient(90deg, #0000, #101c26e8 12%, #101c26fa 32%);
   }
 }
+/* 修8（2026-10-09 四轮）：大字统一黑体。demo 里两处大标题是宋体系：
+   .intro h1 = Georgia,Noto Serif SC,Songti SC,SimSun,serif（左下 intro），
+   .detail-title = font:400 … Georgia,SimSun,serif（交互面板标题，shorthand
+   连字重一起定成 400）。业主要求统一黑体 —— 换中文黑体栈并加粗；
+   .detail-en（15px 英文斜体）不是大字且宿主面板已不渲染，不动。
+   字号/字距/行高一概不碰，只换字族与字重。 */
+.intro h1,
+.detail-title {
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+  font-weight: 700;
+}
 /* 修3：demo 打开面板会编程 focus「返回街角」，:focus-visible 的 2px 描边框
    （outline 2px var(--accent)）在参考图里没有 —— 去掉。 */
 .back:focus, .back:focus-visible { outline: none !important; }
