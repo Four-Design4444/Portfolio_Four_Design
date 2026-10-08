@@ -1337,10 +1337,21 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs {
     opacity 240ms cubic-bezier(0.4, 0, 0.7, 1),
     transform 240ms cubic-bezier(0.4, 0, 0.7, 1);
 }
-html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-heading { transition-delay: 0ms; }
-html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter { transition-delay: 40ms; }
-html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots { transition-delay: 80ms; }
+/* 计数器离场与标题同步(2026-10-09 业主反馈:序号没跟随英文一起离场):
+   原本 40ms 的 stagger 在真机掉帧下被放大成肉眼可见的「标题已淡、序号还在」,
+   且截图形态与回程入场动画(fill both)未摘时再去程的竞态吻合 —— 一并兜底。 */
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-counter { transition-delay: 0ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-dots { transition-delay: 40ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs { transition-delay: 160ms; }
+/* 兜底:回程入场动画(is-chrome-in, fill both)尚未摘除时再次去程,
+   animation 的 fill 优先级高于普通声明,会把 opacity 钉在亮态、
+   is-chrome-out 的 transition 完全失效 ⇒ 双类并存时显式掐掉入场动画。 */
+html[data-device="mobile"] .mob-showcase.is-chrome-in.is-chrome-out .mob-heading,
+html[data-device="mobile"] .mob-showcase.is-chrome-in.is-chrome-out .mob-counter,
+html[data-device="mobile"] .mob-showcase.is-chrome-in.is-chrome-out .mob-dots,
+html[data-device="mobile"] .mob-showcase.is-chrome-in.is-chrome-out .mob-thumbs {
+  animation: none;
+}
 /* 底部缩略图条在最底端,若跟随其他元素一起向上移 14px,会掀开它遮挡的 body
    黑色背景,视觉上就是"底部色块往上缩"。所以缩略图条只淡出、保持原位,
    不露底。 */

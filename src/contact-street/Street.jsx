@@ -251,6 +251,27 @@ const HOST_CSS = `
     padding-bottom: calc(120px + 18vh);
   }
 }
+/* 修10（2026-10-09 六轮）：移动端交互面板底部留白。demo ≤700 段把 #detail
+   定成固定 57% 高的底部抽屉（top:43%），内容短时面板底剩大片空白（业主
+   红框）。改为内容自适应高度 + 贴底：top:auto + height:auto（基础规则
+   inset:0 0 0 auto 已含 bottom:0），抽屉顶边随内容收缩 ⇒ 上方镜头画面
+   自然变高、展示更多场景。max-height 放宽到 68% 防超长内容（mail 面板）
+   溢出，overflow-y:auto 沿用 demo 原值。demo JS 用 rect.top 判定
+   「指针在面板上方 = 拖拽场景」，自适应后判定依然成立，无需改 JS。 */
+@media (max-width:700px) {
+  #detail {
+    top: auto;
+    height: auto;
+    max-height: 68%;
+  }
+  /* 修11（2026-10-09 七轮）：① 面板文字整组再上移 —— 业主箭头标注「返回街角」
+     应在 ≈52% 视口高（原 57.8%），底部 padding 垫高 6vh 把整组往上推；
+     ② 移动端移除「返回街角」旁的 ESC 键帽（.back kbd），PC 保留。 */
+  #detail {
+    padding-bottom: calc(max(38px, env(safe-area-inset-bottom)) + 6vh);
+  }
+  .back kbd { display: none; }
+}
 /* 修7（2026-10-09 四轮）：底色层左移，提升工作室/汽车场景下的文字可读性。
    demo 原始：#detail 宽 44%、左缘从全透明渐入（e8 91% 不透明在 25% 面板宽 ≈11vw
    处才到位），文字起始列（padding-left 3vw）背后的底色只有 ~25% 不透明度，
