@@ -245,7 +245,33 @@ const HOST_CSS = `
     flex-direction: column;
     justify-content: safe center;
     padding-top: 132px;
-    padding-bottom: 120px;
+    /* 2026-10-09 三轮+：业主要求整组再上移 —— 返回街角大约落到其标注箭头处
+       （截图里返回行在 30% 视口高、箭头在 21.5%）。给底部多垫 18vh，居中
+       参考点随之整体上移 9vh，比例随视口高度自适应。 */
+    padding-bottom: calc(120px + 18vh);
+  }
+}
+/* 修7（2026-10-09 四轮）：底色层左移，提升工作室/汽车场景下的文字可读性。
+   demo 原始：#detail 宽 44%、左缘从全透明渐入（e8 91% 不透明在 25% 面板宽 ≈11vw
+   处才到位），文字起始列（padding-left 3vw）背后的底色只有 ~25% 不透明度，
+   亮场景（工作室室内灯、汽车场）下文字发虚。做法：
+   · 面板加宽 44%→52%（左边界向左移 8vw），padding-left 等量 +8vw —— 文字
+     位置一像素不动，动效（panel-in 从右滑入）不受影响；
+   · 渐变前段收陡：e8 提前到 12%（≈6.2vw）、fa 全不透明 32% —— 文字区从
+     起始列起就处在 ≥90% 不透明度的底色上；
+   · 701–1100 段 demo 是 46%/2vw，同差补偿为 54%/10vw。移动端（≤700）不动。 */
+@media (min-width: 1101px) {
+  #detail {
+    width: 52%;
+    padding-left: 11vw;
+    background: linear-gradient(90deg, #0000, #101c26e8 12%, #101c26fa 32%);
+  }
+}
+@media (min-width: 701px) and (max-width: 1100px) {
+  #detail {
+    width: 54%;
+    padding-left: 10vw;
+    background: linear-gradient(90deg, #0000, #101c26e8 12%, #101c26fa 32%);
   }
 }
 /* 修3：demo 打开面板会编程 focus「返回街角」，:focus-visible 的 2px 描边框
@@ -665,7 +691,7 @@ function detailHtmlFor(mode) {
     + '<h2 id="detail-title" class="detail-title">以设计，<br>点亮未知的旷野。</h2>'
     + '<div class="detail-rule"></div>'
     + '<div class="services"><span>品牌设计</span><span>产品设计</span><span>视觉叙事</span></div>'
-    + '<div class="actions"><button class="primary-action" data-switch="mail">聊聊你的想法 <span>↗</span></button></div>';
+    + '<div class="actions"><button class="primary-action" data-switch="phone">聊聊你的想法 <span>↗</span></button></div>';
   if (mode === 'phone') return `<p class="detail-kicker" data-host-copy="1">LET&#39;S TALK</p>`
     + '<h2 id="detail-title" class="detail-title">链接，<br>从此刻开启。</h2>'
     + '<div class="detail-rule"></div>'
@@ -678,7 +704,8 @@ function detailHtmlFor(mode) {
     + '<div class="detail-rule"></div>'
     + '<div class="contact-label">A LETTER TO FOUR</div>'
     + `<a class="contact-value email" href="${mailHref}">${streetCfg.email}</a>`
-    + `<div class="actions"><a class="primary-action" href="${mailHref}">写一封信 <span>↗</span></a>`
+    // 「写一封信」按业主指定跳 QQ 邮箱网页版（新标签页），不再走 mailto。
+    + '<div class="actions"><a class="primary-action" href="https://wx.mail.qq.com/" target="_blank" rel="noopener noreferrer">写一封信 <span>↗</span></a>'
     + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
   if (mode === 'car') return '<p class="detail-kicker" data-host-copy="1">FOUR DESIGN</p>'
     + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'

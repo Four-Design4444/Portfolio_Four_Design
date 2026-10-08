@@ -1537,6 +1537,12 @@ html[data-device="mobile"] .works-index-page {
   left: 0;
   width: 100%;
   height: var(--mw-vh, 100dvh);
+  /* ⚠⚠ 必须显式清零 styles.css 基础规则里的 min-height:100vh(2026-10-09 真机
+     第三轮血泪):height 被压对后,固定层的实际高度仍是 max(height, min-height)
+     = 100vh = 全屏 —— 这才是三轮「dvh/innerHeight/visualViewport 都修不动」
+     的共同根因:JS 测得再准,min-height 恒等于全屏,卡片永远按全屏高居中、
+     hint 永远落在工具栏下面。 */
+  min-height: 0;
   z-index: 10;
   overflow: hidden;
   display: flex;

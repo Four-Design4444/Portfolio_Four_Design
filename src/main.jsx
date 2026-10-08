@@ -6395,25 +6395,29 @@ function WorksPage({
      导航高亮由 App 的 activeCategory 驱动,闭环才不会打架。 */
   const notifyRef = useRef(onActiveWorkChange);
   notifyRef.current = onActiveWorkChange;
-  /* --mw-vh(2026-10-09 真机修复):业主手机(Firefox Android,动态工具栏)上
-     fixed 层 height:100dvh 实测大于可视区 —— 层中心偏下、底部被工具栏裁掉、
-     贴底的 .mw-hint 整个不可见。dvh 在该浏览器的行为不可信,改用 JS 实测
-     innerHeight(与分屏对齐、翻页位移同源,实时跟随工具栏收展);
-     CSS 侧高度全部写成 var(--mw-vh, 100dvh),不支持时回落 dvh。 */
+  /* --mw-vh(2026-10-09 真机修复·第二轮):业主手机(Firefox Android,overlay 动态
+     工具栏)实测 100dvh 和 innerHeight 都等于**全屏高** —— 工具栏是悬浮层,
+     盖在 layout viewport 上,二者都不排除它 ⇒ fixed 层仍偏下、底部被裁、
+     贴底 hint 不可见。真正排除工具栏的是 visualViewport.height
+     (乘回 scale 抵消 pinch-zoom),innerHeight 只作无 visualViewport 的兜底。 */
   useEffect(() => {
     if (!isMobile) return undefined;
     const setVh = () => {
-      const h = window.innerHeight;
+      const vv = window.visualViewport;
+      const raw = vv ? vv.height * vv.scale : window.innerHeight;
+      const h = Math.round(raw);
       if (h > 0) document.documentElement.style.setProperty('--mw-vh', `${h}px`);
     };
     setVh();
     window.addEventListener('resize', setVh);
     window.addEventListener('orientationchange', setVh);
     window.visualViewport?.addEventListener('resize', setVh);
+    window.visualViewport?.addEventListener('scroll', setVh);
     return () => {
       window.removeEventListener('resize', setVh);
       window.removeEventListener('orientationchange', setVh);
       window.visualViewport?.removeEventListener('resize', setVh);
+      window.visualViewport?.removeEventListener('scroll', setVh);
     };
   }, [isMobile]);
 
