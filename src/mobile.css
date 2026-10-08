@@ -15,10 +15,10 @@ html[data-device="mobile"] {
   text-size-adjust: 100%;
   scrollbar-gutter: auto;
   overflow-y: auto;
-  /* 卡片宽度变量:一级/二级卡面 base 宽度不同(一级由舞台高 3:5、二级由视口
+  /* 卡片宽度变量:一级/二级卡面 base 宽度不同(一级由舞台高 3:5、二级由动态视口
      min 约束),圆角跨级交接时按此比例做缩放补偿,使视觉圆角在落定帧一致。 */
-  --mob-card-w: calc(min(42vh, 354px) * 0.6);
-  --works-card-w: calc(min(58vh, 500px, calc(74vw * 5 / 3)) * 0.6);
+  --mob-card-w: calc(min(42dvh, 354px) * 0.6);
+  --works-card-w: calc(min(58dvh, 500px, calc(74vw * 5 / 3)) * 0.6);
   /* 跨级缩放补偿系数 = 二级卡面宽 / 一级卡面宽(≈1.41)。
      卡面内所有**固定 px** 的光影量(box-shadow 的偏移/模糊、text-shadow 的模糊)
      都会被卡面自身的 transform:scale() 一起缩放。两级卡面 base 宽度不同 →
@@ -1530,7 +1530,10 @@ html[data-device="mobile"] .mob-thumb.on {
 /* 单屏固定层:一屏展示、不产生滚动(溢出内容不存在,页面高度由层自己管)。 */
 html[data-device="mobile"] .works-index-page {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
   z-index: 10;
   overflow: hidden;
   display: flex;
@@ -1545,9 +1548,9 @@ html[data-device="mobile"] .mw-stage {
   min-height: 0;
   overflow: hidden;
   touch-action: none;
-  /* 卡片几何:高度主导(58vh),宽 = 高 × 3/5,同时不超过 74vw。
+  /* 卡片几何:高度主导(58dvh),宽 = 高 × 3/5,同时不超过 74vw。
      3:5 与 20px 圆角和首页卡组完全同形 —— 首页点卡的放大动效才能无缝衔接。 */
-  --mw-card-h: min(58vh, 500px, calc(74vw * 5 / 3));
+  --mw-card-h: min(58dvh, 500px, calc(74vw * 5 / 3));
   --mw-card-w: calc(var(--mw-card-h) * 0.6);
   /* 副卡(非当前卡)的统一缩放。业主第三轮:副卡要明显小于主卡,层级才清楚 ——
      同比例缩到 0.75(比原来的 0.94 再降约 20%)。
@@ -1790,7 +1793,7 @@ html[data-device="mobile"] .works-side-rays { transition: opacity 260ms ease; }
 html[data-device="mobile"] .mw-hint {
   position: absolute;
   left: 50%;
-  bottom: calc(20px + env(safe-area-inset-bottom));
+  bottom: calc(28px + env(safe-area-inset-bottom));
   width: max-content;
   height: 36px;
   display: flex;
@@ -1841,7 +1844,10 @@ html[data-device="mobile"] .mw-under.is-covered { visibility: hidden; }
    - z-index 20 < 导航 40:导航 morph 照常浮在翻页层之上,动效不受影响。 */
 html[data-device="mobile"] .work-detail-page {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100dvh;
   z-index: 20;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1849,7 +1855,7 @@ html[data-device="mobile"] .work-detail-page {
   /* 竖向滚动交给浏览器原生;横向位移以 pointer 事件进来(横滑切项目) */
   touch-action: pan-y;
   overscroll-behavior: contain;
-  min-height: 100%;
+  min-height: 100dvh;
   background: #000000;
   /* 三级页不显示浏览器滚动条(2026-10-07):层内滚动照常,只是不画条 */
   scrollbar-width: none;
@@ -1868,22 +1874,22 @@ html[data-device="mobile"] .work-detail-page::-webkit-scrollbar {
    ⚠ 两层时长/曲线必须完全一致,中途才不会错缝露底;
    ⚠ 曲线不用 ease-in/ease-out(用户反馈"中间有停顿感"),直接匀速快速翻。 */
 @keyframes mwFlipNextIn {
-  from { transform: translateY(100vh); }
+  from { transform: translateY(100dvh); }
   to { transform: translateY(0); }
 }
 
 @keyframes mwFlipNextOut {
   from { transform: translateY(0); }
-  to { transform: translateY(-100vh); }
+  to { transform: translateY(-100dvh); }
 }
 
 @keyframes mwFlipBackOut {
   from { transform: translateY(0); }
-  to { transform: translateY(100vh); }
+  to { transform: translateY(100dvh); }
 }
 
 @keyframes mwFlipBackIn {
-  from { transform: translateY(-100vh); }
+  from { transform: translateY(-100dvh); }
   to { transform: translateY(0); }
 }
 

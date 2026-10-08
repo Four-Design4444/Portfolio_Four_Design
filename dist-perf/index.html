@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <!-- 首屏 Loading 遮罩的关键样式必须内联：外链 CSS 要等构建产物下载完才生效，
+         那时已经晚于第一帧，会先闪一下空白。底色与 demo 的 #151f2a 完全一致，
+         所以遮罩存在期间和揭幕之后看不到色差。 -->
+    <style>html{background:#151f2a}#app-loader{z-index:99999;opacity:1;background:#151f2a;transition:opacity .5s;position:fixed;top:0;bottom:0;left:0;right:0}#app-loader.is-gone{opacity:0;pointer-events:none}#app-loader.is-off{display:none}#app-loader>iframe{--lightningcss-light: ;--lightningcss-dark:initial;color-scheme:dark;background:0 0;border:0;width:100%;height:100%;display:block}.app-loader-progress{pointer-events:none;align-items:center;gap:12px;display:flex;position:absolute;bottom:34px;left:50%;transform:translate(-50%)}.app-loader-bar{background:#b9cbd524;width:140px;height:1px;position:relative;overflow:hidden}.app-loader-bar>i{background:#8b9eaf;width:0;transition:width .28s;position:absolute;top:0;bottom:0;left:0}.app-loader-num{letter-spacing:1.6px;color:#8291a0;font-variant-numeric:tabular-nums;font:9px/1 Segoe UI,Microsoft YaHei,sans-serif}@media (prefers-reduced-motion:reduce){#app-loader,.app-loader-bar>i{transition:none}}</style>
+    <noscript><style>#app-loader{display:none}</style></noscript>
+    <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin />
+    <title>UI / Visual / AI Designer Portfolio</title>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var params = new URLSearchParams(window.location.search);
+        var forced = params.get('device');
+        var ua = navigator.userAgent || '';
+        // `MicroMessenger` deliberately absent: desktop WeChat puts it in a
+        // Windows/Mac UA, which would wrongly classify it as a phone. Mobile
+        // WeChat always carries Android/iPhone + "Mobile" anyway.
+        var uaMobile = /Android|iPhone|iPod|iPad|Windows Phone|Mobile|HarmonyOS/i.test(ua);
+        var iPadDesktopUA = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+        var touchOnly = (navigator.maxTouchPoints || 0) > 0 && !window.matchMedia('(hover: hover)').matches;
+        var narrow = window.matchMedia('(max-width: 900px)').matches;
+        // Width-priority upgrade: a touch device whose *logical* viewport is
+        // already tablet-sized (>=1024 CSS px: 12.9" iPad, tablets landscape)
+        // gets the desktop layout. High-DPI phones stay far below the threshold
+        // (360-480 CSS px after DPR division), so they can never misjudge.
+        // Judged once at first paint; rotating a tablet mid-session does not
+        // flip the layout for the rest of the visit.
+        var bigTouch = (navigator.maxTouchPoints || 0) > 0 && window.matchMedia('(min-width: 1024px)').matches;
+        var isMobile = forced === 'mobile' ? true
+          : forced === 'desktop' ? false
+            : (bigTouch ? false : (uaMobile || iPadDesktopUA || (touchOnly && narrow)));
+        root.setAttribute('data-device', isMobile ? 'mobile' : 'desktop');
+        // Mobile WeChat paints the hero through WebCodecs, which fetches a raw
+        // H.264 clip from JS — normally that request can only start once React
+        // has booted. Preloading it here lets the clip download in parallel
+        // with the app bundle, which is what keeps the bigger 1440x2560 source
+        // from delaying the first painted frame.
+        if (isMobile && /MicroMessenger/i.test(ua)) {
+          var preload = document.createElement('link');
+          preload.rel = 'preload';
+          preload.as = 'fetch';
+          // An `as="fetch"` preload only matches a fetch() request when their
+          // CORS settings agree; plain fetch() runs in CORS mode, so the
+          // attribute is required — without it the clip would download twice.
+          preload.crossOrigin = 'anonymous';
+          preload.href = '/media/hero-mobile-webcodecs.264';
+          document.head.appendChild(preload);
+          window.__bootAssets.push({ href: '/media/hero-mobile-webcodecs.264', kind: 'video' });
+        }
+        // Native-video paths: preload the exact hero clips this device will
+        // play, using the SAME decision React makes in HeroSection (device +
+        // HEVC canPlayType + WeChat branch). Without this the browser only
+        // discovers the videos after the JS bundle has downloaded, parsed and
+        // mounted HeroSection, so the ~1.9MB of hero media queues behind the
+        // app instead of downloading in parallel with it. as="video" (no
+        // crossOrigin) matches the media element's same-origin no-cors
+        // request, and the ETag on the server turns the media element's
+        // revalidation into a 304 so nothing downloads twice.
+        // 首屏 Loading 的进度来源：这里发出的每个 preload 都是 React 首屏真正要用
+        // 的资源，把它们登记下来，进度条就不再是假动画，而是"这些文件下完了多少"。
+        window.__bootAssets = [];
+        var heroPreload = function (href) {
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'video';
+          link.href = href;
+          link.fetchPriority = 'high';
+          document.head.appendChild(link);
+          window.__bootAssets.push({ href: href, kind: 'video' });
+        };
+        // Desktop hero poster (first frame still): 83KB, but without a preload
+        // it queues behind the whole app bundle and the black-hero window
+        // grows instead of shrinking.
+        var heroPosterPreload = function () {
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = '/media/hero-pc-poster.webp';
+          link.fetchPriority = 'high';
+          document.head.appendChild(link);
+          window.__bootAssets.push({ href: '/media/hero-pc-poster.webp', kind: 'image' });
+        };
+        var heroSupportsHEVC = (function () {
+          try {
+            var v = document.createElement('video');
+            return /^(probably|maybe)$/.test(v.canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'))
+              || /^(probably|maybe)$/.test(v.canPlayType('video/mp4; codecs="hvc1"'));
+          } catch (e) { return false; }
+        })();
+        // 用 canPlayType 同步决定 HEVC 走哪一对视频。preload 与 React 侧的 assetMode
+        // 必须同一结论：这里同步把结论写进 window.__heroHevcProbe，React 的 HeroSection
+        // 直接读它（未定义时退回 canPlayType，与本分支一致）。两者永远一致，绝不会出现在
+        // 首帧之后才换 assetMode、把 base/alpha 两个 <video> 整体重建的「中途降级」。
+        // （曾改用 MediaCapabilities 做异步探测来提前规避降级，但它与 canPlayType 结论
+        // 可能相左且存在竞态，导致 index 预载与 React 渲染错配、视频起播失败而冻结。）
+        window.__heroHevcProbe = !!heroSupportsHEVC;
+        if (isMobile) {
+          // WeChat mobile paints through WebCodecs (preloaded above); its
+          // native-video fallbacks only engage after a decoder failure, so
+          // they are deliberately NOT preloaded.
+          if (!/MicroMessenger/i.test(ua)) {
+            heroPreload(heroSupportsHEVC ? '/media/hero-mobile.mp4' : '/media/hero-mobile-fallback.mp4');
+          }
+        } else if (/MicroMessenger/i.test(ua)) {
+          // Desktop WeChat is forced onto the H.264 fallback pair in
+          // HeroSection regardless of HEVC support.
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
+        } else if (heroSupportsHEVC) {
+          heroPreload('/media/hero-hevc.mp4');
+          heroPreload('/media/hero-mask-hevc.mp4');
+          heroPosterPreload();
+        } else {
+          heroPreload('/media/hero-base.mp4');
+          heroPreload('/media/hero-mask-fallback.mp4');
+          heroPosterPreload();
+        }
+        // The home route always uses one-screen paging. Keep secondary routes
+        // in their regular document flow from the first paint.
+        var hash = window.location.hash || '';
+        var homeRoute = hash === '' || hash === '#';
+        root.setAttribute('data-paging', homeRoute ? 'on' : 'off');
+        // Take scroll restoration away from the browser before it can apply a
+        // saved position. The paged home decides the starting screen itself,
+        // so a restored offset (e.g. wherever the visitor last was) must never
+        // become the initial screen and then get "aligned" to by the pager.
+        if ('scrollRestoration' in history) {
+          try { history.scrollRestoration = 'manual'; } catch (_) {}
+        }
+        // --vh is the *visible* viewport, not the 100vh unit. On a phone those
+        // differ: 100vh resolves against the largest viewport (address bar
+        // hidden) while the bar is usually on screen. The paged home measures
+        // every screen against this value, so it has to follow the real height.
+        var syncHeight = function () {
+          root.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+        };
+        syncHeight();
+        window.addEventListener('resize', syncHeight);
+        window.addEventListener('orientationchange', function () {
+          window.setTimeout(syncHeight, 120);
+        });
+        // Mobile browsers resize the layout viewport when the address bar
+        // slides away, and they do not always fire a window resize for it.
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', syncHeight);
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-aXHRT6Fr.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D6QgGjXi.css">
+  </head>
+  <body>
+    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
+         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 揭幕」。
+         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
+         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。 -->
+    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
+         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 进度 + 揭幕」。
+         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
+         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。
+         只有首页会显示：二级(works)/三级(detail)页刷新直接进内容，不挡路。 -->
+    <!-- 遮罩本体由下面的脚本创建，HTML 里故意不放这个 div：Chrome 会在解析过程中
+         穿插绘制，若 div 先于脚本出现，二级/三级页刷新就有可能闪一帧纯色遮罩。
+         现在只有判定为首页时它才会被插进 DOM，其余路由连节点都不存在。 -->
+    <script>
+      (function () {
+        // 路由判定与 src/main.jsx 的 parseRoute 保持一致：凡是不是 works /
+        // detail / hero-motion-demo 的 hash 都算首页。
+        var hash = window.location.hash || '';
+        var isHome = !/^#\/(works|detail|hero-motion-demo)/.test(hash);
+        if (!isHome) return; // 二级/三级页刷新：连遮罩节点都不建
+
+        var el = document.createElement('div');
+        el.id = 'app-loader';
+        el.setAttribute('aria-busy', 'true');
+        el.setAttribute('aria-label', '页面加载中');
+        document.body.appendChild(el);
+        var drop = function () { if (el && el.parentNode) el.remove(); };
+
+        // ① demo 本体
+        var frame = document.createElement('iframe');
+        frame.id = 'app-loader-frame';
+        frame.title = 'Loading';
+        frame.setAttribute('tabindex', '-1');
+        frame.setAttribute('aria-hidden', 'true');
+        frame.src = '/loading/typing-cat-v1.1.html?embed';
+        // ② 真实进度读数。节点先建好，正常情况会在 iframe load 后搬进 demo，
+        //    替换掉 demo 自带那条假进度条、坐在动画正下方；拿不到 iframe 文档时
+        //    才退回遮罩底部（降级），两种情况下都只有一个条。
+        var progress = (function () {
+          var wrap = document.createElement('div');
+          wrap.className = 'app-loader-progress';
+          wrap.setAttribute('aria-hidden', 'true');
+          var barEl = document.createElement('div');
+          barEl.className = 'app-loader-bar';
+          var fillEl = document.createElement('i');
+          barEl.appendChild(fillEl);
+          var numEl = document.createElement('span');
+          numEl.className = 'app-loader-num';
+          numEl.textContent = '0%';
+          wrap.appendChild(barEl);
+          wrap.appendChild(numEl);
+          return { root: wrap, fill: fillEl, num: numEl };
+        })();
+        var fill = progress.fill;
+        var num = progress.num;
+        el.appendChild(frame);
+
+        // demo 自带的 .rail 是一条 2.6s 无限往返的假动画条，跟真实加载量毫无关系。
+        // 这里整条摘掉，把真实进度条插到它原来的位置（动画正下方、居中）；排版
+        // 参数抄 demo（rail 底色 / 2px 高 / #8b9eaf / #8291a0 小字），看上去就是
+        // 长在里面的。进度条以运行时的同域替换实现，不改 demo 的原条子。
+        var placed = false;
+        var placeIntoDemo = function () {
+          if (placed) return;
+          var doc = null;
+          try { doc = frame.contentDocument; } catch (_) { return; }
+          if (!doc) return;
+          var rail = doc.querySelector('.rail');
+          if (!rail || !rail.parentNode) return;
+          var style = doc.createElement('style');
+          // 2026-10-07: 加载页背景整体换成参考版 outputs/typing-cat-04-mini.html 的做法,
+          // 两层:①底色 = 04 的 main 径向渐变(--bg #111719,中心是 3% --light 提亮出来的
+          //   #161d1e);②猫咪身后的光 = 04 真正在用的那套 SVG 光晕椭圆,几何换算见下。
+          // 背景与接触阴影沿用进度条替换机制:运行时同域注入;动画源文件只改眨眼时刻。
+          style.textContent = ':root{background:#111719!important}'
+            + 'html,body{background:#111719!important}'
+            + 'main{background:radial-gradient(ellipse at 50% 49%,#161d1e 0%,#111719 68%)!important}'
+            + '.app-loader-progress{margin:17px auto 0;width:fit-content;display:flex;align-items:center;gap:12px}.app-loader-bar{position:relative;width:140px;height:2px;background:rgba(185,203,213,0.09);overflow:hidden}.app-loader-bar>i{position:absolute;left:0;top:0;bottom:0;width:0;background:#8b9eaf;transition:width .28s ease}.app-loader-num{font:10px/1 "Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:1px;color:#8291a0;font-variant-numeric:tabular-nums}@media(prefers-reduced-motion:reduce){.app-loader-bar>i{transition:none}}';
+          doc.head.appendChild(style);
+
+          // 04 的「猫咪身后的光」是画在 SVG 里的两层径向渐变椭圆,不是 CSS 伪元素。
+          // 这里按同一份渐变停靠点(中心 .2 / .62 处 .055 / 末端 0;地面池 .16)重建,
+          // 插到 svg.art 最底层当背景,前景的猫与笔记本完全不受影响。
+          // 几何换算(.workbuddy/tools/probe-halo-geometry.mjs 实测两版猫的 bbox,
+          // calc-halo-fit.mjs 换算):04 的光是「绕着猫」的,所以按猫高缩放而不是按画布宽。
+          // 04 猫高 120.8 / 本 demo 猫高 499.7 → k=4.137。换算后光与猫的比例与 04 逐项相等:
+          //   halo rx/catH 1.341(= 04 的 1.341)、ry/catH 1.193(=1.192)、floor rx/catH 1.135(=1.134)。
+          // 注意 halo 会超出画布边界,这是刻意的 —— 04 里它同样溢出画布,靠 .art 的
+          // overflow:visible 呈现,是一圈弥散在猫背后的环境光,不是一块有边的光斑。
+          var svg = doc.querySelector('svg.art');
+          // ★ Loading 画面的三档横向构图，全部以 SVG user unit 表达（→ PC/移动端同解）。
+          // ① VB_SHIFT 128 —— 视觉居中的第一轮。main 的 place-items:center 只保证 .loader
+          //    盒子居中，管不到「画进画布里的图形」：demo 的 viewBox 是 0 0 1080 659，
+          //    而主干（猫耳左沿 319 → 笔记本右沿 1017）的中心在 668，比画布中心 540 偏右
+          //    128 个单位。把 min-x 右移 128 是纯平移不缩放，主干边距即左右相等。
+          // ② 光圈单独居中。① 把光也平移了同样的量，可光原本就不以主体为中心
+          //    （halo cx 583 / floor cx 624 vs 主干中心 668），于是光圈反而更偏左。
+          //    ★ 踩过的坑：曾给 halo / floor 加「同一个偏移量」+85 —— 可两者原本就不同心
+          //    （624 − 583 = 41），同质平移只会把 floor 推过头。分层实测（analyze-layer-center.py）：
+          //      halo −0.9px / floor **+20.9px** / 接地阴影 +1.2px（桌面 1440）
+          //      halo −0.8px / floor **+14.0px** / 接地阴影 +0.8px（移动 393）
+          //    即「猫脚下的地面光池」在用户语义里属于光圈、明显偏右。
+          //    所以两层不再各自加偏移量，统一直接落在屏幕中线 MID_X 上。
+          // ③ SUBJECT_SHIFT 40 —— 主体（含接地阴影）在画布里再往右一点点。
+          //    ① 是按「猫耳→笔记本」居中，没把向左甩的尾巴算进去：含尾整体轮廓左边距几乎
+          //    贴到画布边缘、右边还剩 83px（1440），看着仍偏左。
+          //    analyze-subject-shift.py 实测几档（X=0 / 40 / 90）的抗阈值十字：
+          //      1440 X=0  边距 492:575  实心部分(th25) bboxΔ -28.0  质心Δ +5.2
+          //      1440 X=90 边距 530:537  完全对称，但主干会被推到质心 +42 —— 过头
+          //    取 40（≈ 完全对称所需的四成），左边不再贴边、主干也不至于明显偏右。
+          // ★ 实现要点：min-x 减 SUBJECT_SHIFT 会让全部内容（含投影）右移，
+          //   光要保持在屏幕原位就必须同步减 SUBJECT_SHIFT —— 两个数必须成对出现。
+          var VB_SHIFT = 128;
+          var SUBJECT_SHIFT = 40;
+          // 屏幕中线在 SVG user 坐标里的 x = viewBox min-x + 画布半宽。
+          // 「光圈」两层 —— 猫身后大光晕 halo、猫脚下地面光池 floor（用户语义里的「底盘」）
+          // —— 都直接落在它身上，而不是各自再加偏移量（那样会把不同心的两层推成互相错位）。
+          var MID_X = (VB_SHIFT - SUBJECT_SHIFT) + 540;
+          if (svg) svg.setAttribute('viewBox', String(VB_SHIFT - SUBJECT_SHIFT) + ' 0 1080 659');
+          if (svg && !doc.getElementById('halo')) {
+            var lightBox = doc.createElement('div');
+            lightBox.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+              + '<defs>'
+              + '<radialGradient id="halo"><stop stop-color="#b9d7cd" stop-opacity=".2"/>'
+              + '<stop offset=".62" stop-color="#b9d7cd" stop-opacity=".055"/>'
+              + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
+              + '<radialGradient id="floor"><stop stop-color="#b9d7cd" stop-opacity=".16"/>'
+              + '<stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient>'
+              + '<filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="24 15"/></filter>'
+              + '<filter id="loader-shadow-contact" x="-10%" y="-180%" width="120%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7 4"/></filter>'
+              + '</defs>'
+              + '<ellipse cx="' + MID_X + '" cy="254" rx="670" ry="596" fill="url(#halo)"/>'
+              + '<ellipse cx="' + MID_X + '" cy="630" rx="567" ry="79" fill="url(#floor)"/>'
+              // The broad layer is a flattened half-round pool: it spreads below the cat and laptop
+              // instead of ending as a straight strip. The smaller layer keeps the contact at y604-605.
+              + '<g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none">'
+              + '<ellipse cx="630" cy="615" rx="365" ry="38" opacity=".23" filter="url(#loader-shadow-soft)"/>'
+              + '<ellipse cx="630" cy="605" rx="335" ry="13" opacity=".38" filter="url(#loader-shadow-contact)"/>'
+              + '</g>'
+              + '</svg>';
+            var lightSvg = lightBox.firstChild;
+            // 一次性搬进 fragment 再插入:逐个 insertBefore 会把顺序反过来。
+            var frag = doc.createDocumentFragment();
+            while (lightSvg.firstChild) frag.appendChild(lightSvg.firstChild);
+            svg.insertBefore(frag, svg.firstChild);
+          }
+          rail.parentNode.replaceChild(progress.root, rail);
+          placed = true;
+          window.clearTimeout(fallbackTimer);
+        };
+        frame.addEventListener('load', placeIntoDemo);
+        // 命中缓存时 load 有可能在监听之前就已经触发，补两次机会。
+        window.setTimeout(placeIntoDemo, 0);
+        window.setTimeout(placeIntoDemo, 400);
+        // 降级：iframe 文档拿不到时退回遮罩底部那一条，并顺手把 demo 里的假条
+        // 隐藏掉 —— 无论如何不能同时出现两条。
+        var fallbackTimer = window.setTimeout(function () {
+          if (placed) return;
+          el.appendChild(progress.root);
+          try {
+            var d = frame.contentDocument;
+            if (d && d.head) {
+              var s = d.createElement('style');
+              s.textContent = '.rail{display:none}';
+              d.head.appendChild(s);
+            }
+          } catch (_) { /* noop */ }
+        }, 600);
+
+        // ---- 真实进度：每项都是一个 0..1 的探针，按权重加权 ----
+        // 只有能真正观测到的量才计入，凑不出来的就不假装：
+        //   · 脚本/图片/预取文件：performance 资源条目有 responseEnd 才算完成；
+        //   · 视频：读 <video> 的 buffered 区间（能拿到真实的字节进度），
+        //     拿不到就退回"资源条目完成"这种 0/1 判定；
+        //   · React 首屏就绪：由 app:ready 事件给出。
+        var tasks = [];
+        var addEntryTask = function (href, weight, cap) {
+          tasks.push({
+            weight: weight,
+            read: function () {
+              var value = 0;
+              try {
+                var abs = new URL(href, location.href).href;
+                var entries = performance.getEntriesByName(abs, 'resource');
+                if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
+                if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
+              } catch (_) { /* noop */ }
+              // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
+              return cap ? Math.min(cap, value) : value;
+            }
+          });
+        };
+        var videoBuffered = function () {
+          var list = document.querySelectorAll('video');
+          if (!list.length) return 0;
+          var sum = 0;
+          var counted = 0;
+          for (var i = 0; i < list.length; i++) {
+            var v = list[i];
+            var dur = v.duration;
+            if (!isFinite(dur) || !dur) continue;
+            try {
+              sum += v.buffered.length ? Math.min(1, v.buffered.end(v.buffered.length - 1) / dur) : 0;
+              counted++;
+            } catch (_) { /* noop */ }
+          }
+          return counted ? sum / counted : 0;
+        };
+        (window.__bootAssets || []).forEach(function (asset) {
+          // 视频是首屏字节大头（~1.9MB），权重给高，进度才不会"一上来就 90%"。
+          var weight = asset.kind === 'video' ? 4 : 1;
+          addEntryTask(asset.href, weight, asset.kind === 'video' ? 0.92 : 0);
+          if (asset.kind === 'video') {
+            tasks.push({
+              weight: weight,
+              read: function () {
+                var buffered = videoBuffered();
+                // 取两者较大值：buffered 更平滑，资源条目完成后直接封顶 1。
+                var done = 0;
+                try {
+                  var abs = new URL(asset.href, location.href).href;
+                  var entries = performance.getEntriesByName(abs, 'resource');
+                  if (!entries.length) entries = performance.getEntriesByName(asset.href, 'resource');
+                  if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
+                } catch (_) { /* noop */ }
+                // 下载完只算到 92%：剩下的 8% 必须由「视频真的能连续播」来补
+                // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
+                return Math.min(0.92, Math.max(buffered, done));
+              }
+            });
+          }
+        });
+        // 应用脚本（Vite 注入的 module + modulepreload）
+        Array.prototype.forEach.call(document.querySelectorAll('script[src], link[rel="modulepreload"]'), function (node) {
+          addEntryTask(node.src || node.href, 1);
+        });
+        // 首屏图片：视口内的 <img> 里已经 decode 完的比例。这是真能观测到的量
+        // （complete + naturalWidth），不是按数量拍脑袋。
+        var imagesProgress = function () {
+          var list = document.querySelectorAll('img');
+          var done = 0;
+          var total = 0;
+          for (var i = 0; i < list.length; i++) {
+            var rect = list[i].getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight || !rect.width) continue;
+            total++;
+            if (list[i].complete && list[i].naturalWidth) done++;
+          }
+          return total ? done / total : 0;
+        };
+        tasks.push({ weight: 2, read: imagesProgress });
+
+        // 外部进度（React 侧在 loading 阶段预载的内容：作品封面、尾屏 WebGL）：
+        // 通过 window 'loading:progress' 事件上报 { id, weight, progress }，并入同一条
+        // 加权进度条，于是条子会随封面一张张下完、尾屏着色器编译完而真实爬升，
+        // 用户能直接"看见 loading 在干活"。权重在首次上报时锁定，之后只更新 progress。
+        var external = {};
+        window.addEventListener('loading:progress', function (e) {
+          var d = e.detail || {};
+          if (!d.id) return;
+          if (!external[d.id]) {
+            var w = (typeof d.weight === 'number' && d.weight > 0) ? d.weight : 2;
+            external[d.id] = { weight: w, progress: 0 };
+            tasks.push({ weight: w, read: function () { return external[d.id] ? external[d.id].progress : 0; } });
+          }
+          if (typeof d.progress === 'number') {
+            external[d.id].progress = Math.max(external[d.id].progress, Math.min(1, d.progress));
+          }
+        });
+
+        var ready = false; // 仅供 hide() 内部状态使用，不再作为进度项
+
+        var shown = 0; // 已显示到的进度，只增不减
+        var eased = 0; // 平滑逼近值：真实值是阶梯状的（资源一个个到位），
+                       // 直接刷会让条子一格一格蹦，这里让它连续地追上去
+        var paint = function (value) {
+          // 只增不减：个别资源条目被缓存复用或重复登记时，进度条不能往回跳。
+          if (value < shown) return;
+          shown = value;
+          var percent = Math.round(shown * 100);
+          fill.style.width = percent + '%';
+          num.textContent = percent + '%';
+        };
+        var tick = function () {
+          var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;
+          var sum = 0;
+          for (var i = 0; i < tasks.length; i++) sum += tasks[i].weight * tasks[i].read();
+          var target = Math.min(1, sum / total);
+          eased += (target - eased) * 0.3;
+          if (target - eased < 0.004) eased = target; // 收尾别拖着不到 100
+          paint(eased);
+        };
+
+        var MIN_SHOW = 600;
+        // 硬超时（最后的安全网，只在 app:ready 始终不来时才生效）。
+        // ⚠ 2026-10-08：6s → 12s。揭幕闸门现在多了一道"尾屏灯光烧录"（见
+        // Street.jsx / HomePage）：demo 的 intro 渐入被 clamp 到 0.05s/帧、无法快进，
+        // 只能在遮罩期按受控帧率跑完 ~3.4s。原来的 6s 会在正常路径上提前揭幕
+        // （首屏视频在慢网下本身就可能 >4s），那就等于把烧录又漏回 hero 播放期。
+        // 12s 对正常路径（~5s）留了一倍余量，同时仍能兜住"某一闸门彻底不动"。
+        var HARD_CAP = 12000;
+        var startedAt = Date.now();
+        var hidden = false;
+        var hide = function (finished) {
+          if (hidden || !el) return;
+          hidden = true;
+          ready = true;
+          window.clearInterval(timer);
+          // 只有"真的加载完了"才补满 100%；触发硬超时说明没等到就绪，
+          // 这时假装 100% 就是假进度，条子停在原处直接淡出。
+          var wait = Math.max(0, MIN_SHOW - (Date.now() - startedAt));
+          // 补满也要补得像真的：不是瞬间跳到 100%，而是让读数在剩下的等待时间里
+          // 一段段爬上去，跟条子 0.28s 的宽度过渡同步（否则数字会先蹦到 100%，
+          // 条子还在后面追，看着就像假进度）。
+          var ramp = window.setInterval(function () {
+            if (!finished) { window.clearInterval(ramp); return; }
+            var pct = parseInt(num.textContent, 10) || 0;
+            if (pct >= 100) { window.clearInterval(ramp); return; }
+            num.textContent = Math.min(100, pct + 9) + '%';
+          }, 40);
+          window.setTimeout(function () {
+            window.clearInterval(ramp);
+            if (finished) paint(1);
+            el.classList.add('is-gone');
+            window.setTimeout(function () {
+              el.classList.add('is-off');
+              drop(); // 连 iframe 一起移除：demo 是 rAF 动画，残留会空转抢主线程
+            }, 520);
+          }, wait);
+        };
+        window.__hideAppLoader = function () { hide(true); };
+        window.addEventListener('app:ready', function () { ready = true; window.__appRevealed = true; hide(true); });
+        var timer = window.setInterval(tick, 120);
+        window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
+        // 兜底：无论如何 HARD_CAP 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下
+        // 始终不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
+        window.setTimeout(function () { if (!hidden) hide(true); }, HARD_CAP);
+        // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
+        // 也要揭幕（不补满进度）。
+        window.setTimeout(function () { hide(false); }, HARD_CAP);
+        tick();
+      })();
+    </script>
+    <div id="root"></div>
+  </body>
+</html>

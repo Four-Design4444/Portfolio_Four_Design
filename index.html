@@ -507,7 +507,13 @@
         };
 
         var MIN_SHOW = 600;
-        var HARD_CAP = 6000;
+        // 硬超时（最后的安全网，只在 app:ready 始终不来时才生效）。
+        // ⚠ 2026-10-08：6s → 12s。揭幕闸门现在多了一道"尾屏灯光烧录"（见
+        // Street.jsx / HomePage）：demo 的 intro 渐入被 clamp 到 0.05s/帧、无法快进，
+        // 只能在遮罩期按受控帧率跑完 ~3.4s。原来的 6s 会在正常路径上提前揭幕
+        // （首屏视频在慢网下本身就可能 >4s），那就等于把烧录又漏回 hero 播放期。
+        // 12s 对正常路径（~5s）留了一倍余量，同时仍能兜住"某一闸门彻底不动"。
+        var HARD_CAP = 12000;
         var startedAt = Date.now();
         var hidden = false;
         var hide = function (finished) {
@@ -541,8 +547,8 @@
         window.addEventListener('app:ready', function () { ready = true; window.__appRevealed = true; hide(true); });
         var timer = window.setInterval(tick, 120);
         window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
-        // 兜底：无论如何 6s 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下始终
-        // 不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
+        // 兜底：无论如何 HARD_CAP 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下
+        // 始终不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
         window.setTimeout(function () { if (!hidden) hide(true); }, HARD_CAP);
         // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
         // 也要揭幕（不补满进度）。

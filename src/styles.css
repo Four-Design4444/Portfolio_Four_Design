@@ -2352,9 +2352,9 @@ h2 {
 .showcase-deck::after {
   content: '';
   position: absolute;
-  left: 5%;
-  right: 5%;
-  top: 65%;
+  left: 4%;
+  right: 4%;
+  top: 60%;
   bottom: 0;
   z-index: -1;
   pointer-events: none;
@@ -2372,7 +2372,9 @@ h2 {
   position: absolute;
   left: var(--x);
   top: 40%;
-  width: 16.72%;
+  /* 2026-10-08:7 张 → 11 张，卡宽 16.72% → 12.2%（步长 7.4%，见
+     main.jsx 的 DECK_START_X / DECK_STEP_X）。倒影宽度必须与卡同值。 */
+  width: 12.2%;
   aspect-ratio: 4 / 3;
   z-index: var(--z);
   opacity: 0;
@@ -2390,8 +2392,9 @@ h2 {
 }
 
 .showcase-deck:not(.is-visible) .showcase-deck-card {
-  --enter: 54px;
-  transition-delay: calc(var(--i) * 90ms);
+  --enter: 46px;
+  /* 11 张卡：错峰步长由 90ms 收到 62ms，末卡延迟 620ms，整排张开不至于拖沓。 */
+  transition-delay: calc(var(--i) * 62ms);
 }
 
 .showcase-deck.is-visible .showcase-deck-card {
@@ -2405,8 +2408,10 @@ h2 {
 .showcase-deck-reflection {
   position: absolute;
   left: var(--x);
-  top: 68%;
-  width: 16.72%;
+  /* 卡变窄后卡底随之上移（卡高只占 28.6% 屏高），倒影顶边从 68% 提到 63%，
+     否则卡与倒影之间会空出一条比原来宽得多的"悬浮缝"。 */
+  top: 63%;
+  width: 12.2%;
   aspect-ratio: 4 / 3;
   z-index: 1;
   overflow: hidden;
@@ -2533,22 +2538,23 @@ h2 {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0 clamp(10px, 0.86vw, 14px) clamp(10px, 0.82vw, 13px);
+  gap: 3px;
+  /* 卡变窄（≈156px @1440）后内边距与字号同步收小，避免标题撞到卡右缘。 */
+  padding: 0 clamp(8px, 0.68vw, 11px) clamp(8px, 0.64vw, 11px);
   pointer-events: none;
   text-align: left;
 }
 
 .showcase-deck-copy em {
   font-style: normal;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.2em;
   color: rgba(255, 255, 255, 0.42);
 }
 
 .showcase-deck-copy strong {
-  font-size: clamp(13px, 0.95vw, 17px);
+  font-size: clamp(11.5px, 0.82vw, 14px);
   font-weight: 800;
   line-height: 1.1;
   color: #ffffff;
@@ -2556,7 +2562,7 @@ h2 {
 
 .showcase-deck-copy b {
   font-weight: 500;
-  font-size: clamp(9.5px, 0.6vw, 11px);
+  font-size: clamp(9px, 0.52vw, 10px);
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.56);
 }
@@ -3129,8 +3135,9 @@ h2 {
     margin-top: 58px;
   }
 
+  /* 11 张卡：≤1500px 时卡更窄，标题不能再放大（原 clamp(15px,1.2vw,20px)）。 */
   .showcase-deck-copy strong {
-    font-size: clamp(15px, 1.2vw, 20px);
+    font-size: clamp(12.5px, 0.95vw, 15px);
   }
 
   .showcase-item {
@@ -3164,9 +3171,11 @@ body:has(.work-detail-page) .detail-hero img {
     margin-top: 64px;
   }
 
+  /* 11 张卡（步长仍 7.4%）：窄视口下按同样比例放大卡宽，18% → 14.2%，
+     保证每张露出的比例与桌面端一致（≈52%）。 */
   .showcase-deck-card,
   .showcase-deck-reflection {
-    width: 18%;
+    width: 14.2%;
   }
 }
 

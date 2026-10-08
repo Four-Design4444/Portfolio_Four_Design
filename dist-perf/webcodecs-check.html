@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WebCodecs 能力检测</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #0d0c12; color: #e8e6f0;
+    font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .verdict { padding: 14px; border-radius: 10px; margin-bottom: 14px; font-size: 16px; font-weight: 700; }
+  .ok { background: #12351f; color: #6ee7a0; border: 1px solid #2c7a4b; }
+  .no { background: #3a1418; color: #ff8a95; border: 1px solid #8a2b36; }
+  .wait { background: #2a2418; color: #e8c46a; border: 1px solid #7a6524; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px; }
+  td { padding: 7px 8px; border-bottom: 1px solid #262433; vertical-align: top; word-break: break-all; }
+  td:first-child { width: 38%; color: #9a96ae; }
+  .y { color: #6ee7a0; } .n { color: #ff8a95; } .u { color: #e8c46a; }
+  pre { background: #16151f; padding: 12px; border-radius: 8px; font-size: 12px;
+    white-space: pre-wrap; word-break: break-all; color: #b8b4cc; }
+  button { display: block; width: 100%; margin: 8px 0; padding: 13px; font-size: 15px;
+    border: 0; border-radius: 9px; background: #4a3fa8; color: #fff; font-weight: 600; }
+  button:active { background: #372e82; }
+  canvas { width: 100%; border-radius: 8px; background: #16151f; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<h1>WebCodecs 能力检测</h1>
+<div class="verdict wait" id="verdict">步骤 1：读取环境信息…</div>
+<div id="frame"></div>
+<table id="tbl"></table>
+<button onclick="copyResult()">复制检测结果</button>
+<pre id="raw">…</pre>
+
+<script>
+var RESULT = { ua: navigator.userAgent, stage: 0, done: false, steps: [] };
+var rawText = '';
+var WATCHDOG = null;
+
+window.onerror = function (m, s, l) {
+  RESULT.jsError = String(m) + ' @' + l;
+  row('JS 错误', RESULT.jsError, 'n');
+};
+
+function row(k, v, cls) {
+  var t = document.getElementById('tbl');
+  var tr = document.createElement('tr');
+  var a = document.createElement('td'); a.textContent = k;
+  var b = document.createElement('td'); b.textContent = v; if (cls) b.className = cls;
+  tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
+}
+function stage(n, text) {
+  RESULT.stage = n;
+  RESULT.steps.push(n + ':' + text);
+  var v = document.getElementById('verdict');
+  v.className = 'verdict wait';
+  v.textContent = '步骤 ' + n + '：' + text;
+}
+function setVerdict(text, cls) {
+  var v = document.getElementById('verdict');
+  v.textContent = text; v.className = 'verdict ' + cls;
+}
+function withTimeout(p, ms, label) {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise(function (_, rej) { setTimeout(function () { rej(new Error(label + ' 超时 ' + ms + 'ms')); }, ms); })
+  ]);
+}
+function copyResult() {
+  var ta = document.createElement('textarea');
+  ta.value = document.getElementById('raw').textContent;
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); alert('已复制，请粘贴发送'); } catch (e) { alert('复制失败，请截图'); }
+  document.body.removeChild(ta);
+}
+window.copyResult = copyResult;
+
+function chromeVer() { var m = /Chrome\/(\d+)/.exec(navigator.userAgent); return m ? parseInt(m[1], 10) : null; }
+function xwebVer() { var m = /XWEB\/(\d+)/i.exec(navigator.userAgent); return m ? m[1] : null; }
+
+function splitNAL(buf) {
+  var u8 = new Uint8Array(buf);
+  var marks = [];
+  for (var i = 0; i < u8.length - 3; i++) {
+    if (u8[i] === 0 && u8[i + 1] === 0 && u8[i + 2] === 1) { marks.push([i, i + 3]); i += 2; }
+    else if (u8[i] === 0 && u8[i + 1] === 0 && u8[i + 2] === 0 && u8[i + 3] === 1) { marks.push([i, i + 4]); i += 3; }
+  }
+  var nals = [];
+  for (var j = 0; j < marks.length; j++) {
+    var s = marks[j][1];
+    var e = (j + 1 < marks.length) ? marks[j + 1][0] : u8.length;
+    if (e > s) nals.push({ type: u8[s] & 31, data: u8.subarray(s, e) });
+  }
+  return nals;
+}
+function toAnnexB(nals) {
+  var total = 0, i;
+  for (i = 0; i < nals.length; i++) total += 4 + nals[i].data.length;
+  var out = new Uint8Array(total), p = 0;
+  for (i = 0; i < nals.length; i++) {
+    out[p] = 0; out[p + 1] = 0; out[p + 2] = 0; out[p + 3] = 1;
+    out.set(nals[i].data, p + 4); p += 4 + nals[i].data.length;
+  }
+  return out;
+}
+function toLengthPrefixed(nals) {
+  var total = 0, i;
+  for (i = 0; i < nals.length; i++) total += 4 + nals[i].data.length;
+  var out = new Uint8Array(total), p = 0;
+  for (i = 0; i < nals.length; i++) {
+    var d = nals[i].data;
+    out[p] = (d.length >> 24) & 255; out[p + 1] = (d.length >> 16) & 255;
+    out[p + 2] = (d.length >> 8) & 255; out[p + 3] = d.length & 255;
+    out.set(d, p + 4); p += 4 + d.length;
+  }
+  return out;
+}
+function makeAvcC(sps, pps) {
+  var out = new Uint8Array(11 + sps.length + pps.length);
+  out[0] = 1; out[1] = sps[1]; out[2] = sps[2]; out[3] = sps[3];
+  out[4] = 0xff; out[5] = 0xe1;
+  out[6] = (sps.length >> 8) & 255; out[7] = sps.length & 255;
+  out.set(sps, 8);
+  var o = 8 + sps.length;
+  out[o] = 1; out[o + 1] = (pps.length >> 8) & 255; out[o + 2] = pps.length & 255;
+  out.set(pps, o + 3);
+  return out;
+}
+function finish() {
+  RESULT.done = true;
+  if (WATCHDOG) clearTimeout(WATCHDOG);
+  rawText = JSON.stringify(RESULT, null, 1);
+  document.getElementById('raw').textContent = rawText;
+}
+
+// ---------- 步骤 1：同步环境信息（立刻渲染，即使后面卡住也能看到） ----------
+var cv = chromeVer(), xw = xwebVer();
+RESULT.chrome = cv; RESULT.xweb = xw; RESULT.stage = 1;
+row('User-Agent', navigator.userAgent);
+row('Chrome 内核版本', cv === null ? '未知' : String(cv), cv && cv >= 94 ? 'y' : 'n');
+row('XWEB 版本', xw || '未检出（可能 X5 或系统 WebView）');
+row('是否微信内置', /MicroMessenger/i.test(navigator.userAgent) ? '是' : '否');
+row('typeof VideoDecoder', typeof VideoDecoder, typeof VideoDecoder === 'function' ? 'y' : 'n');
+row('typeof VideoFrame', typeof VideoFrame, typeof VideoFrame === 'function' ? 'y' : 'n');
+row('typeof EncodedVideoChunk', typeof EncodedVideoChunk, typeof EncodedVideoChunk === 'function' ? 'y' : 'n');
+row('typeof WebAssembly', typeof WebAssembly);
+row('navigator.hardwareConcurrency', String(navigator.hardwareConcurrency || '未知'));
+
+WATCHDOG = setTimeout(function () {
+  if (!RESULT.done) {
+    RESULT.watchdog = '总超时，停在步骤 ' + RESULT.stage;
+    setVerdict('⚠ 超时未完成（停在步骤 ' + RESULT.stage + '），以下为已得到的信息', 'wait');
+    finish();
+  }
+}, 70000);
+
+async function probeConfig(codec, w, h) {
+  if (typeof VideoDecoder === 'undefined' || !VideoDecoder.isConfigSupported) return 'no API';
+  try {
+    var r = await withTimeout(VideoDecoder.isConfigSupported({ codec: codec, codedWidth: w, codedHeight: h }), 5000, 'isConfigSupported');
+    return r && r.supported ? 'YES' : 'NO';
+  } catch (e) { return 'ERR ' + (e && e.message); }
+}
+
+async function attempt(mode, hw, sps, pps, slices, count, waitMs) {
+  var frames = [], err = null, qlog = [], times = [];
+  var decoder = null;
+  var now = function () { return (performance && performance.now) ? performance.now() : Date.now(); };
+  var t0 = now();
+  try {
+    decoder = new VideoDecoder({
+      output: function (f) { frames.push(f); times.push(now()); },
+      error: function (e) { err = (e && e.message) || 'decoder error'; }
+    });
+    var cfg = { codec: 'avc1.640028', codedWidth: 810, codedHeight: 1440,
+      optimizeForLatency: true, hardwareAcceleration: hw };
+    if (mode === 'avcc') cfg.description = makeAvcC(sps, pps);
+    decoder.configure(cfg);
+    for (var k = 0; k < count; k++) {
+      var list = [];
+      if (mode === 'annexb' && k === 0) { list.push({ data: sps }); list.push({ data: pps }); }
+      list.push(slices[k]);
+      decoder.decode(new EncodedVideoChunk({
+        type: slices[k].type === 5 ? 'key' : 'delta',
+        timestamp: Math.round(k * 1000000 / 24),
+        data: mode === 'annexb' ? toAnnexB(list) : toLengthPrefixed(list)
+      }));
+      qlog.push(decoder.decodeQueueSize);
+    }
+    // Do NOT rely on flush(): some kernels never resolve it. Poll for output instead.
+    var waited = 0;
+    while (frames.length < count && waited < waitMs) {
+      await new Promise(function (r) { setTimeout(r, 100); });
+      waited += 100;
+    }
+    var flushNote = 'ok';
+    try { await withTimeout(decoder.flush(), 2500, 'flush'); }
+    catch (e) { flushNote = 'flush未返回（' + (e && e.message) + '）'; }
+    // Measure only first->last frame arrival, so init latency and flush stalls
+    // do not distort the throughput number.
+    var span = (times.length > 1) ? (times[times.length - 1] - times[0]) : 0;
+    var snapshot = frames.slice();
+    try { decoder.close(); } catch (e) {}
+    return { frames: snapshot, ms: Math.round(now() - t0), span: Math.round(span),
+      err: err, flush: flushNote, waited: waited, queue: qlog.slice(0, 6),
+      queueEnd: decoder.decodeQueueSize };
+  } catch (e) {
+    var snapshot2 = frames.slice();          // keep whatever arrived before the error
+    try { if (decoder) decoder.close(); } catch (e3) {}
+    return { frames: snapshot2, ms: 0, err: String((e && e.message) || e), flush: 'n/a',
+      waited: 0, queue: qlog.slice(0, 6), queueEnd: -1 };
+  }
+}
+
+async function main() {
+  if (typeof VideoDecoder !== 'function') {
+    RESULT.ok = false; RESULT.reason = '内核未提供 VideoDecoder';
+    setVerdict('✗ 不支持：内核没有 VideoDecoder', 'no');
+    finish(); return;
+  }
+
+  stage(2, '查询解码器配置支持…');
+  var c810 = await probeConfig('avc1.640028', 810, 1440);
+  var c2k = await probeConfig('avc1.640028', 1440, 2560);
+  var chevc = await probeConfig('hvc1.1.6.L120.90', 1440, 2560);
+  RESULT.h264_810 = c810; RESULT.h264_2k = c2k; RESULT.hevc_2k = chevc;
+  row('H.264 810×1440', c810, c810 === 'YES' ? 'y' : 'n');
+  row('H.264 1440×2560 (2K)', c2k, c2k === 'YES' ? 'y' : 'n');
+  row('HEVC 2K（参考）', chevc, chevc === 'YES' ? 'y' : 'n');
+
+  if (c810 !== 'YES') {
+    RESULT.ok = false; RESULT.reason = 'H.264 配置不被支持：' + c810;
+    setVerdict('✗ 有 VideoDecoder 但不支持 H.264：' + c810, 'no');
+    finish(); return;
+  }
+
+  stage(3, '下载裸流数据…');
+  var buf = null, fetchNote = '';
+  try {
+    var res = await withTimeout(fetch('/media/hero-mobile-webcodecs.264', { headers: { Range: 'bytes=0-524287' } }), 12000, 'fetch(Range)');
+    RESULT.fetchStatus = res.status;
+    if (!res.ok && res.status !== 206) throw new Error('HTTP ' + res.status);
+    buf = await withTimeout(res.arrayBuffer(), 12000, 'arrayBuffer');
+    fetchNote = 'Range';
+  } catch (e) {
+    RESULT.fetchRangeError = String(e && e.message);
+    try {
+      var res2 = await withTimeout(fetch('/media/hero-mobile-webcodecs.264'), 15000, 'fetch(全量)');
+      var all = await withTimeout(res2.arrayBuffer(), 20000, 'arrayBuffer');
+      buf = all.slice(0, 524288);
+      fetchNote = '全量后截取';
+    } catch (e2) {
+      RESULT.fetchError = String(e2 && e2.message);
+      RESULT.ok = false; RESULT.reason = '取流失败';
+      row('取流失败', RESULT.fetchRangeError + ' | ' + RESULT.fetchError, 'n');
+      setVerdict('✗ 无法下载裸流文件', 'no');
+      finish(); return;
+    }
+  }
+  RESULT.fetchBytes = buf.byteLength; RESULT.fetchMode = fetchNote;
+  row('取流', fetchNote + ' / HTTP ' + RESULT.fetchStatus + ' / ' + buf.byteLength + ' 字节');
+
+  stage(4, '解析 NAL 单元…');
+  var nals = splitNAL(buf);
+  var sps = null, pps = null, slices = [];
+  for (var i = 0; i < nals.length; i++) {
+    if (nals[i].type === 7 && !sps) sps = nals[i].data;
+    else if (nals[i].type === 8 && !pps) pps = nals[i].data;
+    else if (nals[i].type === 5 || nals[i].type === 1) slices.push(nals[i]);
+  }
+  RESULT.sps = !!sps; RESULT.pps = !!pps; RESULT.sliceCount = slices.length;
+  row('SPS / PPS', (sps ? '有' : '无') + ' / ' + (pps ? '有' : '无') + '，slice ' + slices.length + ' 个');
+  if (!sps || !pps || slices.length < 1) {
+    RESULT.ok = false; RESULT.reason = '裸流解析失败';
+    setVerdict('✗ 裸流解析失败（取不到 SPS/PPS）', 'no');
+    finish(); return;
+  }
+  var start = 0;
+  for (var z = 0; z < slices.length; z++) { if (slices[z].type === 5) { start = z; break; } }
+  slices = slices.slice(start);
+
+  stage(5, '实际解码…');
+  var useCount = Math.min(slices.length, 24);
+  var combos = [
+    { mode: 'annexb', hw: 'prefer-hardware' },
+    { mode: 'avcc', hw: 'prefer-hardware' },
+    { mode: 'annexb', hw: 'no-preference' },
+    { mode: 'avcc', hw: 'no-preference' }
+  ];
+  RESULT.attempts = [];
+  var r = null, used = null, usedHw = null;
+  for (var ci = 0; ci < combos.length; ci++) {
+    var ar = await attempt(combos[ci].mode, combos[ci].hw, sps, pps, slices, useCount, 5000);
+    RESULT.attempts.push({ mode: combos[ci].mode, hw: combos[ci].hw, frames: ar.frames.length,
+      flush: ar.flush, queue: ar.queue, queueEnd: ar.queueEnd, err: ar.err });
+    if (ar.frames.length > 0) { r = ar; used = combos[ci].mode; usedHw = combos[ci].hw; break; }
+    if (!r) r = ar;
+  }
+
+  // If nothing decoded at all, run a minimal single-key-frame test to tell
+  // "decoder completely dead" apart from "decodes but flush() never resolves".
+  if (!r || r.frames.length === 0) {
+    stage(6, '单帧最小测试（仅 1 个关键帧）…');
+    var single = await attempt('annexb', 'no-preference', sps, pps, slices, 1, 6000);
+    RESULT.singleFrameTest = { frames: single.frames.length, err: single.err,
+      flush: single.flush, queue: single.queue, queueEnd: single.queueEnd, waited: single.waited };
+    row('单帧最小测试', single.frames.length + ' 帧 | flush=' + single.flush +
+      ' | 队列=' + JSON.stringify(single.queue) + ' | 等待=' + single.waited + 'ms',
+      single.frames.length > 0 ? 'y' : 'n');
+    if (single.frames.length > 0) {
+      r = single; used = 'annexb'; usedHw = 'no-preference';
+    }
+  }
+  RESULT.chunkFormat = used || 'none'; RESULT.hwAccel = usedHw || 'none';
+  RESULT.decodedFrames = r.frames.length;
+  RESULT.decodeMs = r.ms;
+  RESULT.frameSpanMs = r.span || 0;
+  RESULT.fpsEstimate = (r.frames.length > 1 && r.span > 0)
+    ? Math.round((r.frames.length - 1) / (r.span / 1000) * 10) / 10 : 0;
+  row('可用组合', (used || '无') + ' / hardwareAcceleration=' + (usedHw || '无'));
+  row('实际解码帧数', r.frames.length + ' / 提交 ' + useCount, r.frames.length > 0 ? 'y' : 'n');
+  row('首帧延迟', (r.frames.length ? '第1帧 @' + r.ms + 'ms 总耗时' : '无') + '（flush=' + (r.flush || '') + '）');
+  row('推算帧率', RESULT.fpsEstimate + ' fps（首末帧间隔 ' + RESULT.frameSpanMs + 'ms）',
+    RESULT.fpsEstimate >= 24 ? 'y' : 'n');
+  if (r.err) row('最后一次错误', r.err, 'n');
+
+  if (r.frames.length > 0) {
+    var f0 = r.frames[0];
+    RESULT.frameSize = f0.displayWidth + 'x' + f0.displayHeight;
+    row('输出帧尺寸', RESULT.frameSize);
+    try {
+      var cvs = document.createElement('canvas');
+      cvs.width = f0.displayWidth; cvs.height = f0.displayHeight;
+      var ctx = cvs.getContext('2d');
+      ctx.drawImage(f0, 0, 0);
+      document.getElementById('frame').appendChild(cvs);
+    } catch (e) { row('绘制失败', String(e && e.message), 'n'); }
+    RESULT.ok = true;
+    setVerdict('✓ 可用：成功解码 ' + r.frames.length + ' 帧（' + RESULT.fpsEstimate + ' fps）', 'ok');
+    for (var q = 0; q < r.frames.length; q++) { try { r.frames[q].close(); } catch (e) {} }
+  } else {
+    RESULT.ok = false; RESULT.reason = '解码未输出帧';
+    setVerdict('✗ 解码器未输出任何帧', 'no');
+  }
+  finish();
+}
+
+main().catch(function (e) {
+  RESULT.ok = false; RESULT.reason = String(e && e.message);
+  row('顶层异常', String(e && e.message), 'n');
+  setVerdict('✗ 检测脚本异常：' + (e && e.message), 'no');
+  finish();
+});
+</script>
+</body>
+</html>

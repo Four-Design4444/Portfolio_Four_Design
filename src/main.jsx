@@ -214,32 +214,32 @@ const worksByCategory = {
   ui: [
     {
       id: 'coomo-home-mini',
-      title: 'COOMO HOME',
-      subtitle: '家居购物小程序',
+      title: 'COOMO LIFE',
+      subtitle: '家居产品小程序',
       cover43: '/detail/coomo-home-mini/v1/cover-43.webp',
       image: '/detail/coomo-home-mini/v1/cover-portrait.webp',
       detailHero: '/detail/coomo-home-mini/v1/cover.webp'
     },
     {
       id: 'smart-home-platform',
-      title: 'COOMO HOME',
-      subtitle: '智能家居中控平台',
+      title: 'COOMO LINK',
+      subtitle: '智能家居中控',
       cover43: '/detail/smart-home-platform/v1/cover-43.webp',
       image: '/detail/smart-home-platform/v1/cover-portrait.webp',
       detailHero: '/detail/smart-home-platform/v1/cover.webp'
     },
     {
       id: 'coomo-official',
-      title: 'COOMO 官网',
-      subtitle: '家居品牌官网',
+      title: 'COOMO官网',
+      subtitle: '家居官方网站',
       cover43: '/detail/coomo-official/v1/cover-43.webp',
       image: '/detail/coomo-official/v1/cover-portrait.webp',
       detailHero: '/detail/coomo-official/v1/cover.webp'
     },
     {
       id: 'muguan-official',
-      title: '慕冠家居官网',
-      subtitle: '家具品牌官网',
+      title: 'MORGAN官网',
+      subtitle: '家居官方网站',
       cover43: '/detail/muguan-official/v1/cover-43.webp',
       image: '/detail/muguan-official/v1/cover-portrait.webp',
       detailHero: '/detail/muguan-official/v1/cover.webp'
@@ -248,24 +248,24 @@ const worksByCategory = {
   vi: [
     {
       id: 'brand-summer',
-      title: 'Brand 觅野',
-      subtitle: '品牌视觉系统',
+      title: '觅野品牌IP',
+      subtitle: '咖啡品牌设计',
       cover43: '/detail/brand-summer/v1/cover-43.webp',
       image: '/detail/brand-summer/v1/cover-portrait.webp',
       detailHero: '/detail/brand-summer/v1/cover.webp'
     },
     {
       id: 'campaign-visual',
-      title: '商业活动视觉',
-      subtitle: '画册 / KV',
+      title: '平面视觉设计',
+      subtitle: '商业活动视觉',
       cover43: '/detail/campaign-visual/v1/cover-43.webp',
       image: '/detail/campaign-visual/v1/cover-portrait.webp',
       detailHero: '/detail/campaign-visual/v1/cover.webp'
     },
     {
       id: 'packaging-system',
-      title: '运营设计',
-      subtitle: '海报视觉系统',
+      title: '品牌运营设计',
+      subtitle: '海报视觉设计',
       cover43: '/detail/packaging-system/v1/cover-43.webp',
       image: '/detail/packaging-system/v1/cover-portrait.webp',
       detailHero: '/detail/packaging-system/v1/cover.webp'
@@ -274,8 +274,8 @@ const worksByCategory = {
   '3d': [
     {
       id: 'future-chair',
-      title: 'Future Chair',
-      subtitle: '产品 3D 渲染',
+      title: '3D Design',
+      subtitle: '产品三维渲染',
       cover43: '/detail/future-chair/v1/cover-43.webp',
       image: '/detail/future-chair/v1/cover-portrait.webp',
       detailHero: '/detail/future-chair/v1/cover.webp'
@@ -284,24 +284,24 @@ const worksByCategory = {
   aigc: [
     {
       id: 'ai-poster-lab',
-      title: 'AI Workflow',
-      subtitle: 'ComfyUI 工作流实验',
+      title: 'AIGC工作流',
+      subtitle: 'ComfyUI商业应用',
       cover43: '/detail/ai-poster-lab/v1/cover-43.webp',
       image: '/detail/ai-poster-lab/v1/cover-portrait.webp',
       detailHero: '/detail/ai-poster-lab/v1/cover.webp'
     },
     {
       id: 'aigc-model',
-      title: 'Model Consistency',
-      subtitle: 'AIGC 模特一致性',
+      title: 'AI Model',
+      subtitle: 'AI模特一致性',
       cover43: '/detail/aigc-model/v1/cover-43.webp',
       image: '/detail/aigc-model/v1/cover-portrait.webp',
       detailHero: '/detail/aigc-model/v1/cover.webp'
     },
     {
       id: 'aigc-style',
-      title: 'AIGC Character',
-      subtitle: 'QQ 形象视觉设计',
+      title: 'AI吉祥物',
+      subtitle: '吉祥物IP',
       cover43: '/detail/aigc-style/v1/cover-43.webp',
       image: '/detail/aigc-style/v1/cover-portrait.webp',
       detailHero: '/detail/aigc-style/v1/cover.webp'
@@ -342,81 +342,132 @@ const RAIL_WINDOW = 4;
 const RAIL_EMERGE_MS = 700;
 const RAIL_LEAVE_MS = 560;
 
-// Seven cards laid out as a slightly staggered row (NOT an arc). `left` is the
-// resting x position, `restY`/`rot` give each card its small resting tilt and
-// vertical nudge, `z` stacks them left-to-right. Hovering a card lifts it to
-// the top layer and pushes everything to its right further right, which is
-// what makes the row open up. Every card also mirrors into the floor below it.
+/* 2026-10-08:首页卡组从 7 张扩到 11 张(全部作品直接上首页,不再只挑精选)。
+   ⚠ 排版铁律:**错落,不是扇形**。
+   - left 等距铺开(步长 7.0%,卡宽 15.9% ⇒ 每张露出约 44%,右侧被后一张压住);
+   - rot 是**不规则**的小角度(在 ±2.3° 内正负交替、不单调递增),绝不能从
+     负值线性扫到正值 —— 那样整排会读成一个扇形,和现版的"随手错落"完全两回事;
+   - restY 是几像素的上下错动,配合 rot 制造参差;
+   - z 从左到右递增 ⇒ 右侧卡压住左侧卡,hover 时把当前卡提到最上层并左右推开。
+   每张卡在地面各有一份倒影(见 ShowcaseDeck)。
+
+   2026-10-08 二次调整:卡整体等比放大 30%(12.2% → 15.9%),步长同时收窄
+   (7.4% → 7.0%)把相邻卡拉近,首卡 left 由居中公式给出:
+     START_X = (100 - 10*STEP_X - CARD_W) / 2 = 7.05
+   卡内文字同步缩小(见 .showcase-deck-copy),避免标题顶到卡右缘。 */
+const DECK_STEP_X = 7.0;     // 相邻卡 left 步长(%)，收窄 = 卡片靠得更近
+const DECK_CARD_W = 15.9;    // 与 styles.css 的 .showcase-deck-card width 必须同值
+const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 7.05，左右留白对称
 const projectShowcases = [
   {
     id: 'ui-1',
     category: 'ui',
     work: 0,
     index: '01',
-    title: 'COOMO HOME',
-    meta: '家居购物小程序',
+    title: 'COOMO LIFE',
+    meta: '家居产品小程序',
     description: '以简洁界面与流畅购物流程重构家居线上体验，平衡品牌调性与转化效率。',
-    deck: { left: 8.64, rot: -2.6, restY: 8, z: 1 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 0, rot: -2.3, restY: 8, z: 1 }
   },
   {
     id: 'ui-2',
     category: 'ui',
     work: 1,
     index: '02',
-    title: '智家中控平台',
-    meta: '智能家居中控界面',
+    title: 'COOMO LINK',
+    meta: '智能家居中控',
     description: '将多设备控制与场景联动整合为直观的可视化系统，降低用户决策成本。',
-    deck: { left: 19.74, rot: -1.6, restY: -2, z: 2 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 1, rot: -0.8, restY: -2, z: 2 }
   },
   {
     id: 'ui-3',
     category: 'ui',
     work: 2,
     index: '03',
-    title: '品牌官方网站',
-    meta: '响应式官网设计',
+    title: 'COOMO官网',
+    meta: '家居官方网站',
     description: '在多种终端上保持品牌叙事的一致性与高级感，让内容成为视觉主角。',
-    deck: { left: 30.84, rot: -0.6, restY: 3, z: 3 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 2, rot: -1.9, restY: 3, z: 3 }
+  },
+  {
+    id: 'ui-4',
+    category: 'ui',
+    work: 3,
+    index: '04',
+    title: 'MORGAN官网',
+    meta: '家居官方网站',
+    description: '以沉稳的排版与材质感呈现家具品牌调性，让产品在页面中成为主角。',
+    deck: { left: DECK_START_X + DECK_STEP_X * 3, rot: -0.4, restY: -4, z: 4 }
   },
   {
     id: 'vi-1',
     category: 'vi',
     work: 0,
-    index: '04',
-    title: 'Brand Visual',
-    meta: '品牌视觉系统',
+    index: '05',
+    title: '觅野品牌IP',
+    meta: '咖啡品牌设计',
     description: '以统一的图形语言与色彩体系传递品牌核心价值，建立可识别的视觉资产。',
-    deck: { left: 41.94, rot: 0.2, restY: -5, z: 4 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 4, rot: 1.2, restY: -5, z: 5 }
   },
   {
     id: 'vi-2',
     category: 'vi',
     work: 1,
-    index: '05',
-    title: 'Campaign KV',
+    index: '06',
+    title: '平面视觉设计',
     meta: '商业活动视觉',
     description: '围绕主题构建具有冲击力与记忆点的传播画面，让信息在第一眼被捕捉。',
-    deck: { left: 53.04, rot: 1.0, restY: 1, z: 5 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 5, rot: -1.0, restY: 1, z: 6 }
+  },
+  {
+    id: 'vi-3',
+    category: 'vi',
+    work: 2,
+    index: '07',
+    title: '品牌运营设计',
+    meta: '海报视觉设计',
+    description: '把高频运营需求沉淀成可复用的版式与图形规则，让产出既快又稳。',
+    deck: { left: DECK_START_X + DECK_STEP_X * 6, rot: 0.6, restY: -3, z: 7 }
   },
   {
     id: '3d-1',
     category: '3d',
     work: 0,
-    index: '06',
-    title: 'Product 3D',
+    index: '08',
+    title: '3D Design',
     meta: '产品三维渲染',
     description: '用光影与材质塑造真实可信的商品视觉表达，强化产品的高级感与细节张力。',
-    deck: { left: 64.14, rot: 1.9, restY: -3, z: 6 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 7, rot: -1.6, restY: 7, z: 8 }
   },
   {
     id: 'aigc-1',
     category: 'aigc',
     work: 0,
-    index: '07',
+    index: '09',
     title: 'AI Workflow',
     meta: 'ComfyUI 生成工作流',
     description: '把 AI 能力固化为可复用的视觉生产管线，让创意探索从随机走向可控。',
-    deck: { left: 75.24, rot: 2.8, restY: 7, z: 7 }
+    deck: { left: DECK_START_X + DECK_STEP_X * 8, rot: 1.4, restY: -1, z: 9 }
+  },
+  {
+    id: 'aigc-2',
+    category: 'aigc',
+    work: 1,
+    index: '10',
+    title: 'Model Consistency',
+    meta: 'AIGC 模特一致性',
+    description: '用同一套条件控制锁住人物特征，让批量生成在不同场景下仍是同一个人。',
+    deck: { left: DECK_START_X + DECK_STEP_X * 9, rot: 0.3, restY: 4, z: 10 }
+  },
+  {
+    id: 'aigc-3',
+    category: 'aigc',
+    work: 2,
+    index: '11',
+    title: 'AIGC Character',
+    meta: 'QQ 形象视觉设计',
+    description: '为品牌角色建立可延展的表情与姿态库，让 IP 在各类物料中保持同一性格。',
+    deck: { left: DECK_START_X + DECK_STEP_X * 10, rot: 1.8, restY: 2, z: 11 }
   }
 ];
 
@@ -2633,10 +2684,13 @@ function ShowcaseDeck({ items, openWorks }) {
 
   // Hovering a card lifts it to the front and pushes the others sideways: the
   // cards to its left travel further left, the ones to its right travel further
-  // right. That is what makes the row "fan open", and it is why moving from
+  // right. That is what makes the row open up, and it is why moving from
   // card 1 to card 2 makes card 1 drop back and slide left again.
-  const PUSH = 24;      // px a neighbour shifts away from the hovered card
+  // 2026-10-08:11 张卡比原先 7 张窄(卡宽 16.72% → 12.2%),推挤与抬起量同比例
+  // 收小,否则邻卡的相对位移会大到把整排扯散。
+  const PUSH = 16;      // px a neighbour shifts away from the hovered card
   const PUSH_CAP = 3;   // neighbours further than this many steps move no more
+  const LIFT = -38;     // px the hovered card rises off the floor
 
   return (
     <div
@@ -2654,7 +2708,7 @@ function ShowcaseDeck({ items, openWorks }) {
         const deckVars = {
           '--x': `${project.deck.left}%`,
           '--rot': active ? 0 : project.deck.rot,
-          '--y': active ? -46 : project.deck.restY,
+          '--y': active ? LIFT : project.deck.restY,
           '--push': push,
           '--scale': active ? 1.06 : 1,
           '--z': active ? 60 : project.deck.z,
@@ -5165,6 +5219,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     // welcome 字母的入场次序按 bbox 的 x 从左到右动态计算(不依赖 data-welcome-part 的值)，
     // 保证无论标记顺序如何，都始终「最左先入场」。refreshPaths 每次算出并缓存。
     let welcomeOrder = [];
+    // 入场最后一个节点的收尾时刻(相对 start 的毫秒数)，在 refreshPaths 里一并算好。
+    let introEndsAt = 1800;
     const smooth = (value) => {
       const t = Math.min(Math.max(value, 0), 1);
       return t * t * t * (t * (t * 6 - 15) + 10);
@@ -5199,12 +5255,53 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         })
         .sort((a, b) => a.x - b.x)
         .map((entry) => entry.node);
+      // 收尾时刻：所有 path 里最晚的 (delay + 1800)，与副标那条取较大值。
+      // 跑完这一刻之后 opacity/filter 就是常量，再每帧重写毫无意义。
+      let endsAt = BYLINE_INTRO_START_MS + BYLINE_CHAR_DURATION_MS;
+      paths.forEach((node, index) => {
+        const isWelcome = node.dataset.welcomePart !== undefined;
+        const delay = isWelcome ? 1080 + Math.max(0, welcomeOrder.indexOf(node)) * 55 : index * 120;
+        if (delay + 1800 > endsAt) endsAt = delay + 1800;
+      });
+      introEndsAt = endsAt;
     };
+    // 入场起始态/终态各只写一次；跑完之后 opacity/filter 就是常量。
+    let introStartDone = false;
+    let introFinalDone = false;
+    let offscreenTick = 0;
     const render = (now) => {
-      refreshPaths();
-      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      // 指针一移出标题层就会被置 0；但翻页只靠滚轮、不触发 pointermove —— 若用户是
+      // "鼠标停在标题上再滚去别的屏"，hoverTarget 会永远停在 1 让循环一直空转。
+      // 这里每 ~20 帧用一次布局真值兜底纠正（只在 target=1 时才做，开销可忽略）。
+      if (hoverTargetRef.current === 1 && (offscreenTick++ % 20) === 0) {
+        const rect = wrapRef.current?.getBoundingClientRect();
+        if (!rect || (rect.width === 0 && rect.height === 0) || rect.bottom < 0 || rect.top > window.innerHeight) {
+          hoverTargetRef.current = 0;
+          pointerRef.current = { x: 0.5, y: 0.5 };
+        }
+      }
+      const target = hoverTargetRef.current;
+      const mixSettled = Math.abs(target - hoverMix) < 0.0008;
+      // 收敛后直接吸附：省掉永远追不上的尾数，也让下面的"静息"判定能真正成立。
+      if (mixSettled) hoverMix = target;
+      else {
+        const dt = Math.min((now - lastTime) / 1000, 0.05);
+        hoverMix += (target - hoverMix) * (1 - Math.exp(-dt * 12));
+      }
       lastTime = now;
-      hoverMix += (hoverTargetRef.current - hoverMix) * (1 - Math.exp(-dt * 12));
+      const running = start !== null && now < start + introEndsAt;
+      const needIntro = running || (start === null ? !introStartDone : !introFinalDone);
+      // 静息：入场已落定 + 指针没靠近 + hoverMix 已归零 → 本帧不可能有任何视觉变化。
+      // 悬停特效与入场共用同一批 style 写入，所以 rAF 循环必须留着（指针随时可能回来），
+      // 但可以把「每帧写 ~81 个 style 属性 + 同量级字符串分配」降到「读两个 ref + 一次比较」。
+      // 实测这正是揭幕后稳态里那 ~6.7% 主线程占用的来源，而且会随停留时间一直烧下去。
+      if (!needIntro && hoverMix === 0 && (bylineAlignRef.current || !bylineRef.current || start === null)) {
+        frame = window.requestAnimationFrame(render);
+        return;
+      }
+      refreshPaths();
+      // 收尾那一帧直接写终值，不留"差一点点"的尾数（blur 0.0016px / opacity 0.99998）。
+      const forceFinal = start !== null && !running;
       const p = pointerRef.current;
       paths.forEach((node, index) => {
         const center = centers[index] || { x: 0.5, y: 0.5 };
@@ -5212,7 +5309,11 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         // 从左到右的序号(0 = 最左)，替代原来按源 SVG 逆序的 data-welcome-part。
         const wIdx = isWelcome ? Math.max(0, welcomeOrder.indexOf(node)) : 0;
         const introDelay = isWelcome ? 1080 + wIdx * 55 : index * 120;
-        const intro = start === null ? 0 : smooth((now - start - introDelay) / 1800);
+        if (needIntro) {
+          const intro = forceFinal ? 1 : (start === null ? 0 : smooth((now - start - introDelay) / 1800));
+          node.style.opacity = String(intro);
+          node.style.filter = `blur(${((1 - intro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
+        }
         const dx = p.x - center.x;
         const dy = p.y - center.y;
         const proximity = Math.max(0, 1 - Math.sqrt(dx * dx * 1.15 + dy * dy * 1.3) / (isWelcome ? 0.48 : 0.46));
@@ -5224,8 +5325,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         const scaleY = 1 + pull * (isWelcome ? 0.3 : 0.24);
         const rotate = dx * 12 * pull + wave * 2.2;
         const skew = dy * 9 * pull;
-        node.style.opacity = String(intro);
-        node.style.filter = `blur(${((1 - intro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
         node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) skewX(${skew.toFixed(2)}deg) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
       });
       // 移动端副标 "Four Design"：**整行一起入场**(业主明确要求，不要逐字分开)。
@@ -5252,21 +5351,27 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           }
         }
         // 整行容器只负责定位/对齐，本身不参与淡入(避免与字符层叠加)。
-        byline.style.opacity = '1';
-        byline.style.filter = 'none';
-        // 与上面 path 同一套曲线(easing/时长/解模糊)，只是副标**整行**共用一个 delay，
-        // 所以是整体一起浮现，而不是从左到右依次出现。
-        // 整行一起浮现：所有字符共用同一个 delay(无 i*stagger)，同一条 smootherstep 曲线，
-        // 同时开始 / 同时结束。不再有独立的位移/幂次解模糊 —— 那些"自创参数"正是业主说的"跟上面SVG不一样"。
-        const chars = bylineCharRefs.current;
-        for (let i = 0; i < chars.length; i++) {
-          const node = chars[i];
-          if (!node) continue;
-          const charIntro = start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS) / BYLINE_CHAR_DURATION_MS);
-          node.style.opacity = String(charIntro);
-          node.style.filter = `blur(${((1 - charIntro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
-          node.style.transform = 'none';
+        if (needIntro) {
+          byline.style.opacity = '1';
+          byline.style.filter = 'none';
+          // 与上面 path 同一套曲线(easing/时长/解模糊)，只是副标**整行**共用一个 delay，
+          // 所以是整体一起浮现，而不是从左到右依次出现。
+          // 整行一起浮现：所有字符共用同一个 delay(无 i*stagger)，同一条 smootherstep 曲线，
+          // 同时开始 / 同时结束。不再有独立的位移/幂次解模糊 —— 那些"自创参数"正是业主说的"跟上面SVG不一样"。
+          const chars = bylineCharRefs.current;
+          for (let i = 0; i < chars.length; i++) {
+            const node = chars[i];
+            if (!node) continue;
+            const charIntro = forceFinal ? 1 : (start === null ? 0 : smooth((now - start - BYLINE_INTRO_START_MS) / BYLINE_CHAR_DURATION_MS));
+            node.style.opacity = String(charIntro);
+            node.style.filter = `blur(${((1 - charIntro) * HERO_INTRO_BLUR_PX).toFixed(3)}px)`;
+            node.style.transform = 'none';
+          }
         }
+      }
+      if (needIntro) {
+        if (start === null) introStartDone = true;
+        else if (!running) introFinalDone = true;
       }
       frame = window.requestAnimationFrame(render);
     };
@@ -5455,8 +5560,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // 依旧长时间卡顿"的根因。现在烧录改在遮罩期以 20fps 受控帧率跑完（见
   // Street.jsx 的 BURN_FRAME_MS），揭幕时尾屏已经"熟"了，且它在此之前绝不跑满帧。
   //
-  // 兜底仍然是 5s：低端 GPU 上着色器编译 + 灯光烧录可能偏慢，但**绝不能让某一闸门
-  // 异常时把 loading 永久卡住**。正常路径由上面的闸门触发。
+  // 兜底 6s：低端 GPU 上着色器编译 + 灯光烧录可能偏慢，但**绝不能让某一闸门异常时
+  // 把 loading 永久卡住**。正常路径（heroVideoReady ≈2.9s、烧录在编译后 +3.4s）落在
+  // 5s 出头，所以这道兜底只在异常时生效；它一旦触发也只是"提前揭幕"，烧录会被
+  // 降级到 20fps 继续在后台跑完，绝不会满帧漏进首屏。
   const markTailBurned = useCallback(() => setTailBurned(true), []);
   const revealedRef = useRef(false);
   const reveal = useCallback(() => {
@@ -5913,7 +6020,8 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         <ContactStreet
           active={active && contactVisible}
           preload={active && contactPreload}
-          onTailReady={setTailReady}
+          onTailReady={() => setTailReady(true)}
+          onTailBurned={markTailBurned}
         />
       </section>
       </div>

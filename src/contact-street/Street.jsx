@@ -6,16 +6,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 
-// 尾屏 intro 灯光渐入时长（demo scene.js 里按真实 dt 累加，约 2.7s；dt 被 clamp 到
-// 0.05s 所以无法快进）。烧录**必须在首屏 loading 遮罩期间完成**，否则它会正好压
-// 在首屏入场动画上：实测满帧烧录在揭幕后 3200ms 窗口里吃掉主线程 2095ms（65%），
-// 这就是"loading 结束后 hero 依旧长时间卡顿"的根因。
-// 烧录档帧率 = 50ms/帧（20fps）。因为 demo 的 dt 上限就是 0.05s，20fps 恰好让
-// 灯光渐入按真实时间走，而渲染帧数只有满帧的 ~1/3，主线程占用从 65% 降到 ~21%。
-const BURN_FRAME_MS = 50;
-// 烧录墙钟预算：20fps × 0.05s/帧 = 每 50ms 推进 0.05s 场景时间，3.4s 可推进
-// ~3.4s ≥ 2.7s，留 ~26% 余量吸收 setTimeout 抖动（抖大时 dt 被 clamp，推进变慢）。
-const INTRO_BURN_MS = 3400;
+// 尾屏 intro 灯光渐入（demo scene.js 里按真实 dt 累加：intro += dt/2.7，约 2.7s；
+// dt 被 clamp 到 0.05s，所以无法快进、只能按真实时间走完）。烧录**必须在首屏
+// loading 遮罩期间完成**，否则它会正好压在首屏入场动画上：实测满帧烧录在揭幕后
+// 3200ms 窗口里吃掉主线程 2095ms（65%），这就是"loading 结束后 hero 依旧长时间
+// 卡顿"的根因。
+//
+// ③ 判据用「累计场景时间」而不是墙钟毫秒：HOST_JS 用与 demo 同一套 dt 算法记账
+//    （见 __streetSceneSeconds），机器慢 / 掉帧时它会自然多等一会儿，而不是按一个
+//    拍脑袋的 ms 数提前揭幕留下"灯还没亮满"的尾巴。
+const BURN_SCENE_SECONDS = 2.9;  // ≥ demo 的 2.7s，留 7% 余量
+// 烧录档的**渲染间隔**（不是场景推进速度 —— 后者恒为 50ms/帧，见 HOST_JS 的
+// BURN_STEP_MS）。帧数由 BURN_SCENE_SECONDS 定死（约 58 帧，即 CPU 总量定死 ≈0.6s），
+// 这个值只决定这 0.6s 摊在多少墙钟时间里：40ms ⇒ 约 2.9s、主线程占用约 20%，
+// 与 loading 动画和平共处；调小能更快揭幕，但占用升高、动画会顿。
+const BURN_FRAME_MS = 40;
+// 墙钟兜底：demo 彻底卡死或帧率异常时，加载页也不能被它拖到永远。
+const BURN_MAX_MS = 9000;
 
 export default function ContactStreet({ active, preload, onTailReady, onTailBurned }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
@@ -30,23 +37,39 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
   // 灯光是否已烧完。烧完 = 尾屏进入瞬间就是"满亮度满帧"，不会再有提速跳变。
   const [burned, setBurned] = useState(false);
   const burnedRef = useRef(false);
+  const tailReportedRef = useRef(false);
 
   useEffect(() => {
     if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
 
-  // 烧录计时：冷启动完成 → 受控帧率烧 INTRO_BURN_MS → 熄灭（除非用户已在尾屏）。
+  // 烧录协调：冷启动完成 → 受控帧率烧到 BURN_SCENE_SECONDS → 熄灭（除非用户已在尾屏）。
   // 它完全发生在首屏 loading 遮罩期间，用户看不到，但揭幕时尾屏已经"熟"了。
   useEffect(() => {
     if (!mounted || !armed || burnedRef.current) return undefined;
-    const timer = window.setTimeout(() => {
+    let stopped = false;
+    let poll = 0;
+    const startedAt = performance.now();
+    const finish = () => {
+      if (stopped || burnedRef.current) return;
       burnedRef.current = true;
       setBurned(true);
       try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 1 } })); } catch (_) {}
       try { if (onTailBurned) onTailBurned(); } catch (_) { /* noop */ }
-    }, INTRO_BURN_MS);
-    return () => window.clearTimeout(timer);
+    };
+    const check = () => {
+      if (stopped) return;
+      let secs = 0;
+      try {
+        const win = frameRef.current && frameRef.current.contentWindow;
+        secs = (win && win.__streetSceneSeconds) || 0;
+      } catch (_) { secs = 0; }
+      if (secs >= BURN_SCENE_SECONDS || performance.now() - startedAt >= BURN_MAX_MS) { finish(); return; }
+      poll = window.setTimeout(check, 100);
+    };
+    poll = window.setTimeout(check, 100);
+    return () => { stopped = true; if (poll) window.clearTimeout(poll); };
   }, [mounted, armed, onTailBurned]);
 
   // 渲染档位（P-04 + 2026-10-08 修正）：
@@ -224,38 +247,79 @@ const HOST_JS = `
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
 
-  // ── 后台降频（宿主侧叠加，不改动 demo 产物）────────────────────────────
+  // ── 后台降频 + 场景时间记账（宿主侧叠加，不改动 demo 产物）──────────────
   // 这条街景是 Three.js 场景，一旦挂上就每帧全量渲染：即使用户停在首屏看视频、
   // 甚至已经翻到二级/三级页（那时 HomePage 只是被 display:none，同源 iframe 的
   // rAF 照样跑），它也在烧 CPU —— 实测占满主线程 80%~87%。
   // three 的 WebGLAnimation 是 "requestAnimationFrame(i)" 递归，每帧都会重新
   // 查全局，所以在这里包一层就能控帧。
   //
-  // 两种降频档（都由宿主写 window 上的开关）：
-  //   __streetFrameMs > 0 —— 受控帧率（把回调延后 N 毫秒）。这是"烧录档"：
-  //     demo 的 dt 取的是回调时间戳之差、并被 clamp 到 0.05s（见其
-  //     `Math.min((e-rf)/1e3||.016,.05)`），所以延后到 50ms 时 dt 正好=0.05，
-  //     灯光渐入仍按**真实时间**推进 —— 渲染帧数砍到 1/3，观感进度一点不慢。
-  //     ⚠ 必须传 performance.now()，不能把 rAF 那个旧时间戳转发下去：
-  //     同一轮里 rawRaf 可能先于 setTimeout 触发一次，旧时间戳会让 dt 掉到
-  //     0.016 的兜底值，渐入速度直接腰斩（实测 50% 速）。
-  //   __streetPaused —— 空转保活（约 1fps）。WebGL 上下文、已编译的 shader、
+  // 三个档位（都由宿主写 window 上的开关）：
+  //   __streetPaused     —— 空转保活（约 1fps）。WebGL 上下文、已编译的 shader、
   //     已加载的纹理全部保活，回到尾屏立刻满帧，预挂载红利一点不丢。
+  //   __streetFrameMs > 0 —— 受控帧率（"烧录档"）：把回调按截止时刻摊平到每
+  //     frameMs 一帧。demo 的灯光渐入是 intro += dt/2.7、dt 取回调时间戳之差且
+  //     **被 clamp 到 0.05s**（源码：Math.min((e-rf)/1e3||.016,.05)）。所以：
+  //       · 每帧最多只能推进 0.05s 场景时间 → 2.7s 的渐入最少要 54 帧，这是硬下限；
+  //       · 只要渲染间隔 ≤ 50ms，渐入就按真实时间推进，**降帧不降速**，纯赚 CPU。
+  //   __streetFrameMs = 0 —— 满帧。
+  //
+  // 时间轴：这里不把 rAF 的原生时间戳直接转发给 demo，而是自己维护一条**单调轴**
+  // axis（只保证增量正确）。原因：受控档下回调是被 setTimeout 挪后的，原生时间戳
+  // 会错位（旧时间戳→dt 掉到 0.016 兜底值，渐入直接腰斩）。用自有轴还能把
+  // "每帧推进多少场景时间"与"每帧隔多久渲染"彻底解耦 —— 烧录档每帧推进 50ms
+  // （正好是 clamp 上限，帧数最少、CPU 最省），渲染间隔另由 __streetFrameMs 定。
   window.__streetPaused = false;
   window.__streetFrameMs = 0;
+  // 累计场景时间（秒）：宿主据此判断灯光渐入是否真的走完（见 BURN_SCENE_SECONDS），
+  // 而不是猜一个墙钟毫秒数 —— 机器慢就自然多等，绝不提前揭幕留个"灯没亮满"的尾巴。
+  window.__streetSceneSeconds = 0;
+  // 只用于诊断/探针：烧录档实际渲染了多少帧、首帧墙钟时刻。
+  window.__streetBurnFrames = 0;
+  window.__streetBurnFirstAt = 0;
+  var BURN_STEP_MS = 50;   // 烧录档每帧推进的场景时间（= demo 的 dt 上限）
+  var IDLE_STEP_MS = 16;   // 空转档每帧推进（与旧行为一致）
+  var axis = 0;            // 交给 demo 的时间轴
+  var realLast = 0;        // 上一个原生 rAF 时间戳（满帧档按真实增量推进）
+  var nextAt = 0;          // 烧录档的下一帧截止时刻
   var rawRaf = window.requestAnimationFrame.bind(window);
+  var burn = function (cb) {
+    if (!window.__streetBurnFrames) window.__streetBurnFirstAt = window.performance.now();
+    window.__streetBurnFrames += 1;
+    axis += BURN_STEP_MS;
+    window.__streetSceneSeconds += BURN_STEP_MS / 1000;
+    cb(axis);
+  };
   window.requestAnimationFrame = function (cb) {
     return rawRaf(function (t) {
       if (window.__streetPaused) {
-        window.setTimeout(function () { cb(t); }, 1000);
+        nextAt = 0;
+        axis += IDLE_STEP_MS;
+        window.__streetSceneSeconds += IDLE_STEP_MS / 1000;
+        window.setTimeout(function () { cb(axis); }, 1000);
         return;
       }
       var frameMs = window.__streetFrameMs;
       if (frameMs > 0) {
-        window.setTimeout(function () { cb(window.performance.now()); }, frameMs);
+        // 按截止时刻摊平：不能"每次都再等 N 毫秒"，那会叠上 three 自己那一轮 rAF
+        // 的等待（~16ms），实测间隔变成 ~66ms —— 而 dt 被 clamp 到 0.05s，于是
+        // 场景时间只以 76% 的速度推进，灯光烧录被白白拖长近 1s。
+        var now = window.performance.now();
+        if (now < nextAt) {
+          window.setTimeout(function () { burn(cb); }, nextAt - now);
+          return;
+        }
+        nextAt = now + frameMs;
+        burn(cb);
         return;
       }
-      cb(t);
+      nextAt = 0;
+      var d = t - realLast;
+      realLast = t;
+      var step = (d > 0 && d < BURN_STEP_MS) ? d : IDLE_STEP_MS;
+      axis += step;
+      window.__streetSceneSeconds += step / 1000;
+      cb(axis);
     });
   };
 
@@ -540,10 +604,11 @@ function useStreetWheelBridge(enabled) {
     // 把尾屏 WebGL 预载进度并回首屏 loading 进度条（见 index.html 监听）：
     // 挂载即登记 0，编译完成（#loading.loaded / canvas 已绘制）登记 0.75，
     // 灯光烧录完成再登记 1 —— 于是条子在烧录那几秒里仍在真实爬升，而不是干等。
-    let tailReported = false;
+    // ⚠ 用 ref 而不是局部变量：本 effect 在 burned 翻转时会重跑，局部变量会被重置，
+    //   于是 tail 进度被重新报一遍 0 → 0.75（进度条靠 Math.max 兜住，但没必要）。
     const reportTailReady = () => {
-      if (tailReported) return;
-      tailReported = true;
+      if (tailReportedRef.current) return;
+      tailReportedRef.current = true;
       try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0.75 } })); } catch (_) {}
       try { if (onTailReady) onTailReady(); } catch (_) {}
       // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
