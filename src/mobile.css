@@ -1019,9 +1019,10 @@ html[data-device="mobile"] .project-list {
    and the strip's margin-top:auto absorbs the leftover. */
 html[data-device="mobile"] .mob-showcase {
   padding-top: clamp(84px, 15vh, 132px);
-  /* 底部间距交给 .mob-thumbs 自己的安全区,这里不留 —— 否则缩略图条下方
-     会露出一条 body 黑色背景(就是业主看到的"底部色块")。 */
-  padding-bottom: 0;
+  /* 底部呼吸间距:恢复业主**原始版式**(缩览图下方留白)。与 .mob-thumbs 自身的
+     padding-bottom(24px)共同构成缩览图下方间距。⚠ 这个静态留白不是"色块"的
+     成因 —— 色块来自 min-height 在 data-paging 翻转时塌缩(见下),与本 padding 无关。 */
+  padding-bottom: clamp(22px, 4.5vh, 44px);
   /* ⚠ min-height 必须**与 data-paging 无关**(2026-10-08 业主第二次反馈后定案):
      进入二级的瞬间 route 切到 works → data-paging 由 on→off,若这条 min-height
      挂在 [data-paging="on"] 上就会整条失效 → .mob-showcase 从"撑满视口"塌缩成
@@ -1029,9 +1030,38 @@ html[data-device="mobile"] .mob-showcase {
      下方露出黑色块。业主描述为"底部色块往上缩"。
      实测(430×932):静止 thumbs.bottom=884,入场瞬间跳到 835.8(上移 48px)、
      黑区从 48px 涨到 96px;把 min-height 移出 paging 条件后两端恒等。
-     同时去掉原来的 `- 40px`:它对应的是 .project-list 早已改回 0 的 margin-top,
-     留着会凭空少撑 40px、在缩略图条下留 40px 黑。 */
-  min-height: calc(var(--vh, 1vh) * 100);
+     ⚠ 值必须沿用首页原始高度 `100vh - 40px`(不要删 -40px!):删掉会把缩览图
+     整体压低 40px、站到最底边 —— 即业主 2026-10-08 第三次反馈的"缩览图被缩到
+     下面去了"。只解除 paging 条件、不改值,才能既消色块又保原始间距。 */
+  min-height: calc(var(--vh, 1vh) * 100 - 40px);
+  /* 2026-10-08: 再用 dvh(= 实时可视视口高度)兜住。--vh 是 load/resize 时的
+     快照,地址栏收起后真实视口变高、--vh 没跟上时整块会矮一截(见下方"分屏高度"
+     注释)。dvh 由浏览器实时给出,与分页对齐所用的 innerHeight 同源,不会再矮。
+     老浏览器不支持该单位时整行被丢弃,自动回退到上一行 --vh。 */
+  min-height: calc(100dvh - 40px);
+}
+
+/* ===== 分屏高度:必须跟随**实时**可视视口(2026-10-08 业主反馈"底部色块") =====
+   症状:一级 projects 屏底部露出一条全宽、上边缘笔直的**偏蓝**色块
+   (业主截图实测 (17,21,30);页面底色是 (13,12,18))。
+   根因(探针 outputs/probe-bottom-band.mjs 复现):styles.css 里每个分屏高度是
+   `calc(var(--vh,1vh)*100)`,而 --vh 由 index.html 在 load/resize 时写下、是
+   **快照**(= 当时的 window.innerHeight);可分页对齐用的是**实时** innerHeight
+   (`scrollTo(index*innerHeight)`)。手机地址栏收起后真实视口变高、--vh 没跟上,
+   分屏就比视口矮 Δ → 下一屏(尾屏 .contact-page,底色 #101c26 偏蓝)从底部
+   露出 Δ 高的一条 —— 正是业主反复看到的"色块"。
+   实测:把 --vh 调小 60px,底部 180px 全部变成 `contact-page`
+   (elementsFromPoint 逐点确认),颜色 (16,28,38) 与尾屏底色吻合。
+   修法:高度改用 `100dvh`(浏览器实时给出的可视视口高度),与分页对齐所用的
+   innerHeight 同源 → 地址栏任意状态都不会再露边。这是**纯数值替换**:在
+   --vh 本来就正确的设备(含全部 PC)读出来与原值完全一致,PC 端零变化。
+   老浏览器不支持 dvh 时整条声明被丢弃,自动回退 styles.css 的 --vh 规则。 */
+html[data-device="mobile"][data-paging="on"] .hero-video-stage,
+html[data-device="mobile"][data-paging="on"] .profile-shot,
+html[data-device="mobile"][data-paging="on"] .section.projects,
+html[data-device="mobile"][data-paging="on"] .contact-page {
+  height: 100dvh;
+  min-height: 100dvh;
 }
 
 /* Standalone section title, set in the site's display face (Rany). */
@@ -1103,8 +1133,14 @@ html[data-device="mobile"] .mw-card {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   /* 圆角跨级连续(2026-10-08):base 圆角可能在 armed/entering/leaving 态被覆盖为
-     缩放补偿值,加过渡避免硬切。一级卡平时无覆盖,值恒为 20px,不额外动画。 */
-  transition: border-radius 520ms cubic-bezier(0.22, 1, 0.36, 1);
+     缩放补偿值,加过渡避免硬切。一级卡平时无覆盖,值恒为 20px,不额外动画。
+     投影(box-shadow)也必须过渡:一级卡在 `.front` 切换时阴影会改档
+     (轻档 0 16 40 ↔ 主卡档 0 24 56 ↔ lift 0 36 72),此前**无 box-shadow 过渡**
+     → 改档即硬切,即业主 2026-10-08 第三次反馈的「回程卡片投影跳帧」。
+     (二级 .mw-card 走同一条统一规则,一并补上。) */
+  transition:
+    border-radius 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 html[data-device="mobile"] .mob-card-img,
 html[data-device="mobile"] .mw-card-img {
@@ -1239,10 +1275,9 @@ html[data-device="mobile"] .mob-thumbs {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   cursor: grab;
-  /* 2026-10-08: 底部固定 24px 会在缩略图条下方露出 body 黑色背景,
-     一级进二级退场淡出时会被读成"色块上缩"。改为贴底,仅保留安全区
-     或 4px 微缓冲,消除静态色块。 */
-  padding: 4px 0 max(4px, env(safe-area-inset-bottom));
+  /* 恢复原始版式间距(缩览图下方 24px)。⚠ 与"色块"无关:色块来自 min-height
+     塌缩(已修),这里只是业主要求的视觉留白,勿再归 0。 */
+  padding: 4px 0 24px;
   scroll-behavior: smooth;
   margin-top: auto;
   width: 100%;

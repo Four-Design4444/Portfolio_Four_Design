@@ -2792,8 +2792,12 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
         z = zFor(eff); dim = pose.dim; op = pose.o;
         front = !s.isDrag && z === 3;
       }
+      // ⚠ 内联 transition 会**覆盖** CSS 的 `.mob-card` transition(见 mobile.css
+      //   统一卡面规则),所以 box-shadow / border-radius 的过渡必须在这里一并列出,
+      //   否则一级卡切换 .front(阴影改档)时仍是硬切 —— 业主反馈的"回程卡片投影跳帧"。
       el.style.transition = s.isDrag ? 'none' :
-        'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease';
+        'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease,' +
+        ' box-shadow .52s cubic-bezier(.22,1,.36,1), border-radius .52s cubic-bezier(.22,1,.36,1)';
       el.style.transform = transform;
       el.style.opacity = op;
       el.style.zIndex = z;
