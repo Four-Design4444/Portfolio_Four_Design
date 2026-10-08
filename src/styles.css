@@ -5337,16 +5337,29 @@ html[data-paging="on"] .contact-page {
 /* 逐卡镜面倒影(2026-10-08 重做):以前反射加在**整列** .works-orbit-rail 上,
    整列镜像会把上半两张卡的倒影推到列表最下方(离列表越远被遮罩衰减得越狠),
    实际只有最下面一张卡看得出倒影,上面两张等于没有反射。
-   现在改为**逐卡反射**:每张卡的倒影就贴在自己下沿,三张一起可见。
-   倒影长度必须落在「本卡与下一张卡之间的槽位」里 —— 卡片背景近乎透明
-   (rgba(183,208,250,0.012)),挡不住溢出的倒影,溢出即渗到下一张卡下面。
-   槽位 = flex gap 7 + 本卡 margin-bottom 15 = 22px;倒影 32%×64.8+2px ≈ 22.7px。
+   现在改为**逐卡反射**,并把「卡与卡之间的槽位」调宽,让每张卡的倒影都能显形:
+   - 卡片背景近乎透明(rgba(183,208,250,0.012)),挡不住溢出的倒影,溢出即渗到
+     下一张卡下面 —— 倒影可见范围被「槽位」严格限制(槽位 = flex gap 7 + 本卡
+     margin-bottom 28 = 35px)。
+   - 封面图在卡片竖直中部(距卡底约 10~55px),倒影会把它镜像到卡底下方 ~32px 处。
+     旧槽位仅 22px,这段恰好被下一张卡盖住 → 逐卡了也只剩卡沿一丝,看着仍「没反射」。
+     故必须把槽位放大到 ≥35px(margin-bottom 15 → 28),让封面倒影落进槽位。
    Chromium/Safari 生效;Firefox 优雅降级(仅无反射)。 */
-.works-orbit-rail-card { margin-bottom: 15px; }
-.works-orbit-rail-card:last-child { margin-bottom: 24px; }
+.works-orbit-rail-card { margin-bottom: 28px; }
+.works-orbit-rail-card:last-child { margin-bottom: 36px; }
 @supports (-webkit-box-reflect: below 0) {
   .works-orbit-rail-card {
-    -webkit-box-reflect: below 2px linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.11) 14%, transparent 32%);
+    /* 倒影全长 = 卡片高(64.8px),遮罩百分比相对倒影全长。
+       槽位 ≈ 35px = 全长的 54%。封面图在卡片竖直中部 → 其倒影落在槽位中部
+       (≈27%),故遮罩 0~54% 保持 0.6→0.52 的强段,让封面倒影清晰可见;
+       72% 淡到 0.18,86% 透明 —— 下一张卡自然盖住其后部分。
+       最底卡下方是空白,会露出 0.52 起渐隐的一段,倒影更明显。 */
+    -webkit-box-reflect: below 2px linear-gradient(to bottom,
+      rgba(0, 0, 0, 0.6) 0%,
+      rgba(0, 0, 0, 0.6) 30%,
+      rgba(0, 0, 0, 0.52) 54%,
+      rgba(0, 0, 0, 0.18) 72%,
+      transparent 86%);
   }
 }
 

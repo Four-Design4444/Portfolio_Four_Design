@@ -1019,11 +1019,19 @@ html[data-device="mobile"] .project-list {
    and the strip's margin-top:auto absorbs the leftover. */
 html[data-device="mobile"] .mob-showcase {
   padding-top: clamp(84px, 15vh, 132px);
-  padding-bottom: clamp(22px, 4.5vh, 44px);
-}
-
-html[data-device="mobile"][data-paging="on"] .mob-showcase {
-  min-height: calc(var(--vh, 1vh) * 100 - 40px);
+  /* 底部间距交给 .mob-thumbs 自己的安全区,这里不留 —— 否则缩略图条下方
+     会露出一条 body 黑色背景(就是业主看到的"底部色块")。 */
+  padding-bottom: 0;
+  /* ⚠ min-height 必须**与 data-paging 无关**(2026-10-08 业主第二次反馈后定案):
+     进入二级的瞬间 route 切到 works → data-paging 由 on→off,若这条 min-height
+     挂在 [data-paging="on"] 上就会整条失效 → .mob-showcase 从"撑满视口"塌缩成
+     "内容高" → 缩略图条(margin-top:auto)失去多余空间可吸收而**整体上移**,
+     下方露出黑色块。业主描述为"底部色块往上缩"。
+     实测(430×932):静止 thumbs.bottom=884,入场瞬间跳到 835.8(上移 48px)、
+     黑区从 48px 涨到 96px;把 min-height 移出 paging 条件后两端恒等。
+     同时去掉原来的 `- 40px`:它对应的是 .project-list 早已改回 0 的 margin-top,
+     留着会凭空少撑 40px、在缩略图条下留 40px 黑。 */
+  min-height: calc(var(--vh, 1vh) * 100);
 }
 
 /* Standalone section title, set in the site's display face (Rany). */
@@ -1231,7 +1239,10 @@ html[data-device="mobile"] .mob-thumbs {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   cursor: grab;
-  padding: 4px 0 24px;
+  /* 2026-10-08: 底部固定 24px 会在缩略图条下方露出 body 黑色背景,
+     一级进二级退场淡出时会被读成"色块上缩"。改为贴底,仅保留安全区
+     或 4px 微缓冲,消除静态色块。 */
+  padding: 4px 0 max(4px, env(safe-area-inset-bottom));
   scroll-behavior: smooth;
   margin-top: auto;
   width: 100%;
