@@ -2335,7 +2335,9 @@ h2 {
    its left travel further left, cards to its right travel further right),
    which is what makes the row fan open. */
 .project-list {
-  width: min(1672px, calc(100% - 144px));
+  /* 2026-10-09:业主要求收窄画面左右留白（144px → 88px），把省出的宽度让给
+     卡片步长（deck 更宽 + 步长 8.2%，相邻卡露出更多）。 */
+  width: min(1780px, calc(100% - 88px));
   margin: 70px auto 0;
   overflow: visible;
 }
@@ -3037,7 +3039,8 @@ h2 {
   }
 
   .project-list {
-    width: min(1672px, calc(100% - 96px));
+    /* 与基础规则同值（88px 边距 + 1780px 上限），须成套改。 */
+    width: min(1780px, calc(100% - 88px));
     margin-top: 58px;
   }
 
@@ -3075,10 +3078,10 @@ body:has(.work-detail-page) .work-detail-page {
     margin-top: 64px;
   }
 
-  /* 11 张卡（步长 8.0%）：窄视口下卡宽 18.2%，保证整排仍在 deck 内
-     （START_X 自动 = 0.9%）。倒影宽度与顶边会自动跟着算。 */
+  /* 11 张卡（步长 8.2%）：窄视口下卡宽 17.8%（18.2% 时 span 会到 100.2% 溢出），
+     START_X 自动 = 0.1%。倒影宽度与顶边会自动跟着算。 */
   .showcase-deck {
-    --deck-w: 18.2%;
+    --deck-w: 17.8%;
   }
 }
 
@@ -3752,7 +3755,8 @@ html[data-paging="on"] .section.projects {
    allowance is the heading, its gap and both paddings - everything that is not
    the deck itself. */
 html[data-paging="on"] .project-list {
-  width: min(1672px, calc(100% - 144px), calc((100vh - 360px) * 3.125));
+  /* 与上方 .project-list 基础规则同值（88px 边距 + 1780px 上限），须成套改。 */
+  width: min(1780px, calc(100% - 88px), calc((100vh - 360px) * 3.125));
   margin: clamp(28px, 4vh, 64px) auto 0;
 }
 

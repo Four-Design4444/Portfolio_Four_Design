@@ -359,9 +359,9 @@ const RAIL_LEAVE_MS = 560;
    2026-10-08 三次调整:7.0% 的步长相邻卡叠得太死(每张只露出 44%),步长放宽到
    8.2%(每张露出约 52%),START_X 由同一公式自动算成 1.05 —— 整排几乎铺满 deck
    宽度,deck 自身在 .project-list 里还有 72px 视口边距,所以不会顶到屏幕边。 */
-const DECK_STEP_X = 8.0;     // 相邻卡 left 步长(%)，加大 = 相邻卡左右拉开、每张露出更多
+const DECK_STEP_X = 8.2;     // 相邻卡 left 步长(%)，加大 = 相邻卡左右拉开、每张露出更多
 const DECK_CARD_W = 17.5;    // 与 styles.css 的 .showcase-deck-card width 必须同值
-const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 1.25，左右留白对称
+const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 0.25，左右留白对称
 const projectShowcases = [
   {
     id: 'ui-1',

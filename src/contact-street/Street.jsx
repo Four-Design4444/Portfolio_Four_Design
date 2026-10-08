@@ -13,9 +13,11 @@ const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 // 结束后 hero 依旧长时间卡顿"的根因。现在改为：烧录只允许发生在 loading 期间，
 // 且受控帧率（见 BURN_FRAME_MS），首屏揭幕后它绝不再抢主线程。
 //
-// 判据用「累计场景时间」而不是墙钟毫秒：HOST_JS 用与 demo 同一套 dt 算法记账
-// （见 __streetSceneSeconds），机器慢 / 掉帧时它会自然多等一会儿，而不是按一个
-// 拍脑袋的 ms 数提前揭幕，留下"灯还没亮满"的尾巴。
+// 判据不是墙钟毫秒，而是「demo 的灯光到底亮没亮」：
+//   ① 能读到 demo 自己的灯光脉冲值 n 时（HOST_JS 的一次性钩子）→ 烧到 n≥BURN_LIT；
+//   ② 读不到时退化为帧预算 BURN_FRAMES —— demo 每帧最多推进 dt=0.05s，帧数即场景
+//      时间，所以这个预算是可算的，而不是拍脑袋的毫秒数。机器慢只会让墙钟变长，
+//      不会让"灯还没亮满"就揭幕。
 //
 // 烧录帧预算 —— **首选判据**，不依赖任何内部状态。
 // demo 的灯光是一条 4.8s 周期的余弦脉冲（bundle 里 update(e,t) 的原文）：
@@ -28,14 +30,14 @@ const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 //     · 配合「armed 之前把场景钟冻住」（见渲染档位 effect），烧录的第 0 帧 nf≈0；
 //     · 于是 48 帧正好推到波峰 2.4s。取 52 帧留 4 帧余量：掉帧只会让 nf 偏小，
 //       而 2.4~2.6s 区间内 n 都在 0.96 以上，肉眼都是"全亮"。
-// 为什么不用"累计场景时间"当判据：实测我自己记的场景时间与 demo 内部的 nf 之间
-// 会差出一个固定偏移（同一份代码实测差 1.37s），按时间烧会停在半亮状态。
 const BURN_FRAMES = 52;
-// 若能读到 demo 真正的脉冲值 n（HOST_JS 的一次性钩子，见 __streetState，注意注入
-// 与 demo 模块存在竞态、不保证成功），就以此为准提前放行：n≥0.95 即"已经最亮"。
+// 若能读到 demo 真正的脉冲值 n（HOST_JS 的一次性钩子，见 __streetState），就以它
+// 为准：n≥0.95 即"已经最亮"。读到读数时**不再按帧数提前收工**，而是继续烧到亮为止
+// （上限一个多周期），这样哪怕有帧被 demo 自己丢掉也不会停在半亮。
 const BURN_LIT = 0.95;
+const BURN_MAX_FRAMES = 130;
 // 烧录档的**渲染间隔**（不是场景推进速度 —— 后者恒为 50ms/帧，见 HOST_JS 的
-// BURN_STEP_MS）。帧数由 BURN_SCENE_SECONDS 定死（48 帧，即 CPU 总量定死 ≈0.5s），
+// BURN_STEP_MS）。帧数由 BURN_FRAMES 定死（52 帧，CPU 总量因此定死 ≈0.5s），
 // 这个值只决定这 0.5s 摊在多少墙钟时间里：40ms ⇒ 约 2s、主线程占用约 25%，
 // 与 loading 动画和平共处；调小能更快揭幕，但占用升高、动画会顿。
 const BURN_FRAME_MS = 40;
@@ -48,7 +50,6 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
   const [mounted, setMounted] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const frameRef = useRef(null);
-  const everActive = useRef(false);
   // demo 是否已冷启动完成（compileAsync 完成 / canvas 已画出）。烧录只在这之后开始，
   // 因为 demo 的动画循环是编译完成后才起的。
   const [armed, setArmed] = useState(false);
@@ -59,7 +60,6 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
   const tailZeroRef = useRef(false);
 
   useEffect(() => {
-    if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
 
@@ -98,7 +98,11 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
         if (st && st.charging) n = Number(st.charging.phase);
       } catch (_) { n = -1; }
       const wall = performance.now() - startedAt;
-      if (frames >= BURN_FRAMES || (n >= 0 && n >= BURN_LIT) || wall >= BURN_MAX_MS) { finish(); return; }
+      // 有脉冲读数 → 烧到真的亮（n≥0.95）为止；没有读数 → 退化为帧预算（正好到波峰）。
+      const done = n >= 0
+        ? (n >= BURN_LIT || frames >= BURN_MAX_FRAMES)
+        : frames >= BURN_FRAMES;
+      if (done || wall >= BURN_MAX_MS) { finish(); return; }
       poll = window.setTimeout(check, 100);
     };
     poll = window.setTimeout(check, 100);
@@ -322,16 +326,15 @@ const HOST_JS = `
   // （正好是 clamp 上限，帧数最少、CPU 最省），渲染间隔另由 __streetFrameMs 定。
   window.__streetPaused = false;
   window.__streetFrameMs = 0;
-  // 累计场景时间（秒）：宿主据此判断灯光渐入是否真的走完（见 BURN_SCENE_SECONDS），
-  // 而不是猜一个墙钟毫秒数 —— 机器慢就自然多等，绝不提前揭幕留个"灯没亮满"的尾巴。
+  // 累计场景时间（秒）：与 demo 内部的 nf 同源同步（都用"时间轴增量，clamp 到
+  // 0.05s"记账），用于诊断与探针核对；烧录是否收工另有判据（见 BURN_FRAMES）。
   window.__streetSceneSeconds = 0;
   // 只用于诊断/探针：烧录档实际渲染了多少帧、首帧墙钟时刻。
   window.__streetBurnFrames = 0;
   window.__streetBurnFirstAt = 0;
   var BURN_STEP_MS = 50;   // 烧录档每帧推进的场景时间（= demo 的 dt 上限）
   var IDLE_STEP_MS = 16;   // 空转档每帧推进（与旧行为一致）
-  var axis = 0;            // 交给 demo 的时间轴
-  var realLast = 0;        // 上一个原生 rAF 时间戳（满帧档按真实增量推进）
+  var axis = 0;            // 交给 demo 的时间轴；0 = 尚未与真实时钟对齐
   var nextAt = 0;          // 烧录档的下一帧截止时刻
   var rawRaf = window.requestAnimationFrame.bind(window);
   var burn = function (cb) {
@@ -343,6 +346,17 @@ const HOST_JS = `
   };
   window.requestAnimationFrame = function (cb) {
     return rawRaf(function (t) {
+      // 首帧：把自有时间轴**对齐到 demo 已经用过的真实 rAF 时间戳**，本帧原样转发。
+      // 这一步是必须的：demo 的 dt = (e-rf)/1e3、rf 是它上一帧收到的时间戳。若这里
+      // 从 0 起算，第一帧就会递过去一个远小于 rf 的时间戳，dt 直接为负 —— nf（场景
+      // 时间）被凭空推走一大截，灯光相位随之错开（实测 1.37s），"烧到最亮"就永远
+      // 对不准了。
+      if (!axis) {
+        axis = t;
+        window.__streetSceneSeconds = 0;
+        cb(axis);
+        return;
+      }
       if (window.__streetPaused) {
         nextAt = 0;
         axis += IDLE_STEP_MS;
@@ -365,11 +379,8 @@ const HOST_JS = `
         return;
       }
       nextAt = 0;
-      var d = t - realLast;
-      realLast = t;
-      var step = (d > 0 && d < BURN_STEP_MS) ? d : IDLE_STEP_MS;
-      axis += step;
-      window.__streetSceneSeconds += step / 1000;
+      axis += IDLE_STEP_MS;   // 满帧档每帧 ~16ms（轴只保证增量语义，不必等于真实时刻）
+      window.__streetSceneSeconds += IDLE_STEP_MS / 1000;
       cb(axis);
     });
   };
@@ -651,6 +662,7 @@ function useStreetWheelBridge(enabled) {
     let raf = 0;
     let cssDone = false;
     let readyDone = false;
+    let injectedDoc = null;
     let elapsed = 0;
     // 把尾屏 WebGL 预载进度并回首屏 loading 进度条（见 index.html 监听）：
     // 挂载即登记 0，编译完成（#loading.loaded / canvas 已绘制）登记 0.75，
@@ -678,7 +690,16 @@ function useStreetWheelBridge(enabled) {
       let win = null;
       try { doc = frame.contentDocument; win = frame.contentWindow; } catch (_) { doc = null; }
       if (doc) {
-        if (!cssDone) {
+        // ⚠ 注入必须跟着**文档**走，不能一次性门控：iframe 会先从 about:blank 导航
+        //   到真正的 demo 文档，注入到 about:blank 的那份会随导航一起丢掉。用
+        //   cssDone 挡着的话就再也不会往真文档注入，只能退到 onLoad 兜底 ——
+        //   而那时 demo 的模块早就跑完了：rAF 钩子晚装（时间轴与它自己的 rf 对不
+        //   上，第一帧递过去一个**倒退**的时间戳 ⇒ dt 变负数 ⇒ 场景时间被凭空推走，
+        //   实测灯光相位因此错开 1.37s），一次性诊断钩子更是完全捞不到状态。
+        //   移动端实测就是这个路径。改为"文档换了就重新注入"，两个钩子都能在
+        //   demo 模块执行前就位。
+        if (doc !== injectedDoc) {
+          injectedDoc = doc;
           try { cssDone = injectHostCss(doc) && injectHostJs(doc); } catch (_) { cssDone = false; }
         }
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
