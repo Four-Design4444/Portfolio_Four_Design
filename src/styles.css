@@ -4994,9 +4994,24 @@ html[data-paging="on"] .contact-page {
   /* 地面盒顶边已上移到接触线上方 72px（见 .works-orbit-floor），
      镜像必须同量下移，绝对位置才与卡片底边严丝合缝。 */
   top: var(--floor-pad-top);
-  /* 共轭:rotateX 取反、rotateY 同号、translateY 反向(translate 属性在翻转之外) */
+  /* ⚠⚠⚠ 2026-10-08 第十一轮：支点放到**接触线**上（= 镜像的视觉顶边中点）。
+     父级翻转 `scaleY(-1)` 是"关于 origin 的水平轴"翻的：origin 放在顶边后
+     元素会被翻到接触线**上方**，所以紧接着 `translateY(...)` 把它拉回来。
+     拉回量必须是 **`var(--mz) * 100%`**（= 翻转后的高度），不是 `100%`：
+     翻转后元素占 [-mz·H, 0]（scale 也以 origin 为轴、同样被翻到上方），
+     下移 mz·H 后正好落到 [0 …]，视觉顶边 = `--lift`。
+     实测验证过这一步：写成 `+100%` 时顶边多上飘 0.025×H = 12.4px
+     （= 2×(H/2)×0.025），与公式 -mz·H + L + H 完全吻合。
+     好处：顶边成了支点 ⇒ `scale(mz)`、`rotateX(-rx)`、`rotateY(ry)`
+     **全部不再移动顶边**，镜像顶边位移 = 纯 `--lift`，
+     可与卡片底边（同样只剩 translateY 一项）逐帧对齐、不再裂开。
+     ⚠ 与 `.works-orbit-card` 的 `transform-origin: 50% 100%` 是一对，缺一即错位。 */
+  transform-origin: 50% 0;
+  /* 共轭:rotateX 取反、rotateY 同号(两条轴都过接触线,所以天然共轭);
+     translate: 属性管**漂浮呼吸**（物离地、像离地，反向），
+     transform 里的 `--lift` 管 **hover**（必须同向跟住卡片底边，见下）。 */
   translate: 0 var(--bob-mirror, 0px);
-  transform: perspective(1300px) translateY(var(--lift, 0px))
+  transform: perspective(1300px) translateY(calc(var(--lift, 0px) + var(--mz, 1) * 100%))
              rotateX(calc(var(--rx, 0deg) * -1)) rotateY(var(--ry, 0deg))
              scale(var(--mz, 1)) scaleY(-1);
   transition: transform 0.48s cubic-bezier(0.23, 0.76, 0.25, 1);
@@ -5091,16 +5106,25 @@ html[data-paging="on"] .contact-page {
   animation: works-orbit-sweep 1250ms cubic-bezier(0.25, 0.5, 0.3, 1);
 }
 
-/* 卡片上浮 14px → 倒影下沉 14px;卡片放大 1.025 → 倒影同步放大 */
+/* ⚠⚠⚠ 2026-10-08 第十一轮（业主：「鼠标移入主卡底部后、主卡发生位移就能看到接缝」）：
+   旧值 `--lift: 14px` 是**反向下沉**（"卡片上浮 14 → 倒影下沉 14"），
+   叠加卡片 `scale(1.025)` 把底边往下推的 6.2px，卡底与影顶之间裂开 15.6px。
+   现在两者支点都在接触线上（`transform-origin` 分别 50% 100% / 50% 0），
+   于是卡片底边只剩 translateY(-14px)、镜像顶边只剩 `--lift` 一项，
+   令二者相等即可严丝合缝：`--lift` 就是**卡片的 translateY 值**。
+   ⚠ 以后改卡片 hover 的 translateY，这里必须同步改成同一个数。 */
 .works-orbit-float:hover ~ .works-orbit-floor .works-orbit-floor-mirror,
 .works-orbit-float:has(.works-orbit-card:focus-visible) ~ .works-orbit-floor .works-orbit-floor-mirror {
-  --lift: 14px;
+  --lift: -14px;
   --mz: 1.025;
 }
 
+/* 漂浮呼吸：物上浮 6px，像也上浮 6px（同一块"卡片+倒影"整体呼吸）。
+   ⚠ 旧值 `+6px` 是反向下沉 ⇒ 每个 7.5s 周期里缝从 0 涨到 12px。
+   与 hover 同理，必须同向跟随才能保持拼接。 */
 @keyframes works-orbit-bob-mirror {
   0%, 100% { translate: 0 0; }
-  50% { translate: 0 6px; }
+  50% { translate: 0 -6px; }
 }
 
 /* 镜像图:与 cover 内图片同尺寸同裁剪,1:1 对齐 */
@@ -5328,6 +5352,19 @@ html[data-paging="on"] .contact-page {
   border-radius: 15px;
   overflow: hidden;
   isolation: isolate;
+  /* ⚠⚠⚠ 2026-10-08 第十一轮（业主：「默认看不到这个接缝，但鼠标移入主卡底部后、
+     主卡发生位移就能看到」）：**旋转/缩放的支点必须放在接触线（= 卡片底边）上**。
+     静态时 transform 只有 rotateX(0)/rotateY(0)，origin 无影响；
+     但 hover 时 `translateY(-14px) scale(1.025) rotateX(--rx)` 若以**中心**为支点：
+       · scale 把底边往下推 6.2px（H≈496 时 (H/2)×0.025）；
+       · rotateX(±4°) 让底边离开接触线 ±3.9px（含透视）。
+     于是卡片底边上浮 7.8px，而倒影顶边按"镜面共轭"反向下沉 7.8px
+     ⇒ 中间裂开 **15.6px**（tilt 再叠 ±7.6px），缝里露出页面底色、
+     两侧各一条 1px 描边 —— 就是业主截图里那条横线。
+     origin 放到 `50% 100%` 后：底边上每点 y 都等于接触线，
+     而投影缩放的 y 分量恒为 `y=0 → 0`，所以 rotateX/rotateY/scale
+     **都不会再把底边推离接触线**，只剩 translateY 这一项需要倒影跟住。 */
+  transform-origin: 50% 100%;
   background: linear-gradient(132deg, rgba(231, 242, 255, 0.11), rgba(186, 203, 232, 0.043) 33%, rgba(185, 201, 224, 0.03) 70%, rgba(219, 234, 255, 0.075));
   box-shadow:
     inset 0 0 0 1px rgba(244, 250, 255, 0.02),
@@ -5876,7 +5913,17 @@ html[data-paging="on"] .contact-page {
   .works-orbit-float,
   .works-orbit-rail-card,
   .works-orbit-floor-mirror { animation: none; translate: none; }
-  .works-orbit-floor-mirror { transform: scaleY(-1); }
+  /* ⚠ 2026-10-08 第十一轮：`scaleY(-1)` 是**关于 origin 的水平轴**翻的，
+     origin 已改到顶边（见 .works-orbit-floor-mirror），必须跟上 `translateY(100%)`
+     才落回接触线下方，否则整块倒影会翻到接触线上方 496px 处。 */
+  .works-orbit-floor-mirror { transform: translateY(100%) scaleY(-1); }
+  /* ⚠ 卡片 hover 变换在上面已被 `transform: none` 关掉 ⇒ 倒影的 hover 位移
+     也必须归零，否则镜像单独上浮 7.8px，又裂开一条缝。 */
+  .works-orbit-float:hover ~ .works-orbit-floor .works-orbit-floor-mirror,
+  .works-orbit-float:has(.works-orbit-card:focus-visible) ~ .works-orbit-floor .works-orbit-floor-mirror {
+    --lift: 0px;
+    --mz: 1;
+  }
   /* 2026-10-06 移动端:翻页动效降级为直接切换,内容照常可达 */
   html[data-device="mobile"] .work-detail-page.mw-flip-enter,
   html[data-device="mobile"] .work-detail-page.mw-flip-exit { animation: none; }

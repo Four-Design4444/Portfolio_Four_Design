@@ -41,6 +41,17 @@ const INTRO_BURN_MS = 3200;
 //   focus 描边都跟着走。
 //   ⚠ 3D 场景（canvas）里的暖色灯光属场景美术，不在替换范围 —— 参考图同样保留
 //     街灯与室内的暖光，只把 UI 点缀换成冷蓝。
+//
+// ⑥ 左下文案按参考图 Frame 11.jpg 替换（2026-10-08 补做，第一轮漏了）：
+//   eyebrow · SOMEWHERE, AN IDEA IS STILL AWAKE. → Let's Make It Happen.
+//   h1      · 夜深了，/ 灵感还亮着。              → 有个有趣的想法？/ 不妨我们一起实现。
+//   p · intro-foot · 与参考图一致，原样保留。
+//   ⚠ 参考图句号是**纯白**（实测 p92 = 251,251,251，与正文同色），demo 原来那个
+//     `<span class="amber">。</span>` 是暖黄点缀 ⇒ 换文案时一并去掉该 span。
+//   字号按参考图 1920 宽量出的字高反推：h1 单行 32px、eyebrow 12px、p 13px。
+//   文本用 injectIntroCopy() 改写 —— demo 的 setMode() 只写 `.intro` 的 opacity、
+//     setProgress() 同理，都不碰内容（已核`innerHTML=` 仅 4 处，全在 #detail），
+//     所以只在 overview 首帧改一次即可，不会被 demo 覆盖。
 const HOST_CSS = `
 #loading { display: none !important; }
 .header { display: none !important; }
@@ -50,6 +61,24 @@ const HOST_CSS = `
 #navigation,
 #scene-caption { display: none !important; }
 .hud { justify-content: flex-end !important; }
+
+/* ── ⑥ 左下文案按参考图替换 ────────────────────────────────────────────────
+   参考图实测：h1 两行基线间距 48px、字高 32px；eyebrow 字高 12px、横线宽 39px；
+   p 字高 13px；foot 字高 7px。demo 原值 h1 clamp(28,3.05vw,47)/line-height 1.42、
+   eyebrow 8px、p 11px，均偏小，按参考图放大。 */
+.intro .eyebrow { font-size: 11px; letter-spacing: 2.4px; color: #7d8489; }
+.intro .tiny-line { width: 39px; height: 1px; }
+.intro h1 {
+  font-size: clamp(30px, 2.34vw, 45px);
+  line-height: 1.5;
+  letter-spacing: 4.5px;
+  margin: 20px 0 22px;
+  color: #fbfbfb;
+}
+.intro p { font-size: 12.5px; letter-spacing: 2.2px; color: #8a9095; }
+.intro-foot { font-size: 8.5px; letter-spacing: 1.6px; margin-top: 34px; }
+.intro-foot span:first-child { color: #f0f1f1; }
+.intro-foot span:last-child { color: #4e6b82; }
 
 /* ── ⑤ 棕黄点缀 → 冷蓝点缀（锚点 #6784A6，明度不变） ─────────────────────── */
 :root { --accent: #a4c2e4; }
@@ -113,6 +142,15 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
   .sq-ico { width: 13px; height: 13px; }
   .sq-row + .sq-row { margin-top: 16px; }
   .sq-hint { margin-top: 20px; font-size: 8px; }
+  /* ⚠ ⑥ 的字号是照参考图（1920 宽PC）量的，直接搬到 402px 宽的移动端会让
+     .intro 从w192 涨到 w311、高 142→204，**同时横向与纵向撞上右下新块**
+     （探针实测 overlapIntro=true）。这里按demo 移动端基准缩回：
+     h1 24px / 字距 2px ⇒ 「有个有趣的想法？」约 206px 宽，避开新块左沿 301。 */
+  .intro .eyebrow { font-size: 8px; letter-spacing: 1.4px; }
+  .intro .tiny-line { width: 26px; }
+  .intro h1 { font-size: 24px; line-height: 1.42; letter-spacing: 2px; margin: 14px 0 12px; }
+  .intro p { font-size: 10px; letter-spacing: 1.4px; }
+  .intro-foot { font-size: 6.5px; letter-spacing: 1px; margin-top: 18px; }
 }
 `;
 
@@ -292,6 +330,44 @@ const STREET_QUICK_HTML = `
   <p class="sq-hint">点击 / 拖动 探索场景</p>
 </div>
 `.trim();
+
+// ── ⑥ 左下文案改写（参考图 Frame 11.jpg）────────────────────────────────────
+//只改两处文本节点：.eyebrow 的文字 span、.intro h1 的两行。
+//⚠ 不动 .intro p 与 .intro-foot —— 它们与参考图一致。
+//⚠ h1 里那个 `<span class="amber">。</span>` 必须**连 span 一起去掉**（参考图句号
+//   是纯白，而 .amber 继承 --accent，是个暖黄点缀）。
+//   用 textContent 赋值天然会连 span 一起清掉，无需额外处理。
+const INTRO_COPY = {
+  eyebrow: "Let's Make It Happen.",
+  h1: '有个有趣的想法？\n不妨我们一起实现。',
+};
+
+function injectIntroCopy(doc) {
+  if (!doc || !doc.body) return false;
+  const intro = doc.querySelector('.intro');
+  if (!intro || intro.getAttribute('data-host-copy')) return !!intro;
+  intro.setAttribute('data-host-copy', '1');
+  const eyebrow = intro.querySelector('.eyebrow');
+  // eyebrow 结构是 <span class="tiny-line"></span> SOMEWHERE...
+  // tiny-line 是装饰横线，必须保留，只换它后面的裸文本节点。
+  if (eyebrow) {
+    eyebrow.textContent = '';
+    eyebrow.appendChild(doc.createElement('span'));
+    eyebrow.firstChild.className = 'tiny-line';
+    eyebrow.appendChild(doc.createTextNode(INTRO_COPY.eyebrow));
+  }
+  const h1 = intro.querySelector('h1');
+  if (h1) {
+    // 参考图是两行，靠 <br> 断行；textContent 赋值会清掉旧的 <br> 与 .amber span，
+    // 所以这里拆成两段再插 <br>。
+    const [line1, line2] = INTRO_COPY.h1.split('\n');
+    h1.textContent = '';
+    h1.appendChild(doc.createTextNode(line1));
+    h1.appendChild(doc.createElement('br'));
+    h1.appendChild(doc.createTextNode(line2));
+  }
+  return true;
+}
 
 function injectStreetQuick(doc) {
   if (!doc || !doc.body) return false;
@@ -474,7 +550,7 @@ export default function ContactStreet({ active, preload, onTailReady }) {
         }
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
         //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。
-        try { injectStreetQuick(doc); } catch (_) { /* onLoad 兜底 */ }
+        try { injectStreetQuick(doc); injectIntroCopy(doc); } catch (_) { /* onLoad 兜底 */ }
 if (!readyDone) {
           // 双信号就绪判定（任一成立即可）：
           //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
@@ -548,6 +624,7 @@ function applyHostOverrides(iframe) {
     injectHostCss(doc);
     injectHostJs(doc);
     injectStreetQuick(doc);
+    injectIntroCopy(doc);
   } catch (_) {
     /* 同源 public 资源可读；跨域时静默跳过 */
   }
