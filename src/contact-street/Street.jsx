@@ -280,10 +280,14 @@ const HOST_CSS = `
    连字重一起定成 400）。业主要求统一黑体 —— 换中文黑体栈并加粗；
    .detail-en（15px 英文斜体）不是大字且宿主面板已不渲染，不动。
    字号/字距/行高一概不碰，只换字族与字重。 */
+/* 修8→修9（2026-10-09 五轮）：大字统一黑体但用**细体**（参考图为细黑体，
+   700 粗体业主不要）——字族不变，字重 700 → 300（Microsoft YaHei Light）。
+   .detail-title 的 demo shorthand 字重 400 也一并压到 300 保一致。
+   字号/字距/行高一概不碰。 */
 .intro h1,
 .detail-title {
-  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
-  font-weight: 700;
+  font-family: "Microsoft YaHei Light", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+  font-weight: 300;
 }
 /* 修3：demo 打开面板会编程 focus「返回街角」，:focus-visible 的 2px 描边框
    （outline 2px var(--accent)）在参考图里没有 —— 去掉。 */
