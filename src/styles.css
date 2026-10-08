@@ -2345,7 +2345,7 @@ h2 {
 .showcase-deck {
   /* 卡宽的唯一真源：卡本体、倒影、以及倒影的 vertical 定位都从这里取。
      改一次就够（窄视口在 @media(max-width:1100px) 里覆盖 --deck-w）。 */
-  --deck-w: 15.9%;
+  --deck-w: 17.5%;
   position: relative;
   aspect-ratio: 10 / 3.2;
   touch-action: pan-y;
@@ -2355,8 +2355,10 @@ h2 {
 .showcase-deck::after {
   content: '';
   position: absolute;
-  left: 4%;
-  right: 4%;
+  /* 步长放宽到 8.2% 后整排几乎铺满 deck，光池跟着向两侧铺开，
+     否则首尾两张卡会站在光池外面（地面没有光）。 */
+  left: 1%;
+  right: 1%;
   top: 60%;
   bottom: 0;
   z-index: -1;
@@ -2375,8 +2377,8 @@ h2 {
   position: absolute;
   left: var(--x);
   top: 40%;
-  /* 2026-10-08:7 张 → 11 张，再按业主要求等比放大 30%（12.2% → 15.9%）。
-     起点 / 步长由 main.jsx 的 DECK_START_X / DECK_STEP_X 给出（7.05 + i*7.0）。 */
+  /* 2026-10-08:7 张 → 11 张，放大 30%（12.2% → 15.9%）后再放大一档（→ 17.5%）。
+     起点 / 步长由 main.jsx 的 DECK_START_X / DECK_STEP_X 给出（1.25 + i*8.0）。 */
   width: var(--deck-w);
   aspect-ratio: 4 / 3;
   z-index: var(--z);
@@ -2543,23 +2545,22 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  /* 卡宽 15.9%（≈206px @1440）但每张只露出约 44%，文字按业主要求再收一档，
-     保证标题/副标落在可被看到的那条窄带里。 */
-  padding: 0 clamp(7px, 0.58vw, 9px) clamp(7px, 0.54vw, 9px);
+  /* 卡宽 17.5%（≈227px @1440），文字随卡放大回调一档。 */
+  padding: 0 clamp(8px, 0.66vw, 11px) clamp(8px, 0.62vw, 11px);
   pointer-events: none;
   text-align: left;
 }
 
 .showcase-deck-copy em {
   font-style: normal;
-  font-size: 7px;
+  font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.2em;
   color: rgba(255, 255, 255, 0.42);
 }
 
 .showcase-deck-copy strong {
-  font-size: clamp(10.5px, 0.72vw, 12.5px);
+  font-size: clamp(12px, 0.84vw, 15px);
   font-weight: 800;
   line-height: 1.1;
   color: #ffffff;
@@ -2567,7 +2568,7 @@ h2 {
 
 .showcase-deck-copy b {
   font-weight: 500;
-  font-size: clamp(8px, 0.44vw, 9px);
+  font-size: clamp(9px, 0.52vw, 10.5px);
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.56);
 }
@@ -2852,9 +2853,8 @@ h2 {
   object-fit: cover;
 }
 
-.detail-hero img.is-transitioning {
-  opacity: 0;
-}
+/* 2026-10-08: 三级页头图已删(业主),.detail-hero 全族样式与
+   .detail-hero img.is-transitioning 一并移除;黑底间距由 .detail-content 顶部 padding 承担。 */
 
 .showcase-copy {
   align-self: center;
@@ -2905,109 +2905,10 @@ h2 {
   background: #000000;
 }
 
-.detail-hero {
-  position: relative;
-  width: 100vw;
-  height: auto;
-  overflow: visible;
-  border-radius: 0 0 14px 14px;
-  background: #000000;
-}
-
-.detail-hero img {
-  width: 100%;
-  height: auto;
-  object-fit: contain;
-  filter: none;
-}
-
-.detail-hero-copy {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  padding: clamp(86px, 9vw, 160px) clamp(42px, 6.2vw, 120px) clamp(30px, 3vw, 54px);
-  pointer-events: none;
-  color: #ffffff;
-}
-
-.detail-hero-main {
-  align-self: center;
-  max-width: min(680px, 44vw);
-  transform: translateY(28px);
-  opacity: 0;
-  animation: detailHeroTextIn 900ms cubic-bezier(0.22, 1, 0.36, 1) 180ms forwards;
-}
-
-.detail-hero-main h1 {
-  margin: 0;
-  font-size: clamp(52px, 5vw, 92px);
-  line-height: 0.94;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.detail-hero-main p {
-  margin: clamp(34px, 3.7vw, 70px) 0 0;
-  font-size: clamp(22px, 1.7vw, 34px);
-  line-height: 1.28;
-}
-
-.detail-hero-main span {
-  display: block;
-  margin-top: 12px;
-  color: rgba(255, 255, 255, 0.86);
-  font-size: clamp(16px, 1.15vw, 22px);
-  line-height: 1.45;
-}
-
-.detail-hero-meta {
-  display: flex;
-  gap: clamp(72px, 11vw, 210px);
-  align-items: flex-start;
-  transform: translateY(22px);
-  opacity: 0;
-  animation: detailHeroTextIn 820ms cubic-bezier(0.22, 1, 0.36, 1) 420ms forwards;
-}
-
-.detail-hero-meta div {
-  display: grid;
-  gap: 12px;
-}
-
-.detail-hero-meta b {
-  font-size: clamp(16px, 1.22vw, 24px);
-  line-height: 1;
-}
-
-.detail-hero-meta span {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: clamp(12px, 0.92vw, 16px);
-  line-height: 1.35;
-}
-
-.detail-hero-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: clamp(42px, 5vw, 82px);
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.62);
-  color: rgba(255, 255, 255, 0.86);
-  font-size: clamp(12px, 0.9vw, 15px);
-  line-height: 1;
-  transform: translateY(16px);
-  opacity: 0;
-  animation: detailHeroTextIn 760ms cubic-bezier(0.22, 1, 0.36, 1) 620ms forwards;
-}
-
-@keyframes detailHeroTextIn {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* 2026-10-08(业主):三级页头图删除,PC / 移动端同规。
+   原 .detail-hero / .detail-hero-copy / -main / -meta / -footer / detailHeroTextIn
+   全族样式移除;顶部黑底间距 = .detail-content 的 padding-top 170px
+   (即参考图蓝框标注的高度),之后直接进 .detail-title。 */
 
 .detail-content {
   width: min(1470px, calc(100% - 220px));
@@ -3140,9 +3041,9 @@ h2 {
     margin-top: 58px;
   }
 
-  /* 11 张卡：≤1500px 时卡更窄，标题不能再放大（原 clamp(15px,1.2vw,20px)）。 */
+  /* 11 张卡：≤1500px 时标题同步回调。 */
   .showcase-deck-copy strong {
-    font-size: clamp(11px, 0.8vw, 13px);
+    font-size: clamp(12.5px, 0.92vw, 15px);
   }
 
   .showcase-item {
@@ -3164,9 +3065,7 @@ body:has(.work-detail-page) {
   min-width: 0;
 }
 
-body:has(.work-detail-page) .work-detail-page,
-body:has(.work-detail-page) .detail-hero,
-body:has(.work-detail-page) .detail-hero img {
+body:has(.work-detail-page) .work-detail-page {
   max-width: 100vw;
 }
 
@@ -3176,10 +3075,10 @@ body:has(.work-detail-page) .detail-hero img {
     margin-top: 64px;
   }
 
-  /* 11 张卡（步长 7.0%）：窄视口下把卡放得更大，只改 --deck-w 一处，
-     倒影宽度与顶边会自动跟着算。 */
+  /* 11 张卡（步长 8.0%）：窄视口下卡宽 18.2%，保证整排仍在 deck 内
+     （START_X 自动 = 0.9%）。倒影宽度与顶边会自动跟着算。 */
   .showcase-deck {
-    --deck-w: 17.4%;
+    --deck-w: 18.2%;
   }
 }
 
@@ -3470,68 +3369,6 @@ body:has(.work-detail-page) .detail-hero img {
 
   .detail-design-shot {
     border-radius: 0;
-  }
-
-  .detail-hero-copy {
-    grid-template-rows: 1fr auto;
-    padding: 76px 22px 22px;
-  }
-
-  .detail-hero-main {
-    align-self: center;
-    max-width: 54vw;
-  }
-
-  .detail-hero-main h1 {
-    font-size: clamp(30px, 9vw, 58px);
-  }
-
-  .detail-hero-main p {
-    margin-top: 22px;
-    font-size: clamp(15px, 4vw, 24px);
-  }
-
-  .detail-hero-main span {
-    margin-top: 8px;
-    font-size: clamp(12px, 3vw, 16px);
-  }
-
-  .detail-hero-meta {
-    gap: 28px;
-    justify-content: space-between;
-  }
-
-  .detail-hero-meta b {
-    font-size: 13px;
-  }
-
-  .detail-hero-meta span {
-    font-size: 10px;
-  }
-
-  .detail-hero-footer {
-    margin-top: 24px;
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 560px) {
-  .detail-hero-copy {
-    padding: 68px 18px 18px;
-  }
-
-  .detail-hero-main {
-    max-width: 62vw;
-    align-self: start;
-    margin-top: 9vh;
-  }
-
-  .detail-hero-meta {
-    display: none;
-  }
-
-  .detail-hero-footer {
-    border-top-color: rgba(255, 255, 255, 0.42);
   }
 }
 

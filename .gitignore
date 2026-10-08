@@ -3,6 +3,8 @@ node_modules/
 
 # build output (Cloudflare Pages builds from source)
 dist/
+dist-perf/
+dist-legacy/
 
 # WorkBuddy internal / app files
 .workbuddy/

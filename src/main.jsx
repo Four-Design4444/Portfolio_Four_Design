@@ -248,7 +248,7 @@ const worksByCategory = {
   vi: [
     {
       id: 'brand-summer',
-      title: '觅野品牌IP',
+      title: 'Mieye品牌设计',
       subtitle: '咖啡品牌设计',
       cover43: '/detail/brand-summer/v1/cover-43.webp',
       image: '/detail/brand-summer/v1/cover-portrait.webp',
@@ -353,11 +353,15 @@ const RAIL_LEAVE_MS = 560;
 
    2026-10-08 二次调整:卡整体等比放大 30%(12.2% → 15.9%),步长同时收窄
    (7.4% → 7.0%)把相邻卡拉近,首卡 left 由居中公式给出:
-     START_X = (100 - 10*STEP_X - CARD_W) / 2 = 7.05
-   卡内文字同步缩小(见 .showcase-deck-copy),避免标题顶到卡右缘。 */
-const DECK_STEP_X = 7.0;     // 相邻卡 left 步长(%)，收窄 = 卡片靠得更近
-const DECK_CARD_W = 15.9;    // 与 styles.css 的 .showcase-deck-card width 必须同值
-const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 7.05，左右留白对称
+     START_X = (100 - 10*STEP_X - CARD_W) / 2
+   卡内文字同步缩小(见 .showcase-deck-copy),避免标题顶到卡右缘。
+
+   2026-10-08 三次调整:7.0% 的步长相邻卡叠得太死(每张只露出 44%),步长放宽到
+   8.2%(每张露出约 52%),START_X 由同一公式自动算成 1.05 —— 整排几乎铺满 deck
+   宽度,deck 自身在 .project-list 里还有 72px 视口边距,所以不会顶到屏幕边。 */
+const DECK_STEP_X = 8.0;     // 相邻卡 left 步长(%)，加大 = 相邻卡左右拉开、每张露出更多
+const DECK_CARD_W = 17.5;    // 与 styles.css 的 .showcase-deck-card width 必须同值
+const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 1.25，左右留白对称
 const projectShowcases = [
   {
     id: 'ui-1',
@@ -404,7 +408,7 @@ const projectShowcases = [
     category: 'vi',
     work: 0,
     index: '05',
-    title: '觅野品牌IP',
+    title: 'Mieye品牌设计',
     meta: '咖啡品牌设计',
     description: '以统一的图形语言与色彩体系传递品牌核心价值，建立可识别的视觉资产。',
     deck: { left: DECK_START_X + DECK_STEP_X * 4, rot: 1.2, restY: -5, z: 5 }
@@ -1695,7 +1699,6 @@ function App() {
               <WorkDetailPage
                 activeCategory={exitDetail ? exitDetail.category : activeCategory}
                 work={exitDetail ? exitDetail.work : activeWork}
-                imageTransitionActive={!exitDetail && Boolean(sharedImage && sharedImage.workId === activeWork?.id)}
                 flip={mobileFlip}
                 onSwipeProject={
                   !exitDetail && isMobileDevice() && works.length > 1
@@ -1759,18 +1762,7 @@ function readNavRect(selector) {
   };
 }
 
-// The image itself never carries the corner: on the list it is the card shell
-// (mobile) or the image button (desktop) that clips it. Walk up to whatever is
-// actually rounding the picture so the morph starts from the visible radius.
-function readClippedRadius(element) {
-  let node = element;
-  while (node && node !== document.body) {
-    const radius = getComputedStyle(node).borderRadius;
-    if (radius && radius !== '0px' && radius !== '0%') return radius;
-    node = node.parentElement;
-  }
-  return '0px';
-}
+// 2026-10-08: readClippedRadius 只被「二级→三级 hero morph」使用,头图删除后无调用方,一并移除。
 
 function SharedImageTransition({ transition, onDone }) {
   const [isMoving, setIsMoving] = useState(false);
@@ -2574,9 +2566,9 @@ function ShowcaseDeck({ items, openWorks }) {
   // card 1 to card 2 makes card 1 drop back and slide left again.
   // 2026-10-08:11 张卡比原先 7 张紧(步长 7.0%)，推挤量收小到 22px，避免邻卡
   // 被推到整排之外；抬起量按卡放大的比例回补到 -44px。
-  const PUSH = 22;      // px a neighbour shifts away from the hovered card
+  const PUSH = 24;      // px a neighbour shifts away from the hovered card
   const PUSH_CAP = 3;   // neighbours further than this many steps move no more
-  const LIFT = -44;     // px the hovered card rises off the floor
+  const LIFT = -48;     // px the hovered card rises off the floor
 
   return (
     <div
@@ -6889,7 +6881,7 @@ function DetailScroll({ workId, fallbackImages }) {
   );
 }
 
-function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, flip = '', onSwipeProject = null, onBack = null }) {
+function WorkDetailPage({ activeCategory, work, flip = '', onSwipeProject = null, onBack = null }) {
   const pageRef = useRef(null);
   const swipeRef = useRef({ down: false, startX: 0, dx: 0, lastDX: 0, vel: 0, moved: false });
   const backRef = useRef({ active: false, startY: 0, pulled: 0 });
@@ -7032,32 +7024,9 @@ function WorkDetailPage({ activeCategory, work, imageTransitionActive = false, f
       className={`work-detail-page${flip === 'enter' ? ' mw-flip-enter' : ''}${flip === 'exit' ? ' mw-flip-exit' : ''}`}
       {...swipeHandlers}
     >
-      <div className="detail-hero">
-        <LazyImage className={imageTransitionActive ? 'is-transitioning' : ''} data-detail-hero-image="true" src={work.detailHero} alt={work.title} />
-        {work.detailOverlay && (
-          <div className="detail-hero-copy" aria-label={`${work.detailOverlay.title} project information`}>
-            <div className="detail-hero-main">
-              <h1>{work.detailOverlay.title}</h1>
-              <p>{work.detailOverlay.project}</p>
-              <span>{work.detailOverlay.slogan}</span>
-            </div>
-            <div className="detail-hero-meta">
-              <div>
-                <b>{work.detailOverlay.styleTitle}</b>
-                <span>{work.detailOverlay.styleText}</span>
-              </div>
-              <div>
-                <b>{work.detailOverlay.toolTitle}</b>
-                <span>{work.detailOverlay.toolText}</span>
-              </div>
-            </div>
-            <div className="detail-hero-footer">
-              <span>{work.detailOverlay.footerLeft}</span>
-              <span>{work.detailOverlay.footerRight}</span>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* 2026-10-08(业主):三级页头图删除,PC / 移动端同规。
+          黑底即间距:.detail-content 的顶部 padding 承担原 hero 的高度,
+          PC 170px(≈参考图蓝框高度)、移动端 96px,之后直接进标题区。 */}
       <div className="detail-content">
         <div className="detail-title">
           <span>{activeCategory.label}</span>

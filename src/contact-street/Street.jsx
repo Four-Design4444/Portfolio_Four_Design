@@ -6,19 +6,37 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 
-// 尾屏 intro 灯光渐入（demo scene.js 里按真实 dt 累加：intro += dt/2.7，约 2.7s；
-// dt 被 clamp 到 0.05s，所以无法快进、只能按真实时间走完）。烧录**必须在首屏
-// loading 遮罩期间完成**，否则它会正好压在首屏入场动画上：实测满帧烧录在揭幕后
-// 3200ms 窗口里吃掉主线程 2095ms（65%），这就是"loading 结束后 hero 依旧长时间
-// 卡顿"的根因。
+// 尾屏「烧录」——把这条街的冷启动代价全部塞进首屏 loading 遮罩期间，遮罩掀开时
+// 用户只看到一条已经烧熟的街。为什么非要烧：这条街一旦满帧渲染就吃掉主线程
+// 80%~87%，修复前它是在**首屏揭幕那一刻**才开始满帧烧的，实测在揭幕后 3200ms
+// 窗口里独占主线程 2095ms（65%），正好压在 hero 入场动画上 —— 那就是"loading
+// 结束后 hero 依旧长时间卡顿"的根因。现在改为：烧录只允许发生在 loading 期间，
+// 且受控帧率（见 BURN_FRAME_MS），首屏揭幕后它绝不再抢主线程。
 //
-// ③ 判据用「累计场景时间」而不是墙钟毫秒：HOST_JS 用与 demo 同一套 dt 算法记账
-//    （见 __streetSceneSeconds），机器慢 / 掉帧时它会自然多等一会儿，而不是按一个
-//    拍脑袋的 ms 数提前揭幕留下"灯还没亮满"的尾巴。
-const BURN_SCENE_SECONDS = 2.9;  // ≥ demo 的 2.7s，留 7% 余量
+// 判据用「累计场景时间」而不是墙钟毫秒：HOST_JS 用与 demo 同一套 dt 算法记账
+// （见 __streetSceneSeconds），机器慢 / 掉帧时它会自然多等一会儿，而不是按一个
+// 拍脑袋的 ms 数提前揭幕，留下"灯还没亮满"的尾巴。
+//
+// 烧录帧预算 —— **首选判据**，不依赖任何内部状态。
+// demo 的灯光是一条 4.8s 周期的余弦脉冲（bundle 里 update(e,t) 的原文）：
+//     n = (0.5 - 0.5*cos(e*2π/4.8))^1.3      // e = 累计场景时间 nf
+//     mt.intensity = 0.015 + n*0.84           // 主光：近黑 → 全亮
+//     at.emissiveIntensity = n*1.865          // 车灯/腰线光带
+// n=0 在 e=0、4.8…；n=1（最亮）在 e=2.4、7.2…。而 demo 每帧最多推进 dt=0.05s
+// （Math.min((e-rf)/1e3||.016,.05)），所以：
+//     · 烧录档每帧恒定推进 0.05s 场景时间（HOST_JS 的 BURN_STEP_MS）；
+//     · 配合「armed 之前把场景钟冻住」（见渲染档位 effect），烧录的第 0 帧 nf≈0；
+//     · 于是 48 帧正好推到波峰 2.4s。取 52 帧留 4 帧余量：掉帧只会让 nf 偏小，
+//       而 2.4~2.6s 区间内 n 都在 0.96 以上，肉眼都是"全亮"。
+// 为什么不用"累计场景时间"当判据：实测我自己记的场景时间与 demo 内部的 nf 之间
+// 会差出一个固定偏移（同一份代码实测差 1.37s），按时间烧会停在半亮状态。
+const BURN_FRAMES = 52;
+// 若能读到 demo 真正的脉冲值 n（HOST_JS 的一次性钩子，见 __streetState，注意注入
+// 与 demo 模块存在竞态、不保证成功），就以此为准提前放行：n≥0.95 即"已经最亮"。
+const BURN_LIT = 0.95;
 // 烧录档的**渲染间隔**（不是场景推进速度 —— 后者恒为 50ms/帧，见 HOST_JS 的
-// BURN_STEP_MS）。帧数由 BURN_SCENE_SECONDS 定死（约 58 帧，即 CPU 总量定死 ≈0.6s），
-// 这个值只决定这 0.6s 摊在多少墙钟时间里：40ms ⇒ 约 2.9s、主线程占用约 20%，
+// BURN_STEP_MS）。帧数由 BURN_SCENE_SECONDS 定死（48 帧，即 CPU 总量定死 ≈0.5s），
+// 这个值只决定这 0.5s 摊在多少墙钟时间里：40ms ⇒ 约 2s、主线程占用约 25%，
 // 与 loading 动画和平共处；调小能更快揭幕，但占用升高、动画会顿。
 const BURN_FRAME_MS = 40;
 // 墙钟兜底：demo 彻底卡死或帧率异常时，加载页也不能被它拖到永远。
@@ -38,19 +56,24 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
   const [burned, setBurned] = useState(false);
   const burnedRef = useRef(false);
   const tailReportedRef = useRef(false);
+  const tailZeroRef = useRef(false);
 
   useEffect(() => {
     if (active) everActive.current = true;
     if (active || preload) setMounted(true);
   }, [active, preload]);
 
-  // 烧录协调：冷启动完成 → 受控帧率烧到 BURN_SCENE_SECONDS → 熄灭（除非用户已在尾屏）。
-  // 它完全发生在首屏 loading 遮罩期间，用户看不到，但揭幕时尾屏已经"熟"了。
+  // 烧录协调：冷启动完成 → 按帧预算烧到灯光波峰 → 熄灭（除非用户已在尾屏）。
+  // 它完全发生在首屏 loading 遮罩期间，用户看不到，但揭幕时尾屏已经"熟"了：
+  // 灯全亮、shader/纹理/阴影贴图全部就位，用户翻到尾屏的第一帧就是满帧好画面。
   useEffect(() => {
     if (!mounted || !armed || burnedRef.current) return undefined;
     let stopped = false;
     let poll = 0;
     const startedAt = performance.now();
+    const readWin = () => {
+      try { return (frameRef.current && frameRef.current.contentWindow) || null; } catch (_) { return null; }
+    };
     const finish = () => {
       if (stopped || burnedRef.current) return;
       burnedRef.current = true;
@@ -60,12 +83,22 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
     };
     const check = () => {
       if (stopped) return;
-      let secs = 0;
+      const win = readWin();
+      const frames = (win && win.__streetBurnFrames) || 0;
+      // 进度条如实反映烧录推进：0.75 → 1.0（单调，不会像按 n 那样来回跳）。
       try {
-        const win = frameRef.current && frameRef.current.contentWindow;
-        secs = (win && win.__streetSceneSeconds) || 0;
-      } catch (_) { secs = 0; }
-      if (secs >= BURN_SCENE_SECONDS || performance.now() - startedAt >= BURN_MAX_MS) { finish(); return; }
+        window.dispatchEvent(new CustomEvent('loading:progress', {
+          detail: { id: 'tail', weight: 2, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
+        }));
+      } catch (_) {}
+      // 能读到 demo 的脉冲值就以它为准（已经最亮就直接放行，不必凑满帧数）。
+      let n = -1;
+      try {
+        const st = win && win.__streetState;
+        if (st && st.charging) n = Number(st.charging.phase);
+      } catch (_) { n = -1; }
+      const wall = performance.now() - startedAt;
+      if (frames >= BURN_FRAMES || (n >= 0 && n >= BURN_LIT) || wall >= BURN_MAX_MS) { finish(); return; }
       poll = window.setTimeout(check, 100);
     };
     poll = window.setTimeout(check, 100);
@@ -246,6 +279,21 @@ const HOST_JS = `
 (function () {
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
+
+  // ── 一次性诊断通道 ────────────────────────────────────────────────────
+  // demo 把运行状态挂在内部对象 zd 上（Object.defineProperty(zd, 'lighting', …)），
+  // 但从不导出到 window，于是"灯光渐入到底走完没有"在外部无法观测。这里在
+  // Object.defineProperty 上挂一个**一次性**钩子把 zd 捞出来，捞到就立刻还原 ——
+  // 零稳态开销，demo 产物一个字节都不动。此后可读 __streetState.lighting /
+  // .frameMs / .drawCalls（探针与人工排查都用它）。
+  var rawDefineProperty = Object.defineProperty;
+  Object.defineProperty = function (o, k, d) {
+    if (k === 'lighting' && o && typeof o === 'object' && o.frameMs !== undefined) {
+      window.__streetState = o;
+      Object.defineProperty = rawDefineProperty;
+    }
+    return rawDefineProperty.apply(this, arguments);
+  };
 
   // ── 后台降频 + 场景时间记账（宿主侧叠加，不改动 demo 产物）──────────────
   // 这条街景是 Three.js 场景，一旦挂上就每帧全量渲染：即使用户停在首屏看视频、
@@ -614,7 +662,10 @@ function useStreetWheelBridge(enabled) {
       // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
       try { setArmed(true); } catch (_) {}
     };
-    try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0 } })); } catch (_) {}
+    if (!tailZeroRef.current) {
+      tailZeroRef.current = true;
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0 } })); } catch (_) {}
+    }
 
     const attempt = () => {
       if (stopped) return;

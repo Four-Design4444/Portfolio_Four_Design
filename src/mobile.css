@@ -1921,54 +1921,15 @@ html[data-device="mobile"] .mw-under-return {
   will-change: transform;
 }
 
-html[data-device="mobile"] .detail-hero {
-  width: 100%;
-  border-radius: 0 0 10px 10px;
-}
-
-html[data-device="mobile"] .detail-hero-copy {
-  grid-template-rows: 1fr auto;
-  padding: 70px 20px 20px;
-}
-
-html[data-device="mobile"] .detail-hero-copy::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.66) 0%,
-    rgba(0, 0, 0, 0.3) 40%,
-    rgba(0, 0, 0, 0.62) 100%
-  );
-}
-
-html[data-device="mobile"] .detail-hero-main {
-  align-self: start;
-  max-width: 88%;
-  margin-top: 4vh;
-}
-
-html[data-device="mobile"] .detail-hero-main h1 {
-  font-size: clamp(30px, 9.4vw, 46px);
-}
-
-html[data-device="mobile"] .detail-hero-main p {
-  margin-top: 16px;
-  font-size: 16px;
-}
-
-html[data-device="mobile"] .detail-hero-main span {
-  margin-top: 8px;
-  font-size: 13px;
-}
-
+/* 2026-10-08(业主):三级页头图删除(PC / 移动端同规),原 .detail-hero /
+   .detail-hero-copy(含 ::before 渐变)/ .detail-hero-main 全族样式移除。
+   顶部黑底间距由 .detail-content 的 padding-top 承担:导航栏底(52px)之下
+   再留 ~44px 呼吸,与 PC 的 170px 同一「黑底即间距」的思路。 */
 html[data-device="mobile"] .detail-content {
   width: auto;
   margin-left: max(20px, env(safe-area-inset-left));
   margin-right: max(20px, env(safe-area-inset-right));
-  padding: 64px 0 108px;
+  padding: 96px 0 108px;
 }
 
 html[data-device="mobile"] .detail-title {
