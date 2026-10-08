@@ -230,13 +230,23 @@ const HOST_CSS = `
 .panel-signature .ps-sub { color: #4e6b82; }
 
 /* ── ⑧ 2026-10-09 二轮修正 ───────────────────────────────────────────────── */
-/* 修2：面板正文垂直居中。#detail 原本是从顶往下排（padding-top 132px/18vh），
-   内容短时整块偏上。flex 列 + 正文上下 margin:auto：返回按钮仍钉顶、落款仍
-   钉底、正文以剩余空间垂直居中。只在桌面段生效，移动端面板是底部 57% 抽屉，
-   保持原版式。 */
+/* 修2（三轮重做）：面板整组垂直居中。#detail 原本是从顶往下排（padding-top
+   132px / ≥1600px 时 18vh），内容短时整块偏上。上一版用 flex + 正文
+   margin:auto —— 那会把「返回街角」和落款分别钉到面板上下边缘（业主指出
+   两者应保持原有间距）。改为：整组（返回按钮 + 正文 + 落款）一起居中，
+   元素间保持 demo 原始间距（.back margin-bottom:55px、.panel-signature
+   margin-top:45px）。safe center 防止内容超高时顶部被裁（不支持时整体
+   回退为顶对齐 = demo 原状）。padding-top 归一到 132px：居中布局下 18vh
+   的额外顶距会把整组往下拽出不对称。只在桌面段生效，移动端面板是底部
+   57% 抽屉，保持原版式。 */
 @media (min-width: 701px) {
-  #detail { display: flex; flex-direction: column; }
-  #detail-content { margin-top: auto !important; margin-bottom: auto !important; }
+  #detail {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+    padding-top: 132px;
+    padding-bottom: 120px;
+  }
 }
 /* 修3：demo 打开面板会编程 focus「返回街角」，:focus-visible 的 2px 描边框
    （outline 2px var(--accent)）在参考图里没有 —— 去掉。 */

@@ -6844,17 +6844,15 @@ function WorksPage({
         </div>
 
         {/* stage 底部信息行 + 页脚点缀（自 demo 移入，纯装饰）
-            2026-10-09 业主标注改版：分类序号按导航左右顺序（categories 数组序）、
-            footer 左侧换成品牌文案、右侧 16:9/SINGLE SCREEN → 2026/FOUR DESIGN、
-            移除 V2.0.0 徽章。 */}
+            2026-10-09 业主标注改版（二次澄清）：**不加**分类序号；斜杠后的数字
+            不是作品数，而是该分类按导航左右顺序（categories 数组序）的序号：
+            UI 设计→01、VI 设计→02、3D 设计→03、AIGC→04。 */}
         <div className="works-orbit-stage-meta">
           <div className="works-orbit-collection-label">
             <span className="works-orbit-dot" />
-            <span>{String(categories.findIndex((c) => c.id === activeCategory.id) + 1).padStart(2, '0')}</span>
-            <span className="works-orbit-divider">·</span>
             <span>{activeCategory.cn}</span>
             <span className="works-orbit-divider">/</span>
-            <span>{String(works.length).padStart(2, '0')} PROJECTS</span>
+            <span>{String(categories.findIndex((c) => c.id === activeCategory.id) + 1).padStart(2, '0')} PROJECTS</span>
           </div>
           <span className="works-orbit-hint">HOVER TO FOCUS<span className="works-orbit-hint-line" /></span>
         </div>
