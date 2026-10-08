@@ -1056,10 +1056,24 @@ html[data-device="mobile"] .mob-showcase {
    innerHeight 同源 → 地址栏任意状态都不会再露边。这是**纯数值替换**:在
    --vh 本来就正确的设备(含全部 PC)读出来与原值完全一致,PC 端零变化。
    老浏览器不支持 dvh 时整条声明被丢弃,自动回退 styles.css 的 --vh 规则。 */
-html[data-device="mobile"][data-paging="on"] .hero-video-stage,
-html[data-device="mobile"][data-paging="on"] .profile-shot,
-html[data-device="mobile"][data-paging="on"] .section.projects,
-html[data-device="mobile"][data-paging="on"] .contact-page {
+/* ⚠ 必须**与 data-paging 无关**(2026-10-08 业主第四次反馈"进二级时底部色块"后定案):
+   这条若挂在 [data-paging="on"] 上,进入二级的瞬间 route 切 works →
+   usePagingEnabled(route.page === 'home') 把 data-paging 翻成 off →
+   **styles.css 的 .section.projects{height:calc(var(--vh)*100)} 与本条同时失效**
+   → 分屏退回"内容高"(.mob-showcase 的 100dvh-40 再加下方 padding,随视口落在
+   877~898 之间),不再等于视口高 → 分屏底边与视口底之间裂开一条缝:
+   视口高时露下一屏(.contact-page,#101c26 偏蓝 —— 就是业主看到的"色块"),
+   视口矮时反而把后面整段顶下去(布局跳变)。
+   实测(逐帧探针 outputs/probe-entry-band.mjs,点卡进二级全程):
+     430×932 → 底边比视口底高 34.3px(下一屏从底部顶上来 34px)
+     402×874 → -15px | 393×852 → -29.2px | 390×844 → -33.5px
+   paging=on 时恒等于视口高(932/874/852/844),paging=off 立刻变 897.7/889/881.2/877.5。
+   → 高度不再随 data-paging 变,翻转时零重排,缝合上。
+   PC 端没有 [data-device="mobile"] 前缀,零改动。 */
+html[data-device="mobile"] .hero-video-stage,
+html[data-device="mobile"] .profile-shot,
+html[data-device="mobile"] .section.projects,
+html[data-device="mobile"] .contact-page {
   height: 100dvh;
   min-height: 100dvh;
 }
@@ -1668,6 +1682,13 @@ html[data-device="mobile"] .works-index-page.mw-armed .mw-slide { transition: no
 html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
   transition-duration: var(--mw-emerge-dur, 700ms);
 }
+/* 2026-10-08: 下拉 icon 只允许在**落定后**出现。此前只有 entering/leaving 隐藏它,
+   而入场第一个相位 mw-armed(useLayoutEffect 里写初始姿态、持续到双 rAF 后才切
+   entering)漏了 —— .mw-hint 基态是常驻 bob 动画(opacity 0.7↔1),于是进二级
+   起跑的那几帧它**真的画在屏幕上**,业主捕捉到"二级的下拉 icon 瞬间闪一下又消失"。
+   把 armed 与 mw-handoff(一级层还在场、二级正在淡入的整个交接窗口)一并压掉。 */
+html[data-device="mobile"] .works-index-page.mw-armed .mw-hint,
+html[data-device="mobile"] .works-index-page.mw-handoff .mw-hint { opacity: 0; animation: none; }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-hint { opacity: 0; animation: none; }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-stage { pointer-events: none; }
 /* 离场(二级→一级)是这个入场的**镜像**:主卡与两张副卡一起收拢回它们在一级

@@ -4857,8 +4857,12 @@ html[data-paging="on"] .contact-page {
   height: clamp(260px, 46vh, 560px);
   overflow: hidden; /* 溢出即裁切,绝不产生滚动条 */
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.78) 34%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.14) 86%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.78) 34%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.14) 86%, transparent 100%);
+  /* 整面地的纵深衰减:接触线最实,越远越淡。
+     ⚠ 这一层**没有**被翻转(翻转在子级 .works-orbit-floor-mirror 上),
+     所以这里的 to bottom / 180deg 就是视觉上的"上实下虚",方向天然正确,
+     是整个反射唯一的纵深主控。子级两层只负责"清晰度分层"(见下)。 */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
 }
 
 /* 地平线:一条冷光亮带,读出"地面在这里"(压暗,避免蓝雾感) */
@@ -4950,22 +4954,26 @@ html[data-paging="on"] .contact-page {
 }
 
 /* 近层:主镜像 —— 贴接触线处最实、可辨认(高反射地面),向下逐层淡出。
-   ⚠ 2026-10-08 修:旧值 blur(0.7)+brightness(0.72) 且 mask 0.16@52%→0@72%
-   配合远层的 blur(12) 把倒影压成一团「暗灰雾」,既暗又糊,看不出是镜像。
-   现改为清晰可辨的主镜像(blur 0.6 / brightness 0.86),遮罩铺满整条倒影。 */
+   ⚠⚠ 2026-10-08 关键修(mask 方向):父级 .works-orbit-floor-mirror 带 scaleY(-1),
+   子级(img)自己的 mask 会被这层翻转**一并镜像** —— 于是 to bottom 的
+   "上实下虚"实际渲染成"上虚下实",把接触线附近(卡片最底那行文字)整段抹掉,
+   只剩中下部可见,正好是业主反馈的"反射不到卡片最底部文字"。
+   修法:这里把渐变方向写成 to top,翻转后视觉上才回到"上实下虚=距离优先"。
+   (整面地的纵深主控在 .works-orbit-floor 那层,方向天然正确;本层只做清晰度。) */
 .works-orbit-floor-mirror-near {
-  filter: blur(0.6px) brightness(0.86) saturate(1.05);
+  filter: blur(0.5px) brightness(0.9) saturate(1.05);
   opacity: 1;
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.97) 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.36) 64%, rgba(0, 0, 0, 0.10) 88%, transparent 100%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.97) 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.36) 64%, rgba(0, 0, 0, 0.10) 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.84) 30%, rgba(0, 0, 0, 0.55) 58%, rgba(0, 0, 0, 0.26) 82%, transparent 100%);
 }
 
-/* 远层:仅作柔光景深陪衬(压暗 + 模糊),不能盖过近层,否则倒影糊成一片 */
+/* 远层:仅作柔光景深陪衬(压暗 + 模糊),不能盖过近层,否则倒影糊成一片。
+   同样因父级 scaleY(-1) 需写成 to top。 */
 .works-orbit-floor-mirror-far {
-  filter: blur(9px) brightness(0.42) saturate(1.02);
+  filter: blur(9px) brightness(0.45) saturate(1.02);
   opacity: 0.42;
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.32) 50%, transparent 100%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.42) 0%, rgba(0, 0, 0, 0.32) 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.34) 48%, transparent 100%);
 }
 
 /* --- 页面框架点缀文字（自 works-v2.0.0 demo 移入，纯装饰） --- */
