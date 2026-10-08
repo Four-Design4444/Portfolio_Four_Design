@@ -2312,7 +2312,8 @@ h2 {
   font-weight: 900;
   letter-spacing: 0;
   color: #ffffff;
-  text-transform: uppercase;
+  /* 2026-10-09:业主要求大小写严格按文案「Project Display」显示，不再强制全大写。 */
+  text-transform: none;
 }
 
 .projects-heading span {
@@ -2413,17 +2414,35 @@ h2 {
 
 /* Reflections are deliberately independent from the card transform. This
    creates the visual gap that says "floating", while --mirror-push keeps the
-   reflection travelling with the card when the deck fans open. */
+   reflection travelling with the card when the deck fans open.
+
+   2026-10-09 重构：渐隐 mask 从每份倒影上移到 .showcase-deck-mirrors 容器统一做。
+   原来每份倒影自身最大 alpha 只有 0.58，相邻倒影的重叠区会互相透底（11 的倒影
+   半透明，透出 10 的倒影 = 双重曝光）。现在倒影各自完全不透明、按卡的 z 序叠放
+   （右压左，hover 卡置顶），遮挡关系与真实卡片一致；容器再整体做垂直渐隐。 */
+.showcase-deck-mirrors {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* 顶边 = 倒影接触线：卡中心 40% + 卡半高（--deck-w×1.172）+ 37px 悬浮缝。
+     高度 = 倒影高度（--deck-w×0.75×3.125 = ×2.344，deck 高 = 宽/3.125），
+     保证容器 box 与旧的单份倒影 box 等高，渐隐坡度与旧版逐像素一致。 */
+  top: calc(40% + var(--deck-w) * 1.172 + 37px);
+  height: calc(var(--deck-w) * 2.344);
+  z-index: 1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.2) 38%, transparent 82%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.2) 38%, transparent 82%);
+}
+
 .showcase-deck-reflection {
   position: absolute;
   left: var(--x);
-  /* 倒影顶边**由卡宽反算**，不再写死百分比：
-       卡中心 40% + 卡半高（卡宽×(3/4)÷0.32 是整卡高占 deck 高百分比，取半）+ 34px 悬浮缝。
-     卡一放大 / 一换比例，如果倒影还是死值，卡底就会插进倒影里（实测会叠 6px）。 */
-  top: calc(40% + var(--deck-w) * 1.172 + 37px);
+  top: 0;
   width: var(--deck-w);
   aspect-ratio: 4 / 3;
-  z-index: 1;
+  /* 与对应卡片同 z：右卡压左卡、hover 卡置顶 —— 倒影的遮挡关系跟卡片一致。 */
+  z-index: var(--z);
   overflow: hidden;
   border-radius: 12px;
   clip-path: inset(0 round 12px);
@@ -2434,8 +2453,6 @@ h2 {
   transition:
     opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
-  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.2) 38%, transparent 82%);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.2) 38%, transparent 82%);
 }
 
 .showcase-deck.is-visible .showcase-deck-reflection {

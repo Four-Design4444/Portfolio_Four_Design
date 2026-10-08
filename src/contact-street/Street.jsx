@@ -407,80 +407,11 @@ const HOST_JS = `
     });
   };
 
-  // ── ⑦ 详情面板文案严格替换（2026-10-09，按业主参考图四张）─────────────────
-  // demo 的四个面板模板（studio/phone/mail/car）硬编码在 bundle 里、各写一段
-  // innerHTML 到 #detail-content，产物字节级不可改 ⇒ 宿主侧挂 MutationObserver
-  // 跟随重写：demo 每写一次，我们紧接着整体替换成参考图文案（连它随后追加的
-  // .gesture-note「单击画面返回街角 · 拖动换个角度」一并清掉 —— 参考图里没有）。
-  // 防回环：替换前打 data-host-detail 标记，标记与当前 mode 相同就不再动。
-  // 交互不自己实现：data-copy / data-switch 是 demo 挂在祖先上的事件委托，
-  // 替换内容不影响；tel / mailto 带原参重建（mailto subject 与 demo 一致）。
-  // 联系方式从 site-config.json 读（与 demo 同源同参），读不到用兜底常量。
-  var CFG = { phone: '18219315597', email: 'Four4444.Design@gmail.com' };
-  try {
-    fetch('./site-config.json').then(function (r) { return r.json(); }).then(function (c) {
-      if (c && c.phone) CFG.phone = String(c.phone);
-      if (c && c.email) CFG.email = String(c.email);
-      applyDetailCopy();
-    }).catch(function () {});
-  } catch (_) {}
-  var fmtPhone = function (p) {
-    try { return p.replace(/(\d{3})(\d{4})(\d{4})/, '$1 $2 $3'); } catch (_) { return p; }
-  };
-  var MAIL_SUBJECT = encodeURIComponent('你好 Four Design，聊聊一个新想法');
-  var mailHref = function () { return 'mailto:' + CFG.email + '?subject=' + MAIL_SUBJECT; };
-  var detailHtml = function (mode) {
-    if (mode === 'studio') return '<p class="detail-kicker">FOUR DESIGN</p>'
-      + '<h2 id="detail-title" class="detail-title">让想法，<br>有自己的样子。</h2>'
-      + '<div class="detail-rule"></div>'
-      + '<div class="services"><span>品牌设计</span><span>产品设计</span><span>视觉叙事</span></div>'
-      + '<div class="actions"><button class="primary-action" data-switch="mail">聊聊你的想法 <span>↗</span></button></div>';
-    if (mode === 'phone') return '<p class="detail-kicker">LET&#39;S TALK</p>'
-      + '<h2 id="detail-title" class="detail-title">链接，<br>从此刻开启。</h2>'
-      + '<div class="detail-rule"></div>'
-      + '<div class="contact-label">GIVE ME A CALL</div>'
-      + '<a class="contact-value" href="tel:' + CFG.phone + '">' + fmtPhone(CFG.phone) + '</a>'
-      + '<div class="actions"><a class="primary-action" href="tel:' + CFG.phone + '">拨打电话 <span>↗</span></a>'
-      + '<button class="copy" data-copy>复制号码 ↗</button></div>';
-    if (mode === 'mail') return '<p class="detail-kicker">WRITE A LETTER</p>'
-      + '<h2 id="detail-title" class="detail-title">把想法，<br>轻轻寄到这里。</h2>'
-      + '<div class="detail-rule"></div>'
-      + '<div class="contact-label">A LETTER TO FOUR</div>'
-      + '<a class="contact-value email" href="' + mailHref() + '">' + CFG.email + '</a>'
-      + '<div class="actions"><a class="primary-action" href="' + mailHref() + '">写一封信 <span>↗</span></a>'
-      + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
-    if (mode === 'car') return '<p class="detail-kicker">FOUR DESIGN</p>'
-      + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'
-      + '<div class="detail-rule"></div>'
-      + '<p class="detail-copy">每一次停歇，都是为了更远的抵达。<br>积蓄能量，勇敢奔赴那个你期待的未来。</p>'
-      + '<p class="car-note">#一个留给自己的小彩蛋</p>';
-    return null;
-  };
-  var applyDetailCopy = function () {
-    var dc = document.getElementById('detail-content');
-    if (!dc) return;
-    var mode = document.body.getAttribute('data-mode');
-    if (!mode || mode === 'overview') return;
-    if (dc.getAttribute('data-host-detail') === mode) return;
-    var html = detailHtml(mode);
-    if (!html) return;
-    dc.setAttribute('data-host-detail', mode);
-    dc.innerHTML = html;
-  };
-  try {
-    var detailHost = document.getElementById('detail-content');
-    if (detailHost && window.MutationObserver) {
-      new MutationObserver(function () { applyDetailCopy(); })
-        .observe(detailHost, { childList: true });
-    }
-  } catch (_) {}
-
-  // 面板落款（#detail 底部静态节点，demo 从不回写）按参考图改为两段式，
-  // 去掉状态点与原「THE LIGHT IS ON. COME SAY HELLO.」标语。
-  try {
-    var ps = document.querySelector('.panel-signature');
-    if (ps) ps.innerHTML = '<span class="ps-name">FOUR DESIGN</span><span class="ps-sub">INDEPENDENT CREATIVE STUDIO</span>';
-  } catch (_) {}
+  // ── ⑦ 详情面板文案替换 —— 不在这里做！HOST_JS 是每窗口只跑一次的一次性
+  // 脚本，而 iframe 会先停在 about:blank 再导航到真文档：就算把 observer 挂上，
+  // 它也随 about:blank 文档一起销毁，真文档里这段代码又因 __streetHostHooked
+  // 早退、绝不重跑。所以 DOM 依赖的改写全部放在 React 侧 injectDetailCopy()
+  // （随文档重注入，见该函数注释）。
 
   var post = function (dy, cx, cy) {
     try {
@@ -670,6 +601,100 @@ function injectIntroCopy(doc) {
   return true;
 }
 
+// ── ⑦ 详情面板文案严格替换（2026-10-09，按业主参考图四张）────────────────────
+// demo 的四个面板模板（studio/phone/mail/car）硬编码在 bundle 里、每次 setMode
+// 各写一段 innerHTML 到 #detail-content（随后再 append 一条 .gesture-note），
+// 产物字节级不可改 ⇒ 宿主侧用 MutationObserver 跟随重写：demo 每写一次，
+// 我们紧接着整体替换成参考图文案（.gesture-note「单击画面返回街角」参考图里
+// 没有，随整体替换一起清掉）。防回环：替换前打 data-host-detail 标记，标记与
+// 当前 mode 相同就不再动。
+// ⚠ 为什么放 React 侧而不放 HOST_JS：HOST_JS 每窗口只跑一次，而 iframe 先停在
+//   about:blank 再导航到真文档 —— 挂在 about:blank 里的 observer 会随文档销毁，
+//   真文档里 HOST_JS 又因 __streetHostHooked 早退。injectDetailCopy 与
+//   injectStreetQuick 同架构：幂等、跟着文档走、每次注入都重试。
+// 交互不自己实现：data-copy / data-switch 是 demo 挂在 #detail 祖先上的事件
+//   委托，替换内容不影响；tel / mailto 带原参重建（mailto subject 与 demo 一致）。
+// 联系方式从 site-config.json 读（与 demo 同参），读到前用兜底常量 —— 两者
+//   目前数值一致，所以即便 fetch 失败也显示正确。
+const STREET_CFG_FALLBACK = { phone: '18219315597', email: 'Four4444.Design@gmail.com' };
+let streetCfg = { ...STREET_CFG_FALLBACK };
+try {
+  fetch(`${import.meta.env.BASE_URL}contact-street/site-config.json`)
+    .then((r) => r.json())
+    .then((c) => {
+      if (c && c.phone) streetCfg = { ...streetCfg, phone: String(c.phone) };
+      if (c && c.email) streetCfg = { ...streetCfg, email: String(c.email) };
+    })
+    .catch(() => {});
+} catch (_) { /* 保持兜底值 */ }
+
+function formatStreetPhone(p) {
+  try { return p.replace(/(\d{3})(\d{4})(\d{4})/, '$1 $2 $3'); } catch (_) { return p; }
+}
+
+function detailHtmlFor(mode) {
+  const mailHref = `mailto:${streetCfg.email}?subject=${encodeURIComponent('你好 Four Design，聊聊一个新想法')}`;
+  if (mode === 'studio') return '<p class="detail-kicker">FOUR DESIGN</p>'
+    + '<h2 id="detail-title" class="detail-title">让想法，<br>有自己的样子。</h2>'
+    + '<div class="detail-rule"></div>'
+    + '<div class="services"><span>品牌设计</span><span>产品设计</span><span>视觉叙事</span></div>'
+    + '<div class="actions"><button class="primary-action" data-switch="mail">聊聊你的想法 <span>↗</span></button></div>';
+  if (mode === 'phone') return `<p class="detail-kicker">LET&#39;S TALK</p>`
+    + '<h2 id="detail-title" class="detail-title">链接，<br>从此刻开启。</h2>'
+    + '<div class="detail-rule"></div>'
+    + '<div class="contact-label">GIVE ME A CALL</div>'
+    + `<a class="contact-value" href="tel:${streetCfg.phone}">${formatStreetPhone(streetCfg.phone)}</a>`
+    + `<div class="actions"><a class="primary-action" href="tel:${streetCfg.phone}">拨打电话 <span>↗</span></a>`
+    + '<button class="copy" data-copy>复制号码 ↗</button></div>';
+  if (mode === 'mail') return '<p class="detail-kicker">WRITE A LETTER</p>'
+    + '<h2 id="detail-title" class="detail-title">把想法，<br>轻轻寄到这里。</h2>'
+    + '<div class="detail-rule"></div>'
+    + '<div class="contact-label">A LETTER TO FOUR</div>'
+    + `<a class="contact-value email" href="${mailHref}">${streetCfg.email}</a>`
+    + `<div class="actions"><a class="primary-action" href="${mailHref}">写一封信 <span>↗</span></a>`
+    + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
+  if (mode === 'car') return '<p class="detail-kicker">FOUR DESIGN</p>'
+    + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'
+    + '<div class="detail-rule"></div>'
+    + '<p class="detail-copy">每一次停歇，都是为了更远的抵达。<br>积蓄能量，勇敢奔赴那个你期待的未来。</p>'
+    + '<p class="car-note">#一个留给自己的小彩蛋</p>';
+  return null;
+}
+
+function applyDetailCopy(doc) {
+  const dc = doc.getElementById('detail-content');
+  if (!dc) return;
+  const mode = doc.body.getAttribute('data-mode');
+  if (!mode || mode === 'overview') return;
+  if (dc.getAttribute('data-host-detail') === mode) return;
+  const html = detailHtmlFor(mode);
+  if (!html) return;
+  dc.setAttribute('data-host-detail', mode);
+  dc.innerHTML = html;
+}
+
+function injectDetailCopy(doc) {
+  if (!doc || !doc.body) return false;
+  // 面板落款（#detail 底部静态节点，demo 从不回写）按参考图改为两段式，
+  // 去掉状态点与原「THE LIGHT IS ON. COME SAY HELLO.」标语。
+  const ps = doc.querySelector('.panel-signature');
+  if (ps && !ps.querySelector('.ps-name')) {
+    ps.innerHTML = '<span class="ps-name">FOUR DESIGN</span><span class="ps-sub">INDEPENDENT CREATIVE STUDIO</span>';
+  }
+  const dc = doc.getElementById('detail-content');
+  if (!dc) return false;
+  if (!dc.__hostDetailObserver) {
+    try {
+      dc.__hostDetailObserver = new MutationObserver(() => {
+        try { applyDetailCopy(doc); } catch (_) { /* noop */ }
+      });
+      dc.__hostDetailObserver.observe(dc, { childList: true });
+    } catch (_) { return false; }
+  }
+  applyDetailCopy(doc);
+  return true;
+}
+
 function injectStreetQuick(doc) {
   if (!doc || !doc.body) return false;
   if (doc.getElementById('street-quick')) return true;
@@ -801,7 +826,7 @@ function useStreetWheelBridge(enabled) {
         }
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
         //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。
-        try { injectStreetQuick(doc); injectIntroCopy(doc); } catch (_) { /* onLoad 兜底 */ }
+        try { injectStreetQuick(doc); injectIntroCopy(doc); injectDetailCopy(doc); } catch (_) { /* onLoad 兜底 */ }
 if (!readyDone) {
           // 双信号就绪判定（任一成立即可）：
           //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
@@ -879,6 +904,7 @@ function applyHostOverrides(iframe) {
     injectHostJs(doc);
     injectStreetQuick(doc);
     injectIntroCopy(doc);
+    injectDetailCopy(doc);
   } catch (_) {
     /* 同源 public 资源可读；跨域时静默跳过 */
   }

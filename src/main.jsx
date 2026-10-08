@@ -2570,18 +2570,46 @@ function ShowcaseDeck({ items, openWorks }) {
   const PUSH_CAP = 3;   // neighbours further than this many steps move no more
   const LIFT = -48;     // px the hovered card rises off the floor
 
+  // 2026-10-09:倒影与卡片拆成两层渲染。渐隐 mask 挂在 .showcase-deck-mirrors
+  // 容器上统一做（见 styles.css），倒影本身不透明 —— 否则相邻倒影的重叠区会
+  // 互相透底（业主指出：11 卡压着 10 卡，倒影里却能看到 10 的像，逻辑错误）。
+  const mirrorOf = (index) => {
+    const active = index === hovered;
+    const distance = index - hovered;
+    const push = hovered < 0 || active
+      ? 0
+      : Math.sign(distance) * Math.min(Math.abs(distance), PUSH_CAP) * PUSH;
+    return { active, push };
+  };
+
   return (
     <div
       ref={stageRef}
       className={`showcase-deck${visible ? ' is-visible' : ''}`}
       onPointerLeave={() => setHovered(-1)}
     >
+      <div className="showcase-deck-mirrors" aria-hidden="true">
+        {items.map(({ project, cover }, index) => {
+          const { active, push } = mirrorOf(index);
+          return (
+            <span
+              key={project.id}
+              className={`showcase-deck-reflection${active ? ' is-active' : ''}`}
+              style={{
+                '--x': `${project.deck.left}%`,
+                '--rot': active ? 0 : project.deck.rot,
+                '--y': active ? LIFT : project.deck.restY,
+                '--mirror-push': `${push}px`,
+                '--z': active ? 60 : project.deck.z
+              }}
+            >
+              <LazyImage src={cover} alt="" aria-hidden="true" />
+            </span>
+          );
+        })}
+      </div>
       {items.map(({ project, cover }, index) => {
-        const active = index === hovered;
-        const distance = index - hovered;
-        const push = hovered < 0 || active
-          ? 0
-          : Math.sign(distance) * Math.min(Math.abs(distance), PUSH_CAP) * PUSH;
+        const { active, push } = mirrorOf(index);
 
         const deckVars = {
           '--x': `${project.deck.left}%`,
@@ -2594,43 +2622,32 @@ function ShowcaseDeck({ items, openWorks }) {
         };
 
         return (
-          <React.Fragment key={project.id}>
-            {/* The reflection belongs to the floor, not to the card. It follows
-                the card horizontally, but stays on the fixed ground plane while
-                the card itself can float higher on hover. */}
-            <span
-              className={`showcase-deck-reflection${active ? ' is-active' : ''}`}
-              aria-hidden="true"
-              style={{ ...deckVars, '--mirror-push': `${push}px` }}
+          <div
+            key={project.id}
+            className={`showcase-deck-card${active ? ' is-active' : ''}`}
+            style={deckVars}
+            onPointerEnter={() => setHovered(index)}
+            onFocus={() => setHovered(index)}
+            onBlur={(event) => {
+              // Only drop the card when focus truly leaves it, not on the
+              // card -> button hand-off inside the same card.
+              if (!event.currentTarget.contains(event.relatedTarget)) setHovered(-1);
+            }}
+          >
+            <button
+              type="button"
+              className="showcase-deck-button"
+              onClick={() => openWorks(project.category)}
             >
               <LazyImage src={cover} alt="" aria-hidden="true" />
-            </span>
-            <div
-              className={`showcase-deck-card${active ? ' is-active' : ''}`}
-              style={deckVars}
-              onPointerEnter={() => setHovered(index)}
-              onFocus={() => setHovered(index)}
-              onBlur={(event) => {
-                // Only drop the card when focus truly leaves it, not on the
-                // card -> button hand-off inside the same card.
-                if (!event.currentTarget.contains(event.relatedTarget)) setHovered(-1);
-              }}
-            >
-              <button
-                type="button"
-                className="showcase-deck-button"
-                onClick={() => openWorks(project.category)}
-              >
-                <LazyImage src={cover} alt="" aria-hidden="true" />
-                <span className="showcase-deck-scrim" aria-hidden="true" />
-                <span className="showcase-deck-copy">
-                  <em>{project.index}</em>
-                  <strong>{project.title}</strong>
-                  <b>{project.meta}</b>
-                </span>
-              </button>
-            </div>
-          </React.Fragment>
+              <span className="showcase-deck-scrim" aria-hidden="true" />
+              <span className="showcase-deck-copy">
+                <em>{project.index}</em>
+                <strong>{project.title}</strong>
+                <b>{project.meta}</b>
+              </span>
+            </button>
+          </div>
         );
       })}
     </div>
