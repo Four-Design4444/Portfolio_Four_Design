@@ -2137,7 +2137,8 @@ h2 {
 .display-reveal-title,
 .display-reveal-subtitle {
   opacity: 0;
-  transform-origin: left center;
+  /* 2026-10-09:标题改居中后，reveal 的原点也从左改中（该类只有首页作品标题在用）。 */
+  transform-origin: center center;
   will-change: opacity, transform, clip-path;
 }
 
@@ -2293,7 +2294,8 @@ h2 {
 
 .projects-heading {
   display: grid;
-  justify-items: start;
+  /* 2026-10-09:「作品展示」徽章已删，标题改为 Works Display 并水平居中。 */
+  justify-items: center;
   gap: 16px;
   opacity: 0;
   transform: translate3d(0, 34px, 0);

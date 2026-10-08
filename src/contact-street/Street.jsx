@@ -206,6 +206,28 @@ const HOST_CSS = `
 .intro-foot span:first-child { color: #f0f1f1; }
 .intro-foot span:last-child { color: #4e6b82; }
 
+/* ── ⑦ 详情面板文案按参考图严格替换（2026-10-09）───────────────────────────
+   四个面板的文本由 HOST_JS 的 MutationObserver 重写（demo 的 innerHTML 模板
+   照常运行，我们在其后整体替换 #detail-content），这里只补三处版式：
+   · kicker 前的短横线 —— 参考图四张的 eyebrow 都带一条 39px 线（与 .intro
+     .tiny-line 同款、同色 #6784A6）；
+   · car 面板的「#一个留给自己的小彩蛋」注释行；
+   · 面板落款改两段式 FOUR DESIGN / INDEPENDENT CREATIVE STUDIO（去掉状态点，
+     参考图四张落款全同）。 */
+.detail-kicker:before {
+  content: "";
+  display: inline-block;
+  width: 39px;
+  height: 1px;
+  background: #6784A6;
+  margin-right: 12px;
+  vertical-align: 4px;
+}
+.car-note { margin: 26px 0 0; color: #e6ecf1; font-size: 11px; letter-spacing: 1.2px; font-weight: 600; }
+.panel-signature { color: #6f7d88; gap: 14px; }
+.panel-signature .ps-name { color: #f0f1f1; font-weight: 600; }
+.panel-signature .ps-sub { color: #4e6b82; }
+
 /* ── ⑤ 棕黄点缀 → 冷蓝点缀（锚点 #6784A6，明度不变） ─────────────────────── */
 :root { --accent: #a4c2e4; }
 .tiny-line { background: #6784A6 !important; }
@@ -384,6 +406,81 @@ const HOST_JS = `
       cb(axis);
     });
   };
+
+  // ── ⑦ 详情面板文案严格替换（2026-10-09，按业主参考图四张）─────────────────
+  // demo 的四个面板模板（studio/phone/mail/car）硬编码在 bundle 里、各写一段
+  // innerHTML 到 #detail-content，产物字节级不可改 ⇒ 宿主侧挂 MutationObserver
+  // 跟随重写：demo 每写一次，我们紧接着整体替换成参考图文案（连它随后追加的
+  // .gesture-note「单击画面返回街角 · 拖动换个角度」一并清掉 —— 参考图里没有）。
+  // 防回环：替换前打 data-host-detail 标记，标记与当前 mode 相同就不再动。
+  // 交互不自己实现：data-copy / data-switch 是 demo 挂在祖先上的事件委托，
+  // 替换内容不影响；tel / mailto 带原参重建（mailto subject 与 demo 一致）。
+  // 联系方式从 site-config.json 读（与 demo 同源同参），读不到用兜底常量。
+  var CFG = { phone: '18219315597', email: 'Four4444.Design@gmail.com' };
+  try {
+    fetch('./site-config.json').then(function (r) { return r.json(); }).then(function (c) {
+      if (c && c.phone) CFG.phone = String(c.phone);
+      if (c && c.email) CFG.email = String(c.email);
+      applyDetailCopy();
+    }).catch(function () {});
+  } catch (_) {}
+  var fmtPhone = function (p) {
+    try { return p.replace(/(\d{3})(\d{4})(\d{4})/, '$1 $2 $3'); } catch (_) { return p; }
+  };
+  var MAIL_SUBJECT = encodeURIComponent('你好 Four Design，聊聊一个新想法');
+  var mailHref = function () { return 'mailto:' + CFG.email + '?subject=' + MAIL_SUBJECT; };
+  var detailHtml = function (mode) {
+    if (mode === 'studio') return '<p class="detail-kicker">FOUR DESIGN</p>'
+      + '<h2 id="detail-title" class="detail-title">让想法，<br>有自己的样子。</h2>'
+      + '<div class="detail-rule"></div>'
+      + '<div class="services"><span>品牌设计</span><span>产品设计</span><span>视觉叙事</span></div>'
+      + '<div class="actions"><button class="primary-action" data-switch="mail">聊聊你的想法 <span>↗</span></button></div>';
+    if (mode === 'phone') return '<p class="detail-kicker">LET&#39;S TALK</p>'
+      + '<h2 id="detail-title" class="detail-title">链接，<br>从此刻开启。</h2>'
+      + '<div class="detail-rule"></div>'
+      + '<div class="contact-label">GIVE ME A CALL</div>'
+      + '<a class="contact-value" href="tel:' + CFG.phone + '">' + fmtPhone(CFG.phone) + '</a>'
+      + '<div class="actions"><a class="primary-action" href="tel:' + CFG.phone + '">拨打电话 <span>↗</span></a>'
+      + '<button class="copy" data-copy>复制号码 ↗</button></div>';
+    if (mode === 'mail') return '<p class="detail-kicker">WRITE A LETTER</p>'
+      + '<h2 id="detail-title" class="detail-title">把想法，<br>轻轻寄到这里。</h2>'
+      + '<div class="detail-rule"></div>'
+      + '<div class="contact-label">A LETTER TO FOUR</div>'
+      + '<a class="contact-value email" href="' + mailHref() + '">' + CFG.email + '</a>'
+      + '<div class="actions"><a class="primary-action" href="' + mailHref() + '">写一封信 <span>↗</span></a>'
+      + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
+    if (mode === 'car') return '<p class="detail-kicker">FOUR DESIGN</p>'
+      + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'
+      + '<div class="detail-rule"></div>'
+      + '<p class="detail-copy">每一次停歇，都是为了更远的抵达。<br>积蓄能量，勇敢奔赴那个你期待的未来。</p>'
+      + '<p class="car-note">#一个留给自己的小彩蛋</p>';
+    return null;
+  };
+  var applyDetailCopy = function () {
+    var dc = document.getElementById('detail-content');
+    if (!dc) return;
+    var mode = document.body.getAttribute('data-mode');
+    if (!mode || mode === 'overview') return;
+    if (dc.getAttribute('data-host-detail') === mode) return;
+    var html = detailHtml(mode);
+    if (!html) return;
+    dc.setAttribute('data-host-detail', mode);
+    dc.innerHTML = html;
+  };
+  try {
+    var detailHost = document.getElementById('detail-content');
+    if (detailHost && window.MutationObserver) {
+      new MutationObserver(function () { applyDetailCopy(); })
+        .observe(detailHost, { childList: true });
+    }
+  } catch (_) {}
+
+  // 面板落款（#detail 底部静态节点，demo 从不回写）按参考图改为两段式，
+  // 去掉状态点与原「THE LIGHT IS ON. COME SAY HELLO.」标语。
+  try {
+    var ps = document.querySelector('.panel-signature');
+    if (ps) ps.innerHTML = '<span class="ps-name">FOUR DESIGN</span><span class="ps-sub">INDEPENDENT CREATIVE STUDIO</span>';
+  } catch (_) {}
 
   var post = function (dy, cx, cy) {
     try {

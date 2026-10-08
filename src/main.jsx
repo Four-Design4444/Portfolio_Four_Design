@@ -5861,8 +5861,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}`} id="projects">
         <div className="container">
           <div className="projects-heading">
-            <h2 className="display-reveal-title rany-display-heading">SELECTED WORK</h2>
-            <span className="display-reveal-subtitle">作品展示</span>
+            <h2 className="display-reveal-title rany-display-heading">Project Display</h2>
           </div>
         </div>
         <div className="project-list">
