@@ -6395,6 +6395,28 @@ function WorksPage({
      导航高亮由 App 的 activeCategory 驱动,闭环才不会打架。 */
   const notifyRef = useRef(onActiveWorkChange);
   notifyRef.current = onActiveWorkChange;
+  /* --mw-vh(2026-10-09 真机修复):业主手机(Firefox Android,动态工具栏)上
+     fixed 层 height:100dvh 实测大于可视区 —— 层中心偏下、底部被工具栏裁掉、
+     贴底的 .mw-hint 整个不可见。dvh 在该浏览器的行为不可信,改用 JS 实测
+     innerHeight(与分屏对齐、翻页位移同源,实时跟随工具栏收展);
+     CSS 侧高度全部写成 var(--mw-vh, 100dvh),不支持时回落 dvh。 */
+  useEffect(() => {
+    if (!isMobile) return undefined;
+    const setVh = () => {
+      const h = window.innerHeight;
+      if (h > 0) document.documentElement.style.setProperty('--mw-vh', `${h}px`);
+    };
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', setVh);
+    window.visualViewport?.addEventListener('resize', setVh);
+    return () => {
+      window.removeEventListener('resize', setVh);
+      window.removeEventListener('orientationchange', setVh);
+      window.visualViewport?.removeEventListener('resize', setVh);
+    };
+  }, [isMobile]);
+
   useEffect(() => {
     if (!isMobile || !notifyRef.current) return undefined;
     const work = workAt(pos);
@@ -6821,10 +6843,15 @@ function WorksPage({
           </div>
         </div>
 
-        {/* stage 底部信息行 + 页脚点缀（自 demo 移入，纯装饰） */}
+        {/* stage 底部信息行 + 页脚点缀（自 demo 移入，纯装饰）
+            2026-10-09 业主标注改版：分类序号按导航左右顺序（categories 数组序）、
+            footer 左侧换成品牌文案、右侧 16:9/SINGLE SCREEN → 2026/FOUR DESIGN、
+            移除 V2.0.0 徽章。 */}
         <div className="works-orbit-stage-meta">
           <div className="works-orbit-collection-label">
             <span className="works-orbit-dot" />
+            <span>{String(categories.findIndex((c) => c.id === activeCategory.id) + 1).padStart(2, '0')}</span>
+            <span className="works-orbit-divider">·</span>
             <span>{activeCategory.cn}</span>
             <span className="works-orbit-divider">/</span>
             <span>{String(works.length).padStart(2, '0')} PROJECTS</span>
@@ -6832,10 +6859,9 @@ function WorksPage({
           <span className="works-orbit-hint">HOVER TO FOCUS<span className="works-orbit-hint-line" /></span>
         </div>
         <footer className="works-orbit-footer">
-          <span>移入右侧索引切换作品，移入主卡探索光与视角。方向键同样可切换。</span>
+          <span>设计是看得见的思考，也是看不见的取舍、克制与共情。</span>
           <span className="works-orbit-footer-right">
-            16:9 <span className="works-orbit-divider">/</span> SINGLE SCREEN
-            <span className="works-orbit-version-tag">V2.0.0</span>
+            2026 <span className="works-orbit-divider">/</span> FOUR DESIGN
           </span>
         </footer>
       </div>
