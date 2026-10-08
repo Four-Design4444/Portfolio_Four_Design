@@ -103,7 +103,12 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
 @media (min-width:1600px) { .street-quick { bottom: 115px; } }
 @media (max-width:1100px) { .street-quick { right: 28px; } }
 @media (max-width:700px) {
-  .street-quick { right: 16px; bottom: 93px; }
+  /*⚠ 移动端不能沿用 105px：demo 的 ≤700 段把 .controls 改成
+     position:absolute; bottom:71px（.hud 自身高度因此塌成 0），实测
+     .controls 顶边落在视口底往上 123px 处 —— 新块 bottom:93 会压到它身上
+     （探针 probe-street-mobile.mjs 实测 overlapControls=true）。
+     这里取 controls 顶再上抬 37px（≈参考图 909→948 的 39px 间距）。 */
+  .street-quick { right: 16px; bottom: 160px; }
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
   .sq-ico { width: 13px; height: 13px; }
   .sq-row + .sq-row { margin-top: 16px; }
