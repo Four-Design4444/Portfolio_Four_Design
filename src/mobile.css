@@ -1287,8 +1287,8 @@ html[data-device="mobile"] .mob-thumbs {
      ⚠ padding-top 28px(2026-10-09 业主反馈):「查看全部」删除后,该屏内容高
      ≥ min-height,margin-top:auto 吸收量≈0,缩览图条会贴死上方圆点条 ——
      原来这段间距一直由按钮的 margin 兜着。padding-top 提供保底间距
-     (圆点底 → 缩览图顶),不依赖 auto 是否有剩余。 */
-  padding: 28px 0 24px;
+     (圆点底 → 缩览图顶),不依赖 auto 是否有剩余。2026-10-09 业主微调:28→40。 */
+  padding: 40px 0 24px;
   scroll-behavior: smooth;
   margin-top: auto;
   width: 100%;
@@ -1912,10 +1912,6 @@ html[data-device="mobile"] .detail-content {
 
 html[data-device="mobile"] .detail-title {
   margin-bottom: 46px;
-}
-
-html[data-device="mobile"] .detail-title span {
-  font-size: 14px;
 }
 
 html[data-device="mobile"] .detail-title h1 {

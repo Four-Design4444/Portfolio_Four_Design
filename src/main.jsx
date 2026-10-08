@@ -7088,7 +7088,7 @@ function WorkDetailPage({ activeCategory, work, flip = '', onSwipeProject = null
           PC 170px(≈参考图蓝框高度)、移动端 96px,之后直接进标题区。 */}
       <div className="detail-content">
         <div className="detail-title">
-          <span>{activeCategory.label}</span>
+          {/* 2026-10-09(业主):三级页顶部第一行英文小字(activeCategory.label)移除 */}
           <h1>{work.title}</h1>
           <p>{work.subtitle}</p>
         </div>
