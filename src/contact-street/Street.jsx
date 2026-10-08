@@ -11,7 +11,7 @@ const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
 const INTRO_BURN_MS = 3200;
 
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
-// ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header），保留底部导航栏。
+// ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header）。
 // ② 隐藏加载动画：#loading 覆盖全屏且 z-index:100，是 demo 用来遮 Three.js 冷启动的
 //   （src/main.js 里 await renderer.compileAsync 后才 setReady 加 .loaded 淡出 1s）。
 // ③ 禁用 demo 内部滚动、但完整保留指针交互：
@@ -22,10 +22,93 @@ const INTRO_BURN_MS = 3200;
 //     · 再把 deltaY 用 postMessage 交给 parent.window → 父页面 pager 翻屏。
 //   ⚠ 绝不能用 pointer-events:none —— 那会连 demo 的拖动旋转镜头 / 射线点击热区 /
 //     hover 标签一起杀掉（它们绑定在 host=#scene 的 pointerdown/move/up）。
-//     滚轮与指针是不同事件，各走各的通道，互不干扰。
+//   ⚠ 滚轮与指针是不同事件，各走各的通道，互不干扰。
+//
+// ④ 尾部版式改版（2026-10-08，按参考图 Frame 11.jpg）：
+//   移除 · 底部文字 .explore-note（"拖动观察"）
+//   移除 · 底部中央的交互按钮 #navigation（01 工作室 / 02 打个电话 / 03 写封信 / 04 汽车）
+//   移除 · #scene-caption（它就占着右下角那块地，会与新块重叠）
+//   新增 · 右下角 .street-quick：打个电话 / 发封邮件 两行 + 一行提示，
+//         由宿主注入 DOM、点击时转交demo 自己的 phone / mail 面板。
+//         所以 #navigation 只是被隐藏、**不从 DOM 移除** —— 它身上的事件委托与
+//         demo setMode() 里的 `#navigation button` 全部照常工作（零侵入）。
+//   左下横线 .tiny-line 按业主要求取 #6784A6。
+//
+// ⑤ 棕黄点缀 → 冷蓝点缀：demo 全站 16 个暖色（hue 33°~41°，如 --accent #e4b77d、
+//   .tiny-line #c6ac84、状态点 #eac286…）统一按**同一色相锚点 #6784A6**重算：
+//   明度v 原样搬运、饱和度 s×0.62，于是层级关系不变，只是"色相家族"整体从
+//   暖黄换成冷蓝。--accent 一并换蓝，`.amber` 句号 / `.back>span` 箭头 /
+//   focus 描边都跟着走。
+//   ⚠ 3D 场景（canvas）里的暖色灯光属场景美术，不在替换范围 —— 参考图同样保留
+//     街灯与室内的暖光，只把 UI 点缀换成冷蓝。
 const HOST_CSS = `
 #loading { display: none !important; }
 .header { display: none !important; }
+
+/* ── ④ 尾部版式：移除底部文字 / 底部中央按钮 / 让位给右下角新块 ────────────── */
+.explore-note,
+#navigation,
+#scene-caption { display: none !important; }
+.hud { justify-content: flex-end !important; }
+
+/* ── ⑤ 棕黄点缀 → 冷蓝点缀（锚点 #6784A6，明度不变） ─────────────────────── */
+:root { --accent: #a4c2e4; }
+.tiny-line { background: #6784A6 !important; }
+.weather-dot,
+.status-dot { background: #acc9ea !important; box-shadow: 0 0 9px #85a4c888 !important; }
+#navigation button:hover,
+#navigation button[aria-current=true] { background: #b4c5d8 !important; }
+.controls button:hover { color: #a4c2e4 !important; }
+.controls button[aria-pressed=true] { color: #adbfd4 !important; }
+.primary-action { color: #b2c8e2 !important; border-color: #76818d !important; }
+.primary-action:hover { background: #9db7d4 !important; }
+.inspiration-note { color: #c9d3df !important; border-left-color: #76889c !important; }
+.services span:before { color: #758aa3 !important; }
+.load-line:after { background: #a2bad6 !important; }
+#toast { color: #d2dce7 !important; }
+#hover-label { color: #c9d8e9 !important; }
+.contact-value { color: #c9d7e8 !important; }
+.skip { background: #b1c8e3 !important; }
+
+/* ── ④ 右下角新块 ──────────────────────────────────────────────────────────
+   坐标全部从参考图量出后按视口反推（参考图 1920×1081）：
+     行1「打个电话」rows 818..833、行2「发封邮件」rows 856..871（行距 23px）
+     提示行 rows 901..909（距行2 底 30px）；底部 .controls rows 948..959
+   ⇒ 块底比 .controls 顶低 36px；.controls 高 34 + .hud 底 35/45/23
+     ⇒ bottom 105 / 115 / 93。字号按参考图宽度等比缩到本站。 */
+.street-quick {
+  position: fixed; right: 46px; bottom: 105px; z-index: 5;
+  display: flex; flex-direction: column; align-items: flex-end;
+  text-align: right; pointer-events: none;
+  transition: opacity .35s;
+}
+.sq-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  pointer-events: auto; -webkit-tap-highlight-color: transparent;
+  color: #cfd6dd; font-size: 12.5px; letter-spacing: 1.5px;
+  transition: color .2s; font-family: inherit;
+}
+.sq-row + .sq-row { margin-top: 21px; }
+.sq-row:hover { color: #eaf0f6; }
+.sq-ico {
+  width: 15px; height: 15px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.2px;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.sq-hint { margin: 28px 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* demo 进入 phone/mail/car 面板时 #detail 从右侧盖住 44% —— 新块同步淡出 */
+body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: none; }
+
+@media (min-width:1600px) { .street-quick { bottom: 115px; } }
+@media (max-width:1100px) { .street-quick { right: 28px; } }
+@media (max-width:700px) {
+  .street-quick { right: 16px; bottom: 93px; }
+  .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
+  .sq-ico { width: 13px; height: 13px; }
+  .sq-row + .sq-row { margin-top: 16px; }
+  .sq-hint { margin-top: 20px; font-size: 8px; }
+}
 `;
 
 // iframe 内部执行：劫持滚动 → 交还父页面；其余一概不碰。
@@ -183,6 +266,45 @@ const HOST_JS = `
   window.scrollTo(0, 0);
 })();
 `;
+
+// ── 右下角新块（参考图右下：打个电话 / 发封邮件 + 一行提示）─────────────────
+// ⚠ 为什么由宿主注入、而不是改 demo 的 index.html：
+//   demo 产物（public/contact-street/）按项目约定「字节级不变、不重移植」，
+//   任何改动都只走宿主叠加层。这里 insertAdjacentHTML 追加到 <body>，
+//   而点击行为**不自己实现**，而是把 click 转发给 #navigation 里对应
+//   data-mode 的按钮 —— demo 既有的 setMode('phone'/'mail') 与
+//   「点场景空白回街角」的射线热区因此全部原样生效。
+const STREET_QUICK_HTML = `
+<div class="street-quick" id="street-quick" aria-label="快捷联系">
+  <button class="sq-row" type="button" data-sq-mode="phone">
+    <svg class="sq-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5c0 8 6 14 14 14l2-3-4-2-2 2c-3-1.5-5.5-4-7-7l2-2-2-4z"/></svg>
+    <span>打个电话</span>
+  </button>
+  <button class="sq-row" type="button" data-sq-mode="mail">
+    <svg class="sq-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 6.5 12 13l8-6.5"/></svg>
+    <span>发封邮件</span>
+  </button>
+  <p class="sq-hint">点击 / 拖动 探索场景</p>
+</div>
+`.trim();
+
+function injectStreetQuick(doc) {
+  if (!doc || !doc.body) return false;
+  if (doc.getElementById('street-quick')) return true;
+  const host = doc.body;
+  host.insertAdjacentHTML('beforeend', STREET_QUICK_HTML);
+  // 点击 → 转发给 demo 自己的 #navigation 按钮（它被 display:none 但仍在 DOM 里，
+  // 事件委托 document.querySelectorAll('[data-mode]') 照样收得到）。
+  const quick = doc.getElementById('street-quick');
+  quick.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-sq-mode]');
+    if (!btn) return;
+    const mode = btn.getAttribute('data-sq-mode');
+    const target = doc.querySelector('#navigation button[data-mode="' + mode + '"]');
+    if (target) target.click();
+  });
+  return true;
+}
 
 function injectHostCss(doc) {
   if (!doc || !doc.head) return false;
@@ -345,6 +467,9 @@ export default function ContactStreet({ active, preload, onTailReady }) {
         if (!cssDone) {
           try { cssDone = injectHostCss(doc) && injectHostJs(doc); } catch (_) { cssDone = false; }
         }
+        // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
+        //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。
+        try { injectStreetQuick(doc); } catch (_) { /* onLoad 兜底 */ }
 if (!readyDone) {
           // 双信号就绪判定（任一成立即可）：
           //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
@@ -417,6 +542,7 @@ function applyHostOverrides(iframe) {
     if (!doc) return;
     injectHostCss(doc);
     injectHostJs(doc);
+    injectStreetQuick(doc);
   } catch (_) {
     /* 同源 public 资源可读；跨域时静默跳过 */
   }

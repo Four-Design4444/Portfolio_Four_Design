@@ -4872,12 +4872,28 @@ html[data-paging="on"] .contact-page {
      取 **96px** 后左边=12px、右边=1065.5px，均在页面内，
      而 blur 扩散只到 25.2 / 1052.3 ⇒ 完整落在盒内，不再有切割痕迹。 */
   --floor-pad-x: 96px;
+  /* ⚠⚠⚠ 2026-10-08 第九轮（业主截图箭头指卡片左下角：「反射这里最上面还是能看到
+     明显被裁切的剪切痕迹」）：**向上余量 `--floor-pad-top`**。
+     原来地面盒的顶边正好压在接触线上；镜面 `blur(16px)` 向**上**扩散的那 ~48px
+     被盒子的 border box（overflow:hidden + mask 盒）硬切一刀 —— 在卡片**左右圆角
+     外侧**那圈空白里（卡片盖不到的地方）就是一条笔直的横线，实测接触线处
+     一行内 L 从 14 直接跳到 16→20（x 越靠外跳得越多），把地面盒隐藏后同一批像素
+     完全平坦、无任何阶跃 ⇒ 唯一来源就是这道裁切。
+     修法＝把盒子向上长 `--floor-pad-top`，并让遮罩在新顶边处收敛到 transparent，
+     于是向上扩散从"硬切"变成"羽化"。
+     取值 72px = blur 3σ(48px) + hover scale 外溢 ~6px + 余量。
+     ⚠ 加模糊要同步加大这个值（与 `--floor-pad-x` 同理）。
+     ⚠ 配套三处必须一起改，否则接触线会整体错位：
+       ① `height` 加同样的量；② `.works-orbit-floor-mirror` 的 top 由 0 改成
+       `var(--floor-pad-top)`（镜像绝对位置不变）；③ `::after` 的 top 也要加。 */
+  --floor-pad-top: 72px;
   left: calc(-1 * var(--floor-pad-x));
   right: calc(-1 * var(--floor-pad-x));
   /* 接触线 = 卡片底边。100% 是 focus 的 padding 盒(含下方 64px 留白),
-     减去 64px 留白就落在卡片外框的底边。 */
-  top: calc(100% - var(--focus-pb));
-  height: clamp(260px, 46vh, 560px);
+     减去 64px 留白就落在卡片外框的底边;再往上让出 `--floor-pad-top`。
+     所以盒内的**接触线在距顶边 `--floor-pad-top` 处**，不是顶边。 */
+  top: calc(100% - var(--focus-pb) - var(--floor-pad-top));
+  height: calc(clamp(260px, 46vh, 560px) + var(--floor-pad-top));
   /* 溢出即裁切。裁切边界已在 blur 扩散（±72px）之外，所以切不到模糊结果；
      绝不产生滚动条。 */
   overflow: hidden;
@@ -4885,18 +4901,42 @@ html[data-paging="on"] .contact-page {
   /* 整面地的纵深衰减:接触线最实,越远越淡。
      ⚠ 这一层**没有**被翻转(翻转在子级 .works-orbit-floor-mirror 上),
      所以这里的 to bottom / 180deg 就是视觉上的"上实下虚",方向天然正确,
-     是整个反射唯一的纵深主控。子级两层只负责"清晰度分层"(见下)。 */
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.72) 32%, rgba(0, 0, 0, 0.40) 60%, rgba(0, 0, 0, 0.13) 84%, transparent 100%);
+     是整个反射唯一的纵深主控。子级两层只负责"清晰度分层"(见下)。
+     ⚠ 2026-10-08 第九轮：第一个 stop 改成 `transparent 0`（盒顶已上移到接触线
+     上方 72px），中间每个 stop 都要补上 `--floor-pad-top` 才保持"接触线最实、
+     越远越淡"的原语义不变。pos = pad-top + (100% − pad-top) × 原比例。 */
+  /* ① 竖向羽化（唯一纵深主控）：接触线最实、越远越淡。
+     首 stop `transparent 0`（盒顶已上移到接触线上方 `--floor-pad-top`）。 */
+  --floor-vmask: linear-gradient(180deg, transparent 0, #000 var(--floor-pad-top), rgba(0, 0, 0, 0.72) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.32), rgba(0, 0, 0, 0.40) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.60), rgba(0, 0, 0, 0.13) calc(var(--floor-pad-top) + (100% - var(--floor-pad-top)) * 0.84), transparent 100%);
+  /* ② 横向抑制：**只在顶部 `--floor-pad-top` 这条带里生效**（见下面的 `mask-size`，
+     带外因 no-repeat 取值 0 = 不减任何东西，所以接触线以下完全不受影响）。
+     带内：卡片脚印范围（左右各内缩 `--floor-pad-x`）为 #000 = 减掉 —— 否则
+     镜面 blur(16px) 向上扩散的那 48px 会从**卡片底边那圈 12px padding + 1px 描边
+     的透明留白环**里透出来（实测整条卡宽被提亮 +5~18）。卡外 32px 内渐隐到
+     transparent = 保留羽化 ⇒ 业主看到的「剪切痕迹」在卡外才真正消失。
+     两层用 `subtract`（= 层① − 层②）合并。 */
+  --floor-hmask: linear-gradient(90deg, transparent 0, transparent calc(var(--floor-pad-x) - 32px), #000 var(--floor-pad-x), #000 calc(100% - var(--floor-pad-x)), transparent calc(100% - var(--floor-pad-x) + 32px), transparent 100%);
+  -webkit-mask-image: var(--floor-vmask), var(--floor-hmask);
+  mask-image: var(--floor-vmask), var(--floor-hmask);
+  /* 层② 的高度被压成 `--floor-pad-top`（= 盒顶到接触线那一段），它只作用在这一条带里。
+     ⚠ 若把 size 写成 100%/auto，层② 会铺满全盒 ⇒ 卡片脚印范围内的**真实倒影也被扣掉**。 */
+  -webkit-mask-size: 100% 100%, 100% var(--floor-pad-top);
+  mask-size: 100% 100%, 100% var(--floor-pad-top);
+  -webkit-mask-position: 0 0, 0 0;
+  mask-position: 0 0, 0 0;
   /* ⚠⚠ 遮罩必须 no-repeat：镜像高(≈494px)常大于地面盒高(clamp(260px,46vh,560px))，
      纵向若 repeat，溢出的那段会**重新从 #000 开始**，在倒影中段横出一道亮带；
-     no-repeat 时盒外取值 = 渐变末端 = transparent。
+     no-repeat 时盒外取值 = 渐变末端 = transparent（层② 因此只在顶部那条带内有效）。
      ⚠⚠⚠ 同时记住：**遮罩盒恒等于元素 border box，且横向铺不出盒外**
      （`mask-size` 放大 / `mask-repeat: repeat-x` 实测都无效）。
      地面盒能显示的横向范围 = 遮罩盒范围 ⇒ 想要 blur 扩散不被切，
-     只能把地面盒本身做宽（`--floor-pad-x`），没有别的办法。 */
+     只能把地面盒本身做宽（`--floor-pad-x`）、做高（`--floor-pad-top`），没有别的办法。 */
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+  /* 层① − 层②（subtract）。⚠ 两个前缀属性名不是同一个 CSS 属性：Chrome 认后写的
+     标准 `mask-composite`，旧 WebKit 认 `-webkit-mask-composite`，故顺序不能反。 */
+  -webkit-mask-composite: source-out;
+  mask-composite: subtract;
 }
 
 /* ⚠⚠ 2026-10-08 第三次修(业主:「反射层这里的底部还是能看到一个底色,没有排除干净」)
@@ -4925,7 +4965,8 @@ html[data-paging="on"] .contact-page {
      合计 = pad + 10% − 0.2×pad = pad×0.8 + 10%。 */
   left: calc(var(--floor-pad-x) * 0.8 + 10%);
   right: calc(var(--floor-pad-x) * 0.8 + 10%);
-  top: 1px;
+  /* 盒顶已上移 `--floor-pad-top`，投影要贴回接触线，所以加上这一段。 */
+  top: calc(var(--floor-pad-top) + 1px);
   height: 22px;
   border-radius: 50%;
   background: radial-gradient(ellipse 50% 50% at 50% 42%, rgba(2, 5, 11, 0.5), rgba(2, 5, 11, 0.2) 58%, transparent 80%);
@@ -4950,7 +4991,9 @@ html[data-paging="on"] .contact-page {
      与主卡逐像素对齐；地面盒多出来的横向余量全部留给 blur 扩散。 */
   left: var(--floor-pad-x);
   right: var(--floor-pad-x);
-  top: 0;
+  /* 地面盒顶边已上移到接触线上方 72px（见 .works-orbit-floor），
+     镜像必须同量下移，绝对位置才与卡片底边严丝合缝。 */
+  top: var(--floor-pad-top);
   /* 共轭:rotateX 取反、rotateY 同号、translateY 反向(translate 属性在翻转之外) */
   translate: 0 var(--bob-mirror, 0px);
   transform: perspective(1300px) translateY(var(--lift, 0px))
