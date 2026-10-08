@@ -372,16 +372,10 @@ html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
-/* 2026-10-08: 三级导航暗调模式下,Back 文字/左箭头与 Last/Next 文字/三角标的
-   默认白色在深色玻璃上可视度偏低,统一提为 #aaaaaa 保证可读;disabled 状态
-   保持更深灰,避免与可用态混淆。 */
-html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail .detail-nav-back,
-html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail .detail-pager button:not(:disabled) {
-  color: #aaaaaa;
-}
-
-html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail .detail-pager button:disabled {
-  color: #777777;
+/* 2026-10-08: 三级导航暗调模式下,Last(上一张) 文字与左三角标的默认白色
+   在深色玻璃上可视度偏低,提为 #cccccc;Back/Next 保持原色不变。 */
+html[data-device="mobile"] body.nav-on-light .morph-nav.nav-detail .detail-pager button:first-child {
+  color: #cccccc;
 }
 
 /* Logo is kept on the left of the top capsule on every level and doubles
