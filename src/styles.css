@@ -5332,15 +5332,21 @@ html[data-paging="on"] .contact-page {
   gap: 7px;
   align-self: center;
   position: relative;
-  /* 下方留白:给整列的镜面反射留出空间 */
-  padding-bottom: 30px;
 }
 
-/* 整列镜面反射(2026-10-05):短倒影,只保留贴列表的下半部,避免长倒影叠到页脚。
+/* 逐卡镜面倒影(2026-10-08 重做):以前反射加在**整列** .works-orbit-rail 上,
+   整列镜像会把上半两张卡的倒影推到列表最下方(离列表越远被遮罩衰减得越狠),
+   实际只有最下面一张卡看得出倒影,上面两张等于没有反射。
+   现在改为**逐卡反射**:每张卡的倒影就贴在自己下沿,三张一起可见。
+   倒影长度必须落在「本卡与下一张卡之间的槽位」里 —— 卡片背景近乎透明
+   (rgba(183,208,250,0.012)),挡不住溢出的倒影,溢出即渗到下一张卡下面。
+   槽位 = flex gap 7 + 本卡 margin-bottom 15 = 22px;倒影 32%×64.8+2px ≈ 22.7px。
    Chromium/Safari 生效;Firefox 优雅降级(仅无反射)。 */
+.works-orbit-rail-card { margin-bottom: 15px; }
+.works-orbit-rail-card:last-child { margin-bottom: 24px; }
 @supports (-webkit-box-reflect: below 0) {
-  .works-orbit-rail {
-    -webkit-box-reflect: below 3px linear-gradient(to bottom, rgba(0, 0, 0, 0.16), transparent 30%);
+  .works-orbit-rail-card {
+    -webkit-box-reflect: below 2px linear-gradient(to bottom, rgba(0, 0, 0, 0.30), rgba(0, 0, 0, 0.11) 14%, transparent 32%);
   }
 }
 

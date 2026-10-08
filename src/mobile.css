@@ -1326,6 +1326,10 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-viewall {
   from { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.96); }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
+@keyframes mob-chrome-in-thumbs {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots,
@@ -1338,7 +1342,7 @@ html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs {
 /* 入场顺序 = 退场顺序的镜像:缩略图条 0ms → 查看全部 40ms → 圆点 80ms →
    计数器 120ms → 标题 160ms。与基础态的 transition-delay 同值,所以
    animation 起跑与 transition 兜底两条路径读出来是同一节奏。 */
-html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs { animation-delay: 0ms; }
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs { animation-name: mob-chrome-in-thumbs; animation-delay: 0ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-viewall { animation-delay: 40ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots { animation-delay: 80ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter { animation-delay: 120ms; }
