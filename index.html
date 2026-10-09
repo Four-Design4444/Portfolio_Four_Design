@@ -378,7 +378,26 @@
           frame.classList.add('is-in');
           window.clearTimeout(fallbackTimer);
         };
-        frame.addEventListener('load', placeIntoDemo);
+        /* ★ 2026-10-10 第三轮（业主：「进入 Loading 后先黑一下，然后底部冒出一条进度条」）：
+           新建 iframe 在 src 真正提交之前，contentDocument 已经是**一个
+           readyState='complete' 的空白 about:blank 文档**（实测 kids=""、docBg 透明）。
+           旧判据只认「complete 且没有 .rail」，于是 600ms 那道闸门把它当成
+           「文档加载完了、只是没有 rail」→ 直接 openWithOverlay()：纯色遮罩被开门，
+           真实进度条被挂到**遮罩底部**（.app-loader-progress 的降级位 bottom:34px），
+           等真文档到了再挪进 demo —— 业主看到的就是「黑屏一下 → 底部一条进度条 →
+           又跳回猫下面」。修法：只有 iframe **真的导航过**（location 已不是 about:blank）
+           才允许走「complete 但没 rail」这条降级；没导航过就一律继续等。
+           4s 那道「始终没导航」的兜底保证极端情况（iframe 被拦）也不会永远停在纯色遮罩上。 */
+        var navigated = false;
+        var markNavigated = function () {
+          if (navigated) return;
+          try {
+            var w = frame.contentWindow;
+            var href = w && w.location && w.location.href;
+            if (href && href !== 'about:blank') navigated = true;
+          } catch (_) { /* 读不到就当尚未导航 */ }
+        };
+        frame.addEventListener('load', function () { markNavigated(); placeIntoDemo(); });
         // 命中缓存时 load 有可能在监听之前就已经触发，补两次机会。
         window.setTimeout(placeIntoDemo, 0);
         window.setTimeout(placeIntoDemo, 400);
@@ -411,12 +430,18 @@
           forceDarkNoRail();
           frame.classList.add('is-in');
         };
+        var gateStart = 0; // 首次进闸门时打点，用于「始终没导航」的 4s 兜底
         var fallbackTimer = window.setTimeout(function tryGate() {
           if (placed) return;
+          if (!gateStart) gateStart = performance.now();
+          markNavigated();
           var doc = null;
           try { doc = frame.contentDocument; } catch (_) { doc = null; }
           if (doc && doc.querySelector('.rail')) { placeIntoDemo(); return; }
-          if (doc && doc.readyState === 'complete') { openWithOverlay(); return; }
+          // ★ 必须 navigated 才认「complete 但没 rail」；否则那是 iframe 的初始空白文档，
+          //   开门只会露出纯色遮罩 + 底部进度条（业主看到的「底部那个进度条」）。
+          if (navigated && doc && doc.readyState === 'complete') { openWithOverlay(); return; }
+          if (!navigated && performance.now() - gateStart > 4000) { openWithOverlay(); return; }
           fallbackTimer = window.setTimeout(tryGate, 150);
         }, 600);
         window.setTimeout(function () {

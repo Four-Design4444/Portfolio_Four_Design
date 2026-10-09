@@ -18,3 +18,12 @@ outputs/
 
 # stale lockfile
 pnpm-lock.yaml
+
+# 排查草稿 / 临时目录（2026-10-10：曾随整树同步混进 GitHub 仓库，一并挡掉）
+.vite.log
+*.log
+up-probe/
+release-keep/
+release-r22/
+项目清理清单.md
+项目引用检查.md
