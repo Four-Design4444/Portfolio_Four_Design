@@ -412,14 +412,13 @@ const HOST_CSS = `
 }
 /* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
 .sq-ico-fill { fill: currentColor; stroke: none; }
-/* ⚠ 邮件图标（业主 2026-10-10 重新提供 Group 29.svg）——**一个像素都不许调**：
-   之前挂 .sq-ico 时被这里的 width/height 15px + stroke-width 1.2px 覆盖，
-   原本 18×17、0.7 描边的设计被放大加粗（业主：「把我原本的 icon 给调宽了」）。
-   现在换成独立类 .sq-ico-raw：只做「不参与 flex 收缩 + 块级」两件事，
-   尺寸、描边粗细、颜色全部由 SVG 自带的属性决定（CSS 一旦出现同名属性就会
-   压过 presentation attribute，所以这里刻意一条都不写）。
-   ⚠ 因此 ≤700 段那条 .sq-ico{width:13px} 也**不能**作用到它。 */
-.sq-ico-raw { flex: none; display: block; }
+/* ⚠ 邮件图标（业主 2026-10-10 提供 Group 29.svg）——SVG 内部（路径 / 0.7 描边 /
+   rect）一个字节不许动；显示尺寸走**等比缩放**：高度锁定与听筒一致（PC 15 /
+   移动 13），宽度按 18:17 固有比例自动反推 ⇒ 不拉伸、不加粗。
+   对齐：.sq-row 是 flex align-items:center，两图标盒同高后视觉中心即对齐；
+   信封glyph的本体中心比几何中心略高（底部还有一条下划线 rect），实测后再决定
+   要不要 ±0.5px 的光学补偿，先用零补偿。 */
+.sq-ico-raw { flex: none; display: block; height: 15px; width: auto; }
 /* 提示行到「发封邮件」的间距由脚本写入常量（--sq-hint-mt，PC 40px），底边同时钉在图标上沿 */
 .sq-hint { margin: var(--sq-hint-mt, 40px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
 /* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
@@ -444,9 +443,10 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
      上沿距视口底 123 ⇒ 137）。JS 跑起来后会再实测一次覆盖它。 */
   .street-quick { right: 16px; bottom: 140px; }
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
-  /* ⚠ 这条只命中「打个电话」的听筒（class=sq-ico）；邮件图标用的是
-     .sq-ico-raw，保持业主给的原尺寸 18×17，移动端也不缩放（见上面注释）。 */
+  /* ⚠ 这条只命中「打个电话」的听筒（class=sq-ico）；邮件图标 .sq-ico-raw
+     在下面单独等比缩到同一高度（13px），宽度按 18:17 自适应。 */
   .sq-ico { width: 13px; height: 13px; }
+  .sq-ico-raw { height: 13px; }
   .sq-row + .sq-row { margin-top: var(--sq-gap, 16px); }
   .sq-hint { margin-top: var(--sq-hint-mt, 30px); font-size: 8px; }
   /* 业主 2026-10-09：移动端面板「复制号码/复制邮箱」贴主按钮（demo ≤700 段 gap:10px） */
