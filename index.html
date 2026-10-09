@@ -11,7 +11,12 @@
          注入后的最终色）：2026-10-09 之前这里写的是 demo 原始的 #151f2a（蓝灰），
          而 iframe 加载后的注入会把 demo 换成 #111719 —— 刷新瞬间就有一帧到几帧
          的蓝色页面残留（业主在移动端实测看到）。三处（html / 遮罩 / demo 原始
-         背景）现在统一为 #111719，任何时刻都看不到蓝色阶段。 -->
+         背景）现在统一为 #111719，任何时刻都看不到蓝色阶段。
+         ⚠ iframe 门控（同日第二轮）：demo 是渐进渲染的，iframe 加载期间浏览器会
+         先画原始背景、再画猫，而「居中 viewBox / 光晕 / 真进度条替换」全在 load
+         事件后由注入完成 —— 注入生效前的每一帧都是未处理原貌（未居中的猫 + 假
+         进度条 + 旧蓝渐变），业主看到的"猫的残留闪现"就是它。所以 iframe 初始
+         opacity:0，注入落位（或 600ms 降级）后才显示，未注入态永远不会被看见。 -->
     <style>
       html { background: #111719; }
       #app-loader {
@@ -31,7 +36,10 @@
         border: 0;
         background: transparent;
         color-scheme: dark;
+        opacity: 0;
+        transition: opacity .3s ease;
       }
+      #app-loader > iframe.is-in { opacity: 1; }
       /* 进度读数：宽度/字号/字距都抄 demo 的微观排版（rail 用 #8b9eaf、副文字
          9px/1px 字距、#8291a0），所以它是"长在 demo 里"的，而不是外来控件。 */
       .app-loader-progress {
@@ -68,6 +76,7 @@
       }
       @media (prefers-reduced-motion: reduce) {
         #app-loader { transition: none; }
+        #app-loader > iframe { transition: none; }
         .app-loader-bar > i { transition: none; }
       }
     </style>
@@ -218,10 +227,6 @@
   </head>
   <body>
     <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
-         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 揭幕」。
-         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
-         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。 -->
-    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
          仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 进度 + 揭幕」。
          demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
          并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。
@@ -364,6 +369,9 @@
           }
           rail.parentNode.replaceChild(progress.root, rail);
           placed = true;
+          // 注入全部落位后才让 demo 可见：门控解除前用户看到的是纯色遮罩，
+          // 而不是未居中的猫 + 假进度条的注入前原貌（见 <style> 里的说明）。
+          frame.classList.add('is-in');
           window.clearTimeout(fallbackTimer);
         };
         frame.addEventListener('load', placeIntoDemo);
@@ -375,6 +383,9 @@
         var fallbackTimer = window.setTimeout(function () {
           if (placed) return;
           el.appendChild(progress.root);
+          // 降级路径也要解除门控：demo 拿不到注入就带着原貌显示，绝不能
+          // 因为门控没开而让 loading 永远停在纯色遮罩上。
+          frame.classList.add('is-in');
           try {
             var d = frame.contentDocument;
             if (d && d.head) {
