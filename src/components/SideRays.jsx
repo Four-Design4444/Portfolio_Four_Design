@@ -222,11 +222,35 @@ void main() {
       };
 
       let lastRender = 0;
-      // 遮挡判定节流：getComputedStyle 有成本，但遮挡只在页面级切换时变化
-      // （路由 / 覆盖层），按时间每 VIS_CHECK_MS 复查一次足够，且隐藏时**整帧不渲**。
-      const VIS_CHECK_MS = 200;
+      /* 遮挡判定(2026-10-10 改):原来靠"每 200ms 逐级 getComputedStyle 复查"。
+         问题在于转场那 1 秒里页面正处于不断被写样式的状态,任何一次这种复查都会
+         把浏览器拽去做一趟**同步布局 + 样式重算**(未压缩构建的 trace 里能看到
+         isRendered ← loop 的布局栈落在跨级转场窗口内,一次转场 3 次),而这是
+         常年每秒 5 次的固定税。遮挡只可能因为**页面级切换**发生 —— 也就是祖先的
+         class/style 被改 —— 所以改成事件驱动:在容器到 <html> 这条祖先链上挂一个
+         MutationObserver(只盯 class/style/hidden,不盯子树,所以不会被卡片逐帧
+         写内联样式惊动),祖先一变立刻复查,比原来的 200ms 更及时。
+         再留 2000ms 兜底,防止有观察不到的隐藏方式(最坏多渲不到 2 秒)。 */
+      const VIS_OPTS = { attributes: true, attributeFilter: ['class', 'style', 'hidden'] };
+      const ancestorChain = () => {
+        const list = [];
+        let node = containerRef.current;
+        while (node && node !== document.documentElement) { list.push(node); node = node.parentElement; }
+        return list;
+      };
+      let visDirty = true;
+      let visObserver = null;
+      if (typeof MutationObserver === 'function') {
+        visObserver = new MutationObserver(() => { visDirty = true; });
+        ancestorChain().forEach((node) => visObserver.observe(node, VIS_OPTS));
+      }
+      const VIS_FALLBACK_MS = 2000;
+      /* 复查速率下限:事件驱动是"一变就查",万一哪天有人给祖先链逐帧写内联样式,
+         就会退化成每帧一次强制布局。加一道 120ms 下限把它锁死(仍比原来的
+         200ms 周期更快,只是不允许更密)。 */
+      const VIS_MIN_MS = 120;
       let lastVisCheck = -Infinity;
-      let rendered = true;   // 本帧是否真的该渲染（由周期性复查更新）
+      let rendered = true;   // 本帧是否真的该渲染（由复查更新）
       const loop = (time) => {
         if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return;
         // 先排下一帧：即便本帧跳过重绘，循环也不中断（保 WebGL 上下文 / shader），
@@ -239,9 +263,16 @@ void main() {
         // 容器被祖先 display:none / visibility:hidden 遮住时同样停渲：
         // IntersectionObserver 对这种"仍在布局流、rect 正常"的隐藏判不出来，
         // 移动端三级页下二级页(.mw-under.is-covered)会因此空转全屏着色。
-        if (time - lastVisCheck >= VIS_CHECK_MS) {
+        const byFallback = time - lastVisCheck >= VIS_FALLBACK_MS;
+        if ((visDirty && time - lastVisCheck >= VIS_MIN_MS) || byFallback) {
           lastVisCheck = time;
+          visDirty = false;
           rendered = isRendered(containerRef.current);
+          /* 只有兜底那一趟才重挂观察:容器可能被 React 挪到了别处,祖先链会变。 */
+          if (visObserver && byFallback) {
+            visObserver.disconnect();
+            ancestorChain().forEach((node) => visObserver.observe(node, VIS_OPTS));
+          }
         }
         if (!rendered) return;
         // 移动端按 frameInterval 节流：iTime 用真实时间推进，动画速度不变。
@@ -263,6 +294,10 @@ void main() {
         if (animationIdRef.current) {
           cancelAnimationFrame(animationIdRef.current);
           animationIdRef.current = null;
+        }
+        if (visObserver) {
+          visObserver.disconnect();
+          visObserver = null;
         }
         window.removeEventListener('resize', updateSize);
         if (renderer) {

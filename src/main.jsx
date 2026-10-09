@@ -869,9 +869,6 @@ function App() {
   const paging = usePagingEnabled(route.page === 'home');
   const [navMotion, setNavMotion] = useState('');
   const [sharedPill, setSharedPill] = useState(null);
-  const [sharedImage, setSharedImage] = useState(null);
-  const sharedImageRef = useRef(null);
-  sharedImageRef.current = sharedImage;
   const [worksActiveLocked, setWorksActiveLocked] = useState(false);
   const previousPageRef = useRef(route.page);
   /* 2026-10-06 移动端二级/三级交互合并:
@@ -1214,130 +1211,6 @@ function App() {
     };
   }, [route.page, activeCategory.id, activeCategory.title]);
 
-  /* 2026-10-08: 三级页头图已删,hero morph 目标([data-detail-hero-image])不存在,
-     原「detail hero 落点追踪」useLayoutEffect 整体移除;sharedImage 现在只服务
-     PC 一级→二级的卡片放大 morph(目标 [data-work-image],见下方 effect)。 */
-
-  /* 2026-10-06 移动端:首页卡片 → 二级页的放大落点追踪。
-     与上面 detail 的追踪同构,目标是二级页当前主卡里的封面 img
-     ([data-work-image]),位图就绪后把 toRect 补给 SharedImageTransition,
-     并把圆角从首页卡组的 20px 过渡到二级主卡的圆角。 */
-  useLayoutEffect(() => {
-    if (route.page !== 'works' || !sharedImageRef.current) return undefined;
-    const workId = sharedImageRef.current.workId;
-    if (!workId) return undefined;
-
-    let frame = 0;
-    let disposed = false;
-    let attempts = 0;
-    let hasTarget = false;
-    let trackedFrames = 0;
-    const selector = `[data-work-image="${workId}"]`;
-
-    const apply = (rect) => {
-      setSharedImage((current) => {
-        if (!current) return current;
-        const prev = current.toRect;
-        if (
-          prev &&
-          Math.abs(prev.x - rect.x) < 0.5 &&
-          Math.abs(prev.y - rect.y) < 0.5 &&
-          Math.abs(prev.width - rect.width) < 0.5 &&
-          Math.abs(prev.height - rect.height) < 0.5
-        ) return current;
-        return { ...current, toRect: rect };
-      });
-      hasTarget = true;
-    };
-
-    const updateImageTarget = () => {
-      if (disposed || !sharedImageRef.current) return;
-      attempts += 1;
-      const img = document.querySelector(selector);
-      const card = img ? img.closest('.mw-card') : null;
-      const rect = img && card ? readNavRect(selector) : null;
-      const ready = Boolean(img && img.complete && img.naturalWidth > 0);
-      if (rect && card && rect.width > 0 && rect.height > 0 && ready) {
-        rect.radius = getComputedStyle(card).borderRadius;
-        apply(rect);
-        trackedFrames += 1;
-      } else if (!hasTarget && attempts >= 260) {
-        setSharedImage(null);
-        return;
-      }
-      if (!hasTarget || trackedFrames < 90) {
-        frame = window.requestAnimationFrame(updateImageTarget);
-      }
-    };
-
-    frame = window.requestAnimationFrame(() => {
-      frame = window.requestAnimationFrame(updateImageTarget);
-    });
-
-    return () => {
-      disposed = true;
-      window.cancelAnimationFrame(frame);
-    };
-  }, [route.page, sharedImage?.workId]);
-
-  /* 2026-10-07 移动端:二级页 → 一级页的**回程**也走同一套覆盖层。
-     业主诉求:「一级页面进入二级页面时卡片要无缝;二级页面返回一次时,也应该
-     保留这样的动效转场」。起点 rect 由 goHome() 在离开二级页前同步量好,这里
-     只负责补终点 —— 首页卡组里 data-deck-work 等于该作品的那张卡(就是用户
-     点进来的那张,active 没变过,所以它的 rect 就是落点)。
-     ⚠ 只落定一次:CSS 过渡一旦起跑就不能再改目标,否则 width 的 transition
-       反复重启、transitionend(交接信号)被不断顺延,覆盖层与卡片错位。
-     首页层在 route 切回 home 的同一帧就已显示(不是 display:none),所以
-     一次 rAF 之后卡的几何量得到;量不到就放弃覆盖层,不留残影。 */
-  useLayoutEffect(() => {
-    if (!isMobileDevice() || route.page !== 'home' || !sharedImageRef.current) return undefined;
-    const workId = sharedImageRef.current.workId;
-    if (!workId) return undefined;
-
-    let frame = 0;
-    let disposed = false;
-    let attempts = 0;
-    let lastRect = null;
-    const selector = `[data-deck-work="${workId}"]`;
-
-    const updateDeckTarget = () => {
-      if (disposed || !sharedImageRef.current) return;
-      attempts += 1;
-      const card = document.querySelector(selector);
-      const rect = card ? readNavRect(selector) : null;
-      // ⚠ 必须连续两帧量到同一个矩形才落定:回程同一帧还要把 window 滚回
-      // 离开首页时的位置(restoreScroll 两个 rAF),量早了会读到滚动前的
-      // 坐标 → 覆盖层落点与返回后的卡片错位。
-      if (rect && rect.width > 0 && rect.height > 0) {
-        const stable = lastRect &&
-          Math.abs(lastRect.x - rect.x) < 0.5 && Math.abs(lastRect.y - rect.y) < 0.5 &&
-          Math.abs(lastRect.width - rect.width) < 0.5 && Math.abs(lastRect.height - rect.height) < 0.5;
-        if (stable) {
-          rect.radius = getComputedStyle(card).borderRadius;
-          setSharedImage((current) => (current ? { ...current, toRect: rect } : current));
-          return;
-        }
-        lastRect = rect;
-      } else {
-        lastRect = null;
-      }
-      if (attempts >= 150) {
-        setSharedImage(null);
-        return;
-      }
-      frame = window.requestAnimationFrame(updateDeckTarget);
-    };
-
-    frame = window.requestAnimationFrame(() => {
-      frame = window.requestAnimationFrame(updateDeckTarget);
-    });
-
-    return () => {
-      disposed = true;
-      window.cancelAnimationFrame(frame);
-    };
-  }, [route.page, sharedImage?.workId]);
-
   const restoreScroll = (key, fallback) => {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
@@ -1410,31 +1283,21 @@ function App() {
     if (isMobileDevice()) holdStreetIdleFrames();
     if (route.page === 'home') {
       setNavMotion('home-to-works');
-      // 2026-10-06 移动端:首页点卡 → 二级页。
-      // PC:复用 SharedImageTransition(覆盖层 img 从首页卡放大到二级主卡)。
-      // 移动端:不再用覆盖层,把源卡矩形交给二级轨道,由**同一张卡**自己
-      // 从源卡姿态张开 —— 覆盖层没有蒙版/标题/阴影,交接瞬间这些东西凭空
-      // 出现,就是业主看到的「跳帧换了一张卡」。
-      if (opts?.rect && opts?.src) {
-        if (isMobileDevice()) {
-          setWorksEntry({
-            rect: opts.rect,
-            workId: opts.workId ?? '',
-            /* 副卡姿态 + 一级卡面布局高:二级轨道的入场初始姿态要用它们,
-               让左右两张副卡从它们在一级里的位置接着动(见 WorksPage 入场)。 */
-            cardH: opts.cardH ?? null,
-            prevPose: opts.prevPose ?? null,
-            nextPose: opts.nextPose ?? null
-          });
-        } else {
-          setSharedImage({
-            src: opts.src,
-            fromRect: opts.rect,
-            fromRadius: '20px',
-            toRect: null,
-            workId: opts.workId ?? ''
-          });
-        }
+      // 2026-10-06 移动端:首页点卡 → 二级页。移动端把源卡矩形交给二级轨道,
+      // 由**同一张卡**自己从源卡姿态张开 —— 覆盖层没有蒙版/标题/阴影,交接
+      // 瞬间这些东西凭空出现,就是业主看到的「跳帧换了一张卡」。
+      // 2026-10-09 业主:PC 一级→二级不再做卡片放大过渡,SharedImageTransition
+      // 已随「二级封面图 → 三级页头图」旧设计一并删除,PC 点卡直接切页。
+      if (opts?.rect && opts?.src && isMobileDevice()) {
+        setWorksEntry({
+          rect: opts.rect,
+          workId: opts.workId ?? '',
+          /* 副卡姿态 + 一级卡面布局高:二级轨道的入场初始姿态要用它们,
+             让左右两张副卡从它们在一级里的位置接着动(见 WorksPage 入场)。 */
+          cardH: opts.cardH ?? null,
+          prevPose: opts.prevPose ?? null,
+          nextPose: opts.nextPose ?? null
+        });
       }
     } else if (route.page !== 'detail') {
       setNavMotion('');
@@ -1504,7 +1367,6 @@ function App() {
     if (fromRect) {
       setSharedPill({ rect: fromRect, title: categories.find((item) => item.id === category)?.title ?? activeCategory.title, mode: 'works' });
     }
-    setSharedImage(null);
     setWorksActiveLocked(false);
     setNavMotion('to-detail');
     // 2026-10-06 移动端:进入详情改为「下滑翻页」——详情层从顶部滑入盖住二级页,
@@ -1560,9 +1422,6 @@ function App() {
   const goDetailBack = () => {
     const entryCategory = window.sessionStorage.getItem('portfolioDetailEntryCategory');
     const shouldRestore = entryCategory === route.category;
-    // A back tap during the entry morph would otherwise strand the overlay on
-    // the works page: nothing re-aims it there, so drop it explicitly.
-    setSharedImage(null);
     setWorksActiveLocked(true);
     window.setTimeout(() => setWorksActiveLocked(false), 860);
     setNavMotion('to-works');
@@ -1639,12 +1498,6 @@ function App() {
           />
         )}
         {sharedPill && <SharedCategoryPill pill={sharedPill} />}
-        {sharedImage && (
-          <SharedImageTransition
-            transition={sharedImage}
-            onDone={() => setSharedImage(null)}
-          />
-        )}
         {route.page === 'heroMotionDemo' ? (
           <HeroMotionDemo />
         ) : (
@@ -1681,7 +1534,6 @@ function App() {
                 activeCategory={activeCategory}
                 goDetail={goDetail}
                 workId={route.workId}
-                arriving={Boolean(sharedImage && sharedImage.workId)}
                 returning={mobileFlip === 'exit'}
                 entry={worksEntry}
                 leaving={exitWorks || pcWorksExit}
@@ -1777,43 +1629,9 @@ function readNavRect(selector) {
 }
 
 // 2026-10-08: readClippedRadius 只被「二级→三级 hero morph」使用,头图删除后无调用方,一并移除。
-
-function SharedImageTransition({ transition, onDone }) {
-  const [isMoving, setIsMoving] = useState(false);
-  const targetRect = transition.toRect ?? transition.fromRect;
-  const rect = isMoving ? targetRect : transition.fromRect;
-  // Corners travel with the box: the overlay starts with the radius that is
-  // really clipping the cover on the list (mobile 18px / desktop 12px) and
-  // unwinds to the radius the hero figure itself has, so the hand-off at the
-  // end matches instead of snapping square.
-  const radius = (isMoving ? targetRect.radius : transition.fromRadius) ?? transition.fromRadius ?? '12px';
-  const style = {
-    '--image-x': `${rect.x}px`,
-    '--image-y': `${rect.y}px`,
-    '--image-w': `${rect.width}px`,
-    '--image-h': `${rect.height}px`,
-    '--image-radius': radius
-  };
-
-  useEffect(() => {
-    if (!transition.toRect) return undefined;
-    const frame = window.requestAnimationFrame(() => setIsMoving(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, [transition.toRect]);
-
-  return (
-    <div
-      className="shared-image-transition"
-      style={style}
-      onTransitionEnd={(event) => {
-        if (event.propertyName === 'width') onDone();
-      }}
-      aria-hidden="true"
-    >
-      <img src={transition.src} alt="" />
-    </div>
-  );
-}
+// 2026-10-09: SharedImageTransition(一级→二级卡片放大覆盖层)随之删除 —— 三级头图
+// 移除后它只剩 PC 一级→二级一条路径,业主决定不再要这个过渡,相关 state/追踪
+// effect/渲染点/CSS 全部清掉。移动端一级/二级的卡片自执行转场(worksEntry)不受影响。
 
 /* 跨级转场期间挂起尾屏街景的「空转保活帧」(见 contact-street/Street.jsx 的
    __streetHoldUntil)。街景与主页共用主线程,而空转帧在手机上一帧要 82~88ms
@@ -2168,11 +1986,37 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
         setVisible(false);
       }
     };
+    /* ⚠ 2026-10-10 性能 + 正确性:跨级转场期间(一级↔二级)一律不做可见性复查。
+       性能:这段复查每次要读 offsetParent + getBoundingClientRect(各一次强制布局),
+       而它有 5 处调用者(240ms 定时器、scroll、resize、IntersectionObserver、
+       挂载后的双 rAF)。转场那 1 秒里页面**正处于不断被写样式的状态**,任何一次读
+       都会把浏览器拽去做一趟同步布局 —— 归因里能看到它的布局栈就落在转场窗口内。
+       正确性:更要紧的是,转场期间首页整层可能正处于"半隐藏"(层已离开、window 还没
+       滚回原位),此时 rect 会落回折叠线以下,复查会把 is-visible 误摘掉 ——
+       这正是上面 2134-2141 注释里那个「接不回一级页面的设计」的老 bug。
+       跳过的那一次不会丢:转场结束会**主动补做一次**(见 scheduleCatchUp),
+       而且 resync()/滚动/resize/IO 各自照旧,判定语义与原来完全一致。 */
+    let catchUpTimer = 0;
+    const holdUntil = () => Number(window.__measureHoldUntil || 0);
+    const heldNow = () => holdUntil() > performance.now();
+    const scheduleCatchUp = () => {
+      if (catchUpTimer) return;
+      const wait = Math.max(0, holdUntil() - performance.now()) + 40;
+      catchUpTimer = window.setTimeout(() => { catchUpTimer = 0; syncVisibility(); }, wait);
+    };
+    /* 被转场挡下来的调用统一走这里:挡了就登记一次补偿复查。 */
+    const syncOrDefer = () => {
+      if (heldNow()) { scheduleCatchUp(); return; }
+      syncVisibility();
+    };
     /* 暴露给外部主动重算(首页重新可见时用):不必等滚动事件。 */
     syncRef.current = syncVisibility;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
+        /* 转场期间直接跳过并登记补偿:IO 回调同样要读 rect + offsetParent,
+           而它在转场里会被反复唤起(每次布局变化都会重算相交)。 */
+        if (heldNow()) { scheduleCatchUp(); return; }
         if (!isRendered()) return;
         const currentScrollY = window.scrollY;
         const isScrollingDown = currentScrollY >= lastScrollYRef.current;
@@ -2200,17 +2044,21 @@ function useRevealOnView({ threshold = 0.18, rootMargin = '0px 0px -10% 0px' } =
     frame = window.requestAnimationFrame(() => {
       frame = window.requestAnimationFrame(syncVisibility);
     });
-    const visibilityTimer = window.setInterval(syncVisibility, 240);
-    window.addEventListener('scroll', syncVisibility, { passive: true });
-    window.addEventListener('resize', syncVisibility);
+    /* 240ms 定时器 / scroll / resize 三条路径统一走 syncOrDefer:
+       转场期间挡下并登记一次补偿复查,其余时候与原来逐字一致。
+       (挂载后的双 rAF 不挡 —— 那是初次判定,不在转场里。) */
+    const visibilityTimer = window.setInterval(syncOrDefer, 240);
+    window.addEventListener('scroll', syncOrDefer, { passive: true });
+    window.addEventListener('resize', syncOrDefer);
 
     return () => {
       syncRef.current = null;
       observer.disconnect();
       window.cancelAnimationFrame(frame);
       window.clearInterval(visibilityTimer);
-      window.removeEventListener('scroll', syncVisibility);
-      window.removeEventListener('resize', syncVisibility);
+      window.clearTimeout(catchUpTimer);
+      window.removeEventListener('scroll', syncOrDefer);
+      window.removeEventListener('resize', syncOrDefer);
     };
   }, [threshold, rootMargin]);
 
@@ -6050,7 +5898,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
 const ORBIT_AUTO_DELAY = 4000;
 
 function WorksPage({
-  activeCategory, goDetail, workId = '', arriving = false, returning = false,
+  activeCategory, goDetail, workId = '', returning = false,
   entry = null, leaving = false, handingOff = false, onEntryArmed = null, onLeavingDone = null,
   onActiveWorkChange = null, onHome = null
 }) {
@@ -6227,6 +6075,19 @@ function WorksPage({
     if (!isMobile) return undefined;
     if (appliedRef.current === pos) return undefined;
     if (phaseRef.current === 'armed' || phaseRef.current === 'entering') return undefined;
+    /* ⚠ 2026-10-10 性能:入场挂载这一趟要跳过 —— 紧接着的入场 effect(声明在后面,
+       同一个提交里必然后跑)会把 track 的姿态、transition 与 appliedRef 整个重写一遍,
+       这里再写一次是纯多余。更要紧的是:「写」会让入场 effect 的 railGeom()/
+       getBoundingClientRect() 变成**写后读** —— 那 165+ 个刚挂载的节点会被强制
+       多跑一整趟样式重算 + 布局。探针实测(手机 4× 降速):点击后 89ms 处那记
+       80~145ms 长任务的主要成分就是它,而这一记正是业主能看见的「卡一下」。
+       只在入场 effect 确实会接管时才跳(它需要 track.children[idx] 里的 .mw-card);
+       它要是不接管,这里照旧归位,不会把轨道留在错误位置。 */
+    if (entry && entry.rect) {
+      const track = trackRef.current;
+      const slide = track ? track.children[posRef.current] : null;
+      if (slide && slide.querySelector('.mw-card')) return undefined;
+    }
     /* ⚠ 离场期间绝不归位:回程的 track transform 是**收拢动画**的一部分,这里一旦
        接管就会把它换成「吸到某个索引」的补间 —— 整轨被拉走,收拢动画当场作废
        (2026-10-07 实测:pos 被改掉时 track 被拽走 477px)。 */
@@ -6746,6 +6607,51 @@ function WorksPage({
     // (mw-entering / mw-leaving),没有第二个元素参与交接。
     // returning:从三级页返回翻页(上滑)时二级页从屏幕底部同步升回,与详情层
     // 的上滑离场构成「相机上移」的整屏翻页(mw-under-return)。
+    /* ⚠ 2026-10-10 性能:轨道这 22 个槽位(154 个节点)只取决于 pos,但原来每次
+       WorksPage 重渲染都会把它们整批重建 —— 而进二级页这一段里,WorksPage 会因为
+       phase(armed/entering/idle)、landed、handingOff 等状态变化重渲染 5~7 次,
+       每一次都白重建这 154 个元素(手机 4× 降速下每次十几到几十毫秒,且正好落在
+       动画帧里)。用 useMemo 把依赖收窄成 pos:相位类变化不再触碰这批节点。
+       键值、结构、属性完全不变,只是跳过 React 的重建 → 视觉与行为零变化。 */
+    const railSlides = useMemo(() => RAIL_SLIDES.map((work, i) => {
+      /* 距当前卡 ±RAIL_WINDOW 之外:整张卡不参与绘制、也不解码封面
+         (见 RAIL_WINDOW 处的说明)。attribute 存在即代表 far。 */
+      const live = Math.abs(i - pos) <= RAIL_WINDOW;
+      return (
+        <div
+          className={`mw-slide${i === pos ? ' is-current' : ''}`}
+          key={`${work.id}-${i}`}
+          data-rail-index={i}
+          data-rail-work={work.id}
+          data-far={live ? undefined : ''}
+        >
+          <button
+            type="button"
+            className="mw-card"
+            aria-label={`${work.title} — 下滑或点按查看设计详情`}
+          >
+            {/* ⚠ 只给活跃窗口挂 src:33 个节点同时挂上会让首帧一次性解码
+                 全部封面,正好压在动画起跑那一帧上(实测多花 ~85ms)。
+                 远处副本要么被主卡盖住、要么远在屏外,不需要位图。
+                 ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,
+                   塞 16:9 会被 object-fit:cover 每侧裁掉 33%。且跨级转场
+                   要求一级 .mob-card 与二级 .mw-card 是同一张卡面。 */}
+            <img
+              className="mw-card-img"
+              src={live ? (work.image ?? work.detailHero) : undefined}
+              alt=""
+              decoding="async"
+            />
+            <span className="mw-card-veil" aria-hidden="true" />
+            <span className="mw-card-copy" aria-hidden="true">
+              <strong>{work.title}</strong>
+              <b>{work.subtitle}</b>
+            </span>
+          </button>
+        </div>
+      );
+      /* eslint-disable-next-line react-hooks/exhaustive-deps */
+    }), [pos]);
     return (
       <section
         ref={pageRef}
@@ -6760,44 +6666,7 @@ function WorksPage({
           onPointerCancel={railCancel}
         >
           <div className="mw-track" ref={trackRef}>
-            {RAIL_SLIDES.map((work, i) => {
-              /* 距当前卡 ±RAIL_WINDOW 之外:整张卡不参与绘制、也不解码封面
-                 (见 RAIL_WINDOW 处的说明)。attribute 存在即代表 far。 */
-              const live = Math.abs(i - pos) <= RAIL_WINDOW;
-              return (
-                <div
-                  className={`mw-slide${i === pos ? ' is-current' : ''}`}
-                  key={`${work.id}-${i}`}
-                  data-rail-index={i}
-                  data-rail-work={work.id}
-                  data-far={live ? undefined : ''}
-                >
-                  <button
-                    type="button"
-                    className="mw-card"
-                    aria-label={`${work.title} — 下滑或点按查看设计详情`}
-                  >
-                    {/* ⚠ 只给活跃窗口挂 src:33 个节点同时挂上会让首帧一次性解码
-                         全部封面,正好压在动画起跑那一帧上(实测多花 ~85ms)。
-                         远处副本要么被主卡盖住、要么远在屏外,不需要位图。
-                         ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,
-                           塞 16:9 会被 object-fit:cover 每侧裁掉 33%。且跨级转场
-                           要求一级 .mob-card 与二级 .mw-card 是同一张卡面。 */}
-                    <img
-                      className="mw-card-img"
-                      src={live ? (work.image ?? work.detailHero) : undefined}
-                      alt=""
-                      decoding="async"
-                    />
-                    <span className="mw-card-veil" aria-hidden="true" />
-                    <span className="mw-card-copy" aria-hidden="true">
-                      <strong>{work.title}</strong>
-                      <b>{work.subtitle}</b>
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
+            {railSlides}
           </div>
         </div>
         <button
@@ -6915,7 +6784,7 @@ function WorksPage({
                   <span className="works-orbit-glow" />
                 </span>
                 <div className="works-orbit-cover">
-                  <LazyImage data-work-image={current.id} src={current.detailHero ?? current.image} alt={current.title} />
+                  <LazyImage src={current.detailHero ?? current.image} alt={current.title} />
                   <span className="works-orbit-peek"><span>OPEN PROJECT</span>{orbitArrow}</span>
                 </div>
               </button>
