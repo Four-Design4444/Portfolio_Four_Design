@@ -461,24 +461,6 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
   /* ⑨ 业主「FOUR DESIGN / INDEPENDENT CREATIVE STUDIO 之间间距收窄」：
      demo 是 gap:18px + letter-spacing 1px（6.5px 字号下相当于 3 个字宽）。 */
   .intro-foot { font-size: 6.5px; letter-spacing: .8px; margin-top: 12px; gap: 8px; }
-  /* ── 修12（2026-10-09 移动端镜头拉近）────────────────────────────────────
-     业主：移动端尾屏场景太小，拉近镜头，但绝不能影响各种交互的镜头过渡。
-     做法 = 给 WebGL canvas 做纯视觉放大（CSS transform scale），相机一概不动：
-     · demo 的相机数学全部基于 innerWidth/innerHeight 与指针位移增量（已核
-       bundle：aspect=innerWidth/innerHeight、hotspots 投影无人消费、canvas
-       无自身 transform），CSS 缩放不改变这些输入 ⇒ 平移/拖拽、面板飞入、
-       转场动画的逻辑与曲线全部原样，只是画面整体放大；
-     · .intro / .hud / .street-quick / #detail 都是 DOM 覆盖层，不在 canvas
-       里，位置一像素不动；
-     · transform-origin 取楼群中心（水平居中、垂直 ≈45%），放大后楼群基本
-       原地变大；放大的越界部分被视口裁掉，不会有空边；
-     · 缩放系数做成变量 --street-zoom，业主嫌大/嫌小只改这一个值。 */
-  :root { --street-zoom: 1.25; }
-  body { overflow: hidden !important; }
-  canvas {
-    transform: scale(var(--street-zoom, 1.25));
-    transform-origin: 50% 45%;
-  }
 }
 `;
 
@@ -504,6 +486,67 @@ const HOST_JS = `
   // 0.5 ≈ 车中心左移 5.4% 视口宽（1512 宽下约 82px）：右侧充电桩完整露出，
   // 车头左缘仍有约 3% 视口宽余量（再大就裁车头，实测 0.6 起前灯出画）。
   var CAR_PAN_PC = 0.5;
+
+  // ── 移动端「初始镜头拉近」（2026-10-10 第一轮，取代 10-09 的 canvas CSS 缩放）─
+  // 业主需求：移动端 overview 场景太小要拉近，但**交互后的镜头是他单独调过的**，
+  // 一个字节都不能动。上一版给 canvas 加 transform:scale 之所以是错的：放大发生在
+  // 光栅之后，overview 与所有交互终态被等比放大 ⇒ 四套交互机位全部要重调。
+  //
+  // 正解 = 只改**主相机的 fov**（投影阶段，等价于换长焦镜头）：
+  //   · fov 只在 nonzero(overview) 时被压窄，其余模式恒回 demo 原始 40；
+  //   · 交互的终态由 demo 自己的相机插值决定（position/target），与 fov 无关，
+  //     且我们在 transition 走完时 fov 已精确回到 40 ⇒ **交互机位与业主调过的
+  //     完全一致**，一套都不用重调；
+  //   · 进出 handler：ê mode 从 overview ↔ 其它切换时，用与 demo 同款 smootherstep
+  //     在 ZOOM_MS 内把缩放量平滑推到 0/1 ⇒ 看起来就是本次转场的一部分；
+  //   · 每帧在 demo 的帧回调**之前**写 fov + updateProjectionMatrix：demo 从不写
+  //     fov（bundle 已核：fov 只在初始化出现一次）⇒ 不会打架；射线拾取用的是
+  //     同一份 projectionMatrix ⇒ 点击判定与看到的画面严格一致。
+  // ⚠ 运行时可调：window.__streetMobileZoom（>1 越大越近，改完下一帧生效）。
+  var BASE_FOV = 40;
+  var ZOOM_MS = 1400;                       // 与 demo 镜头转场同量级
+  var ZOOM_DUR = ZOOM_MS / 1000;
+  var zoomBlend = 1;                        // 1 = 完全拉近，0 = demo 原视角
+  var zoomFrom = 1, zoomTo = 1, zoomT0 = 0, zoomLastMode = null;
+  var smoothstep = function (t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  };
+  var applyOverviewZoom = function (now) {
+    var cam = carCamera;
+    if (!cam || window.innerWidth > 700) {   // 只作用于移动端；PC 一帧都不碰
+      if (cam && window.innerWidth > 700 && cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); zoomBlend = 1; zoomLastMode = null; }
+      return;
+    }
+    var mode = (window.__four && window.__four.mode) || 'overview';
+    if (mode !== zoomLastMode) {
+      zoomLastMode = mode;
+      zoomFrom = zoomBlend;
+      zoomTo = mode === 'overview' ? 1 : 0;
+      zoomT0 = now;
+    }
+    if (zoomBlend !== zoomTo) {
+      var p = ZOOM_DUR > 0 ? Math.min(1, (now - zoomT0) / ZOOM_MS) : 1;
+      zoomBlend = zoomFrom + (zoomTo - zoomFrom) * smoothstep(p);
+    }
+    var z = typeof window.__streetMobileZoom === 'number' ? window.__streetMobileZoom : 1.25;
+    var mag = 1 + (z - 1) * zoomBlend;        // 实际放大倍率
+    if (mag <= 1.0005) {
+      if (cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); }
+      return;
+    }
+    var half = BASE_FOV * Math.PI / 360;
+    cam.fov = 2 * Math.atan(Math.tan(half) / mag) * 180 / Math.PI;
+    cam.updateProjectionMatrix();
+  };
+  window.__streetZoomDebug = function () {
+    return {
+      blend: +zoomBlend.toFixed(3),
+      fov: carCamera ? +carCamera.fov.toFixed(2) : null,
+      mode: (window.__four && window.__four.mode) || null,
+      wide: window.innerWidth > 700
+    };
+  };
   // Reflector 每帧以主相机为 WeakMap key，支持宿主注入晚于相机创建。
   // 捕获一次即恢复 get，后续只包装当前 iframe 的主相机。
   var originalWeakGet = WeakMap.prototype.get;
@@ -645,6 +688,7 @@ const HOST_JS = `
       }
       carCameraOffset = null;
     }
+    applyOverviewZoom(at);   // ⚠ 必须在 cb 之前：cb 里才是 demo 的绘图
     cb(at);
   };
   window.requestAnimationFrame = function (cb) {
