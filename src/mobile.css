@@ -87,12 +87,18 @@ html[data-device="mobile"] .morph-nav {
      nav-works 类已摘掉,若基础值不同,正在淡出的 pill 行高度会瞬跳。
      34 是旧桌面轨道,移动端三态统一 24,淡出全程零位移。 */
   --works-nav-height: 24px;
+  /* 2026-10-10: 背景模糊也必须是过渡的一部分,而且**这里(基础态)也必须写**:
+     返回一级时元素新匹配的是 nav-home,若它身上没有 backdrop-filter 的过渡,
+     玻璃就会在一帧内从 12px 跳回 0(逐帧取证实测:进入方向 13 档补间、返回方向只有 2 档)。
+     两处都写,进出才都是渐变。 */
   transition:
     top 620ms cubic-bezier(0.22, 1, 0.36, 1),
     width 620ms cubic-bezier(0.22, 1, 0.36, 1),
     height 620ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1);
+    border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    -webkit-backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* The base desktop grid is 1fr auto 1fr; on the bottom capsule the middle
@@ -352,18 +358,32 @@ html[data-device="mobile"] .morph-nav.nav-detail {
      1.2 饱和 + 微弱描边与投影。默认亮色(与 PC 默认一致)。 */
   --nav-border-color: rgba(214, 229, 255, 0.09);
   background: rgba(183, 208, 250, 0.024);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-  backdrop-filter: blur(24px) saturate(120%);
+  /* 2026-10-10: 24px → 12px。为什么敢改小、以及为什么必须一并加过渡:
+     · 这层背景模糊是**真·逐像素高斯**,而且 620ms 形变期间胶囊宽高一直在变 → 每帧重新采样。
+       同一份冻结构建上把整层关掉做单变量 A/B(4× 降速、各 3 轮、交替跑):
+       「一级卡→二级页」掉帧超出量中位 146ms → 112ms(**−23%**,三轮方向全一致);
+       而卡片投影那层模糊(56→79px)微基准实测 0ms —— 所以该省的是这一层,不是投影。
+     · 24px 与 12px 的肉眼差:把一张静止的高细节照片垫在导航背后截图逐像素比,
+       平均差 1.72/255(0.67%)、最大 8/255(自检噪声 0.00/255);而"完全不要模糊"是 8.51/255。
+       即 12px 肉眼几乎无差,但比"不要模糊"明显更接近现状。
+     · ⚠ 首页态(nav-home)是 backdrop-filter:none,二/三级是这层 24px —— 状态一换就是一记
+       硬跳变(模糊从无到有),违反"任何变化都要有过渡帧"。故把 backdrop-filter 也写进下面
+       的 620ms 过渡:玻璃从 0 渐凝到 12px,与胶囊形变同步,不再跳。 */
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
   /* ⚠ 必须把 morph 的五条过渡一并列出:这条规则比移动基础 .morph-nav 更具体,
      只写 background/shadow 会把 top/width/height/padding/border-radius 的 620ms
-     形变过渡整个顶掉 → 二/三级胶囊形变失效。末尾补上主题翻转的两条。 */
+     形变过渡整个顶掉 → 二/三级胶囊形变失效。末尾补上主题翻转的两条,
+     以及 2026-10-10 新增的背景模糊(首页态是 none,不写过渡就是一记硬跳变)。 */
   transition:
     top 620ms cubic-bezier(0.22, 1, 0.36, 1),
     width 620ms cubic-bezier(0.22, 1, 0.36, 1),
     height 620ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 620ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    -webkit-backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 260ms ease,
     box-shadow 260ms ease;
 }
@@ -1598,6 +1618,8 @@ html[data-device="mobile"] .mw-slide {
    节点算样式、跑布局、建图层。content-visibility:hidden 让它们**根本不参与渲染**。
     4× 降速、冻结构建的单次 A/B:「二级作品页→详情页」掉帧超出量 229→71ms、
     「一级卡→二级页」424→262ms;⚠ 单次测量在这台机器上噪声极大(同一基线重跑可在
+    545~858ms 间浮动),这两组数字只作方向参考 —— 机制才是确定的:那二十几个
+    副本从此不进样式重算、不进布局、不进绘制。
     545~858ms 间浮动),这两组数字只作方向参考 —— 机制才是确定的:那二十几个
     副本从此不进样式重算、不进布局、不进绘制。
    几何为什么不会动:槽宽(--mw-pitch)与卡面尺寸(--mw-card-w/h)都是显式值,轨道
