@@ -5544,6 +5544,30 @@ const HOME_GESTURE_GAP_MS = 90;
 const HOME_TOUCH_THRESHOLD = 34;
 const HOME_TOUCH_END_DELAY_MS = 120;
 
+/* 整屏翻页动画时长。原来是内核的 `scrollTo({behavior:'smooth'})`（≈700ms），
+   现在自己画，用同一条曲线、同一个时长，观感不变（见 goToPage 的注释）。 */
+const HOME_FLIP_MS = 700;
+
+/* cubic-bezier(0.42, 0, 0.58, 1) —— 与 CSS 的 ease-in-out 同值，也是内核原生
+   平滑滚动用的那条曲线；换掉原生实现后「翻页的手感」必须一模一样。
+   标准 Newton 求 t(x) 再取 y，6 次迭代足够（误差 << 1px）。 */
+function flipEase(p, x1 = 0.42, y1 = 0, x2 = 0.58, y2 = 1) {
+  const cx = 3 * x1; const bx = 3 * (x2 - x1) - cx; const ax = 1 - cx - bx;
+  const cy = 3 * y1; const by = 3 * (y2 - y1) - cy; const ay = 1 - cy - by;
+  const at = (t) => ((ax * t + bx) * t + cx) * t;
+  const bt = (t) => ((ay * t + by) * t + cy) * t;
+  const slope = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  let t = p;
+  for (let i = 0; i < 6; i += 1) {
+    const dx = at(t) - p;
+    if (Math.abs(dx) < 1e-4) break;
+    const d = slope(t);
+    if (Math.abs(d) < 1e-6) break;
+    t -= dx / d;
+  }
+  return bt(Math.min(1, Math.max(0, t)));
+}
+
 const HOME_PAGING_QUERY = '(min-width: 1px)';
 
 // The nav renders above the home page, so it cannot receive the pager as a
@@ -5752,6 +5776,8 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   const lockedUntilRef = useRef(0);
   const scrollingRef = useRef(false);
   const reducedRef = useRef(false);
+  /* 自绘翻页动画的 rAF 句柄（0 = 没有飞行中的翻页）。见 goToPage 的注释。 */
+  const flipRafRef = useRef(0);
 
   indexRef.current = index;
 
@@ -5784,6 +5810,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     let timer = 0;
     const realign = () => {
       timer = 0;
+      // 翻页飞行中不校正：动画自己每帧把终点算成 index * 当前页高，
+      // 中途地址栏变高/变矮也落在整屏边界上。这里再插一次 scrollTo 反而会把
+      // 平滑滚动打断成一帧硬切（见 goToPage 注释）。
+      if (flipRafRef.current) return;
       const aligned = indexRef.current * pageHeight();
       if (Math.abs(window.scrollY - aligned) > 1) {
         window.scrollTo({ top: aligned, behavior: 'auto' });
@@ -5815,13 +5845,64 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     const clamped = Math.max(0, Math.min(HOME_PAGE_COUNT - 1, next));
     setHasEnteredPage(true);
     setIndex(clamped);
-    const smooth = !instant && !reducedRef.current;
-    if (smooth) {
-      scrollingRef.current = true;
-      window.setTimeout(() => { scrollingRef.current = false; }, 725);
+    /* ⚠⚠ 翻页动画由本页**自己画**，不要退回 `scrollTo({behavior:'smooth'})`。
+       （2026-10-10 业主：努比亚 Z70U 自带浏览器里「上下屏切换有时直接硬切」，
+       同机 Edge 正常。）原生平滑滚动把动画交给内核，能不能补间、补到几帧全看
+       内核实现；本页还有两处会从外面打断它：
+       ① `html[data-paging="on"]` 是 `scroll-snap-type: y mandatory`。地址栏收放
+          触发 resize → --vh 变 → 每个分屏的 height 变 → **吸附位置变**，内核会把
+          滚动位置瞬时重新吸附，正好把飞行中的动画掐掉（这解释了「有时」：只在
+          翻页途中地址栏高度真的变化时复现）。
+       ② 同一次 resize 会让上面的 realign（160ms 防抖）在飞行中再发一次
+          `behavior:'auto'` 的 scrollTo，同样把它掐掉。
+       自己画 + 飞行中挂 `is-flipping`（关掉吸附）+ 飞行中跳过 realign，三条一起消。
+       每帧按「缓动进度的增量」推进**剩余行程**（而不是写死 from→to 的直线插值）：
+       终点每帧现算，中途视口变高/变矮时终点跟着移动，位置本身始终连续（不会因为
+       终点瞬移而把画面拽走一步），最后一帧的增量恰好 = 1 ⇒ 落点精确落在整屏边界上，
+       不需要任何事后校正。 */
+    const root = document.documentElement;
+    const dest = () => clamped * pageHeight();
+    if (flipRafRef.current) window.cancelAnimationFrame(flipRafRef.current);
+    flipRafRef.current = 0;
+    if (instant || reducedRef.current || Math.abs(dest() - window.scrollY) < 2) {
+      root.classList.remove('is-flipping');
+      scrollingRef.current = false;
+      window.scrollTo(0, dest());
+      return;
     }
-    window.scrollTo({ top: clamped * pageHeight(), behavior: smooth ? 'smooth' : 'auto' });
+    const start = performance.now();
+    let prevEase = 0;
+    let y = window.scrollY;
+    root.classList.add('is-flipping');
+    scrollingRef.current = true;
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / HOME_FLIP_MS);
+      const ease = flipEase(p);
+      const take = p >= 1 ? 1 : (ease - prevEase) / Math.max(1e-3, 1 - prevEase);
+      prevEase = ease;
+      const to = dest();
+      y += (to - y) * Math.min(1, Math.max(0, take));
+      if (p < 1) {
+        window.scrollTo(0, y);
+        flipRafRef.current = window.requestAnimationFrame(tick);
+        return;
+      }
+      window.scrollTo(0, dest());
+      flipRafRef.current = 0;
+      root.classList.remove('is-flipping');
+      scrollingRef.current = false;
+    };
+    flipRafRef.current = window.requestAnimationFrame(tick);
   };
+
+  /* 翻页飞行中离开一级页 / 组件卸载：停掉 rAF 并摘掉 is-flipping。
+     dependency 是 paging ⇒ paging 关掉（进二级页）时也会跑到，html 上不会残留
+     那条「关吸附」的 class。 */
+  useEffect(() => () => {
+    if (flipRafRef.current) window.cancelAnimationFrame(flipRafRef.current);
+    flipRafRef.current = 0;
+    document.documentElement.classList.remove('is-flipping');
+  }, [paging]);
 
   const step = (direction) => {
     if (isLocked()) return;

@@ -36,6 +36,15 @@ html[data-device="mobile"] body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* 整屏翻页动画**飞行中**摘掉吸附（js 挂 .is-flipping，见 main.jsx 的 goToPage）。
+   动画每帧自己写 scrollTop；而内核的吸附引擎一旦因为 --vh / 分屏高度变化
+   （地址栏收放触发 resize）重新吸附，会把正在飞的滚动位置**瞬时**挪走 ——
+   表现就是一帧硬切，正是「努比亚自带浏览器有时直接硬切」的机制之一。
+   动画每帧把终点算在整屏边界上，所以摘掉 / 挂回都不产生任何位移。 */
+html[data-device="mobile"][data-paging="on"].is-flipping {
+  scroll-snap-type: none;
+}
+
 html[data-device="mobile"] button,
 html[data-device="mobile"] a {
   touch-action: manipulation;
@@ -2508,23 +2517,26 @@ html[data-device="mobile"] .mob-profile-stats {
      行高 = 卡片 border-box 高 = 上下描边 2px + 2×纵向 padding + 数字盒高
             + 列 gap + 标签固定行高 17px。
      数值已用探针逐项核对：静止 75.7188px / dock 68.8906px，与实测逐位相同。
-     ⚠ 下面三个变量与 .mob-profile-stat 的 padding/gap、strong 的 font-size、
-       .mob-profile-stat-label 的 height、以及 --mob-chip-w 引用的是同一组常量，
-       共四处，改一处必须同步其余三处。 */
+     ⚠ 高度式只此一处（--mob-stat-h / --mob-stat-h-dock），行与三张芯片都引用它，
+       不再各写一份常量；纵向 padding / 列 gap / label 17px 仍然必须与下面
+       .mob-profile-stat 的 padding/gap、.mob-profile-stat-label 的 height 同步。 */
   --mob-stat-pad-y: clamp(9px, 1.9vh, 13px);
   --mob-stat-gap-y: clamp(5px, 1.3vh, 7px);
   --mob-stat-num: clamp(19px, 5.9vw, 28px);
   --mob-stat-num-dock: clamp(14px, 4.2vw, 19px);
-  height: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num) + var(--mob-stat-gap-y) + 17px);
+  /* 行/卡高度（border-box）= 上下描边 2px + 2×纵向 padding + 数字盒高 + 列 gap
+     + 标签固定行高 17px。基础态用 --mob-stat-num，dock 用 --mob-stat-num-dock。 */
+  --mob-stat-h: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num) + var(--mob-stat-gap-y) + 17px);
+  --mob-stat-h-dock: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num-dock) + var(--mob-stat-gap-y) + 17px);
+  height: var(--mob-stat-h);
   /* dock 态专用常量，单一来源（JS 量宽也读这三个，见 measureStatDockWidth）：
      --mob-dock-name-font 选中卡英文 dock 字号（比静止态小一档，静止态不碰）
      --mob-dock-pad-x     选中卡 dock 水平 padding（收边距）
-     --mob-chip-w         收起芯片目标宽 = 芯片实际 stretch 高 → 正方形。
-        推导：芯片高 = 选中卡高 − margin-top
-             = 2×纵向padding + 数字(dock字号,行高1) + 列gap + label 17
-               − [数字dock字号 + clamp(4,1.1vh,6)]
-             = 2×clamp(9,1.9vh,13) + 17 + clamp(5,1.3vh,7) − clamp(4,1.1vh,6)。
-        ⚠ 若改动纵向 padding / 列 gap / margin-top 的任一 clamp，此式必须同步。 */
+     --mob-chip-w         收起芯片目标宽。推导:收起芯片高 = 选中卡高 − 差量
+         （选中卡的数字盒 + 列 gap 被收掉）= 2×clamp(9,1.9vh,13) + 17
+         + clamp(5,1.3vh,7) − clamp(4,1.1vh,6)（再 +2px 描边才是 border-box 高，
+         见 is-docked 规则的芯片 height）。它就是芯片的**高**（≈正方形，差 2px 描边），
+         所以宽高同源、随视口同步缩放。 */
   --mob-dock-name-font: clamp(8px, 2.25vw, 10px);
   --mob-dock-pad-x: clamp(8px, 2.2vw, 11px);
   --mob-chip-w: calc(2 * clamp(9px, 1.9vh, 13px) + 17px + clamp(5px, 1.3vh, 7px) - clamp(4px, 1.1vh, 6px));
@@ -2548,6 +2560,23 @@ html[data-device="mobile"] .mob-profile-stat {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
+  /* ⚠⚠ 卡片高度**必须显式给出**（2026-10-10 第二轮 · 微信端「未选中芯片的图标跳
+     帧」BUG）。症状：上一轮把行高变显式后，「标题/联系方式/选项卡」不再跳，但换成
+     两个**收起芯片的图标**在动效末尾跳一下 —— 也就是跳变从行传递到了行的内部。
+     根因：行高显式之后，卡片高度仍是**派生量** —— `align-items: stretch` 让卡片
+     高度 = 行高 − 自己的 margin-top，两个自变量都在过渡中，微信内核里这条派生
+     高度落地时机与行高不一致（同一类「涌现值停在旧值再瞬跳」）。图标在芯片里是
+     垂直居中的 ⇒ 芯片高一变，图标就跟着跳。
+     修法两条，一起把「派生」彻底拿掉：
+     ① `align-self: flex-end` —— 芯片贴**行底**定锚，不再靠 margin-top 顶下来；
+        底边 = 行底（行底由上方 flex-end 列 + 下方显式高度的描述卡决定，全显式）。
+     ② 高度自己走一条 height 过渡（与行高同值同曲线）：
+        基础态 = 行高的基础式；dock 选中卡 = 行高的 dock 式；
+        dock 收起芯片 = --mob-chip-w + 2px（即 dock 选中卡高 − margin-top 那份，
+        与旧的「stretch 高 − margin-top」逐帧等值，见 is-docked 规则）。
+     数值自检：三处公式都是**同一组常量**推出的，端点值与探针实测逐位相同
+     （402×874：基础 75.7031 / dock 行 68.875 / 收起芯片 46），所以正常浏览器
+     逐帧几何与改前完全一致 —— 只是不再有派生量。 */
   /* 静止态三卡均分 → dock 态由 width 驱动。**不能用 flex:1 1 0**:
      flex 简写会让 width 变成 auto(由内容决定),dock 态再用 width 接管就
      会与 flex 打架。改成 flex: 0 0 auto + width: calc((100% - 2*gap)/3),
@@ -2555,6 +2584,9 @@ html[data-device="mobile"] .mob-profile-stat {
   flex: 0 0 auto;
   width: calc((100% - var(--mob-stat-gap) * 2) / 3);
   min-width: 0;
+  /* 贴行底定锚 + 显式高度（见规则开头注释）。 */
+  align-self: flex-end;
+  height: var(--mob-stat-h);
   /* ⚠ 卡片必须裁剪(2026-10-03):数字 strong 与英文名都改成「盒保留 + 只淡出」,
      盒宽恒为文本自然宽,卡收窄到 36px 时内容会**溢出**而不是被压扁。
      没有这条 overflow 就会看到数字/名字画在邻居卡上面。 */
@@ -2573,6 +2605,7 @@ html[data-device="mobile"] .mob-profile-stat {
   will-change: width, padding;
   transition:
     width var(--mob-w-dur, var(--mob-dock-dur)) var(--mob-dock-ease),
+    height var(--mob-dock-dur) var(--mob-dock-ease),
     padding var(--mob-dock-dur) var(--mob-dock-ease),
     gap var(--mob-dock-dur) var(--mob-dock-ease),
     margin var(--mob-dock-dur) var(--mob-dock-ease),
@@ -2670,7 +2703,7 @@ html[data-device="mobile"] .mob-profile-stats.is-docked {
   gap: 0;
   /* 显式行高另一半：dock 态数字换用 --mob-stat-num-dock（clamp(14,4.2vw,19)），
      其余分项不变。见 .mob-profile-stats 开头的推导注释。 */
-  height: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num-dock) + var(--mob-stat-gap-y) + 17px);
+  height: var(--mob-stat-h-dock);
   /* 左侧让出 14px：dock 态描述卡与标签条相接，选中卡是「上圆角」，
      行若与下方描述卡左缘对齐会撞上描述卡的左上圆角(同技能 dock 的缩进) */
   margin-left: 14px;
@@ -2713,11 +2746,14 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:first-
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) {
   width: var(--mob-chip-w);
   /* 下收(2026-10-03,对齐 PC 版):收起芯片不再是整行高的空盒,而是**贴底
-     小方块** —— margin-top = 选中项数字盒高(dock 态 clamp(16,4.9vw,23)) +
-     列 gap(clamp(5,1.3vh,7),2026-10-03 随卡高收窄从 10 同步降到 7),
-     stretch 行内卡片高度随之收缩,底边仍与选中卡/描述卡同线。
-     margin 在基础态 transition 里,全程可插值无跳变。 */
-  margin-top: calc(clamp(14px, 4.2vw, 19px) + clamp(4px, 1.1vh, 6px));
+     小方块**（底边与选中卡/描述卡同线）。
+     ⚠ 2026-10-10 第二轮：定位从 `margin-top: 数字盒高 + 列 gap` 换成
+     **显式高度 + `align-self: flex-end`**（贴行底）。两者端点几何逐位相同
+     （行底 − (行高 − margin) ≡ 行底 − 芯片高），但 margin 是**过渡中的派生量**：
+     微信内核里它落地时机与行高不一致，表现为「收起芯片的图标在末尾跳一下」。
+     现在高度是声明量：--mob-chip-w + 2px = dock 选中卡高 − margin-top 那一份
+     （chipW 的推导本就把 margin-top 里的 clamp 减掉了，见 --mob-chip-w 注释）。 */
+  height: calc(var(--mob-chip-w) + 2px);
   /* 数字盒随字号**连续**归零(font-size 可插值,非 max-height 那种离散跳变),
      列 gap 同步归零 → 内容只剩 label 一行,恰好填满收缩后的内容盒:
      每一帧 内容高 == 内容盒高,零裁切;图标由基础态 justify-content:center
@@ -2773,6 +2809,8 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
    描边不再加白(用户要求):选中态靠宽度与内容表达,边框与收起项保持同一档。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat.is-active {
   width: var(--mob-w);
+  /* 显式高度 = 行高的 dock 式（选中卡 = 整行，与行高逐帧等值）。 */
+  height: var(--mob-stat-h-dock);
   transform: none;
   padding-left: var(--mob-dock-pad-x);
   padding-right: var(--mob-dock-pad-x);
@@ -2908,9 +2946,17 @@ html[data-device="mobile"] .mob-profile-stats,
 html[data-device="mobile"] .mob-profile-skills {
   /* ⚠ 本条位置更后、特异性与 .mob-profile-stats 基础规则相同 ⇒ **整条覆盖**
      那里的 transition 列表。height 必须带在这里，否则上面那条 height 过渡
-     会被静默吃掉（2026-10-10 显式行高随附）。 */
+     会被静默吃掉（2026-10-10 显式行高随附）。
+     ⚠⚠ gap / margin 也一度被这条规则**静默吃掉**（2026-10-10 第二轮实测发现）：
+     dock 态的 `gap 7→0` 与行的 `margin-left 0→14px` 都在覆盖后的列表之外 ⇒
+     **第一帧就瞬移到终值**（探针逐帧：点击后第一帧 chip x 已经带着 14px 缩进、
+     gap 已经归零，而同帧宽度只走了 6.9%）。表现就是「整行未选中芯片连着图标
+     先横跳一下，再开始平滑形变」。基础规则的注释本来就写着这两条必须在列，
+     这里补齐。 */
   transition:
     opacity 400ms cubic-bezier(0.34, 1.2, 0.44, 1),
+    gap var(--mob-dock-dur) var(--mob-dock-ease),
+    margin var(--mob-dock-dur) var(--mob-dock-ease),
     height var(--mob-dock-dur) var(--mob-dock-ease),
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
