@@ -372,7 +372,7 @@ const DECK_CARD_W = 17.5;    // 与 styles.css 的 .showcase-deck-card width 必
 const DECK_START_X = (100 - DECK_STEP_X * 10 - DECK_CARD_W) / 2;  // = 0.25，左右留白对称
 const projectShowcases = [
   {
-    id: 'ui-1',
+    id: 'coomo-home-mini',
     category: 'ui',
     work: 0,
     index: '01',
@@ -382,7 +382,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 0, rot: -2.3, restY: 8, z: 1 }
   },
   {
-    id: 'ui-2',
+    id: 'smart-home-platform',
     category: 'ui',
     work: 1,
     index: '02',
@@ -392,7 +392,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 1, rot: -0.8, restY: -2, z: 2 }
   },
   {
-    id: 'ui-3',
+    id: 'coomo-official',
     category: 'ui',
     work: 2,
     index: '03',
@@ -402,7 +402,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 2, rot: -1.9, restY: 3, z: 3 }
   },
   {
-    id: 'ui-4',
+    id: 'muguan-official',
     category: 'ui',
     work: 3,
     index: '04',
@@ -412,7 +412,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 3, rot: -0.4, restY: -4, z: 4 }
   },
   {
-    id: 'vi-1',
+    id: 'brand-summer',
     category: 'vi',
     work: 0,
     index: '05',
@@ -422,7 +422,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 4, rot: 1.2, restY: -5, z: 5 }
   },
   {
-    id: 'vi-2',
+    id: 'campaign-visual',
     category: 'vi',
     work: 1,
     index: '06',
@@ -432,7 +432,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 5, rot: -1.0, restY: 1, z: 6 }
   },
   {
-    id: 'vi-3',
+    id: 'packaging-system',
     category: 'vi',
     work: 2,
     index: '07',
@@ -442,7 +442,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 6, rot: 0.6, restY: -3, z: 7 }
   },
   {
-    id: '3d-1',
+    id: 'future-chair',
     category: '3d',
     work: 0,
     index: '08',
@@ -452,7 +452,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 7, rot: -1.6, restY: 7, z: 8 }
   },
   {
-    id: 'aigc-1',
+    id: 'ai-poster-lab',
     category: 'aigc',
     work: 0,
     index: '09',
@@ -462,7 +462,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 8, rot: 1.4, restY: -1, z: 9 }
   },
   {
-    id: 'aigc-2',
+    id: 'aigc-model',
     category: 'aigc',
     work: 1,
     index: '10',
@@ -472,7 +472,7 @@ const projectShowcases = [
     deck: { left: DECK_START_X + DECK_STEP_X * 9, rot: 0.3, restY: 4, z: 10 }
   },
   {
-    id: 'aigc-3',
+    id: 'aigc-style',
     category: 'aigc',
     work: 2,
     index: '11',
@@ -1820,10 +1820,20 @@ function SharedImageTransition({ transition, onDone }) {
    (PC 仅 11~15ms),保活间隔 5s —— 一级↔二级那 520~700ms 的转场里,它有相当
    概率正好撞进某一帧,读起来就是「动画中间莫名卡一下」。
    只作用于「看不见时的保活」:用户真回到尾屏时走的是满帧档,一秒都不会被挂起。
-   1800ms 覆盖最长的一条转场(收拢 560ms / 入场 700ms)并留出余量。 */
+   1800ms 覆盖最长的一条转场(收拢 560ms / 入场 700ms)并留出余量。
+
+   顺带挂起「测量类 hook」的 hashchange 重测(见 useMeasuredWidths /
+   MEASURE_HOLD_MS):改 hash 会触发 hashchange → 那些 hook 在 100/450/1000ms
+   各重测一次,而每次重测都要逐级 getComputedStyle 查可见性、读
+   getBoundingClientRect、以及往 body 插探针读 clamp() 解析值 —— 全是强制同步
+   布局。探针实测(手机 4× 降速)交互期间 30 次布局里 6 次、177 次样式重算里
+   18 次由这条链触发,且正好落在动画帧之间。挂起到转场结束后再测,量到的值
+   不变(只取决于字体与文案)。 */
+const MEASURE_HOLD_MS = 980;
 function holdStreetIdleFrames(ms = 1800) {
   try {
     window.__streetHoldUntil = performance.now() + ms;
+    window.__measureHoldUntil = Math.max(window.__measureHoldUntil || 0, performance.now() + MEASURE_HOLD_MS);
   } catch (_) { /* 极旧环境/被禁用时静默 */ }
 }
 
@@ -2681,7 +2691,14 @@ function ShowcaseDeck({ items, openWorks }) {
             <button
               type="button"
               className="showcase-deck-button"
-              onClick={() => openWorks(project.category)}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                openWorks(project.category, false, {
+                  workId: project.id,
+                  rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+                  src: cover
+                });
+              }}
             >
               <LazyImage src={cover} alt="" aria-hidden="true" />
               <span className="showcase-deck-scrim" aria-hidden="true" />
@@ -3346,6 +3363,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
     let ro = null;
     let roTimer = 0; /* RO 回调防抖句柄(此前未声明,RO 一触发就抛 ReferenceError) */
     let settleTimer = 0; /* 复位形变未落定时的重试句柄 */
+    let deferTimer = 0; /* 跨级转场挂起期间的重测句柄(见下面的 run) */
     const measure = () => {
       const nodes = [...document.querySelectorAll(selector)];
       if (nodes.length !== count) return;
@@ -3368,7 +3386,7 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
       });
       if (unsettled) {
         clearTimeout(settleTimer);
-        settleTimer = setTimeout(measure, 150);
+        settleTimer = setTimeout(run, 150);
         return;
       }
       const next = nodes.map((n) => {
@@ -3384,6 +3402,22 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
       /* 首测成功但 RO 还没挂上时兜底补挂(正常路径已在 effect 里挂好)。 */
       attachRO(nodes);
     };
+    /* ⚠ 2026-10-10 性能:上面所有触发源(RO 防抖 / resize / fonts.ready /
+       400ms 首测 / hashchange 分档重试)都改走 run() —— 它在跨级转场期间只登记
+       一次延迟重测,不真的去量。原因:改 hash 触发的 100/450/1000ms 重测正好落在
+       转场的动画帧之间,而每次 measure 都要逐级 getComputedStyle 查 isRendered、
+       读 getBoundingClientRect、并让 measureStatDockWidth 往 body 插探针读 clamp()
+       解析值 —— 全是强制同步布局。探针实测(手机 4× 降速):交互期间 30 次布局里
+       6 次、177 次样式重算里 18 次由这条链触发。挂起到转场结束后补测一次,量到的
+       值不变(只取决于字体与文案),只是不再插进动画里抢布局。 */
+    const run = () => {
+      const wait = (window.__measureHoldUntil || 0) - performance.now();
+      if (wait > 0) {
+        if (!deferTimer) deferTimer = setTimeout(() => { deferTimer = 0; run(); }, wait + 30);
+        return;
+      }
+      measure();
+    };
     /* ⚠⚠ 2026-10-07 修跳帧 BUG(业主复现路径:二级页刷新→返回一级→点技能卡,
        直接跳帧成选项状态):旧版把 RO 创建放在 measure() **成功路径内部** ——
        二级页刷新启动时首页是 .page-keep.is-hidden(display:none),首次 measure()
@@ -3398,16 +3432,16 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
       if (ro || els.length !== count) return;
       ro = new ResizeObserver(() => {
         clearTimeout(roTimer);
-        roTimer = setTimeout(measure, 120);
+        roTimer = setTimeout(run, 120);
       });
       els.forEach((n) => ro.observe(n));
     };
     attachRO([...document.querySelectorAll(selector)]);
-    measure();
+    run();
     /* 字体加载完 / 容器宽度变化都会改静止态宽度，各等一次。 */
-    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
-    window.addEventListener('resize', measure);
-    const t = setTimeout(measure, 400);
+    if (document.fonts?.ready) document.fonts.ready.then(run).catch(() => {});
+    window.addEventListener('resize', run);
+    const t = setTimeout(run, 400);
     /* ⚠ 2026-10-07 修跳帧 BUG:探针实测 Chrome 的 ResizeObserver 对
        display:none↔显示 的切换**完全不触发回调**(fired:0),上面"RO 自愈"
        的假设不成立 —— 隐藏态挂载时首测被 isRendered 拦下,RO 又永远不响,
@@ -3415,16 +3449,18 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
        auto→36px 无补间,整行瞬移(业主:二级页刷新→返回一级→点技能卡必现)。
        补 hashchange 后的分档重试(100/450/1000ms)覆盖路由过渡各落定点:
        isRendered 拦隐藏态、unsettled 拦形变中间值,不会写垃圾值;
-       路由过渡用的是 transform,不影响布局宽度,中途量到也是正确值。 */
+       路由过渡用的是 transform,不影响布局宽度,中途量到也是正确值。
+       (2026-10-10:这三个落定点现在只会"登记重测",转场期间不真量,见上面 run。) */
     const routeTimers = [];
     const onRouteChange = () => {
-      [100, 450, 1000].forEach((d) => routeTimers.push(setTimeout(measure, d)));
+      [100, 450, 1000].forEach((d) => routeTimers.push(setTimeout(run, d)));
     };
     window.addEventListener('hashchange', onRouteChange);
     return () => {
-      window.removeEventListener('resize', measure);
+      window.removeEventListener('resize', run);
       window.removeEventListener('hashchange', onRouteChange);
       clearTimeout(t);
+      clearTimeout(deferTimer);
       routeTimers.forEach(clearTimeout);
       clearTimeout(roTimer);
       clearTimeout(settleTimer);
@@ -3442,6 +3478,31 @@ function useMeasuredWidths(selector, count, deps, measureWidth) {
    dock 态英文字号/水平 padding 比静止态小一档，常量在 .mob-profile-stats 的
    --mob-dock-name-font / --mob-dock-pad-x（与 CSS 单一来源），这里用探针元素
    把 clamp 解析成 px 后按字号比例折算文本宽。技能卡不传本函数，维持静止宽。 */
+/* clamp()/em 只能靠探针元素解析成 px,而解析结果只取决于这两个 CSS 变量 ——
+   同一版变量下每枚芯片都一样。旧版每量一枚芯片就插一次探针、读三次计算样式再
+   拔出:一次重测(4 枚芯片)就是 8 次 DOM 变更 + 十几次强制样式重算,而改 hash
+   后会连做三遍重测(见 useMeasuredWidths 的 run)。现在按变量字符串缓存,同一批
+   重测里最多解析一次;变量组合极少,只加一个上限防无限增长。 */
+const dockPxCache = new Map();
+function resolveDockPx(dockNameFont, dockPadX) {
+  const key = `${dockNameFont}|${dockPadX}`;
+  const hit = dockPxCache.get(key);
+  if (hit) return hit;
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;';
+  document.body.append(probe);
+  probe.style.fontSize = dockNameFont;
+  const fontPx = parseFloat(getComputedStyle(probe).fontSize);
+  probe.style.fontSize = '';
+  probe.style.paddingLeft = dockPadX;
+  const padPx = parseFloat(getComputedStyle(probe).paddingLeft);
+  probe.remove();
+  const out = { fontPx, padPx };
+  if (dockPxCache.size > 32) dockPxCache.clear();
+  dockPxCache.set(key, out);
+  return out;
+}
+
 function measureStatDockWidth(node) {
   const label = node.querySelector('.mob-profile-stat-label');
   const strong = node.querySelector('strong');
@@ -3455,15 +3516,7 @@ function measureStatDockWidth(node) {
   const dockPadX = rowStyle ? rowStyle.getPropertyValue('--mob-dock-pad-x').trim() : '';
   let inner = Math.max(strong.scrollWidth, label.scrollWidth);
   if (dockNameFont && dockPadX) {
-    const probe = measureStatDockWidth._probe || (measureStatDockWidth._probe = document.createElement('span'));
-    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;';
-    document.body.append(probe);
-    probe.style.fontSize = dockNameFont;
-    const dockFontPx = parseFloat(getComputedStyle(probe).fontSize);
-    probe.style.fontSize = '';
-    probe.style.paddingLeft = dockPadX;
-    const dockPadPx = parseFloat(getComputedStyle(probe).paddingLeft);
-    probe.remove();
+    const { fontPx: dockFontPx, padPx: dockPadPx } = resolveDockPx(dockNameFont, dockPadX);
     if (dockFontPx > 0 && dockPadPx > 0) {
       const restLabelFont = parseFloat(getComputedStyle(label).fontSize);
       const ratio = dockFontPx / restLabelFont;
@@ -5732,6 +5785,13 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     let touchConsumed = false;
     let touchEndTimer = 0;
     let deckGesture = false;   // a touch that began on the mobile card deck: owned by the deck, never a page flip
+    // 触点落在缩览图条上的手势（业主 2026-10-09：圆点带/缩览图带上下滑必须能翻屏）。
+    // 缩览图条的盒子含顶部 40px 内 padding，圆点下方整条视觉带都在它的命中区里，
+    // 旧逻辑把整条带完全豁免 ⇒ 竖滑全被吞。改为按轴锁定：横向 = 原生横 pan，
+    // 纵向优势 = 接管为整屏翻页。
+    let thumbsGesture = false;
+    let thumbsAxisLocked = false;
+    let thumbsIsVertical = false;
 
     const onWheel = (event) => {
       if (event.ctrlKey || event.metaKey) return;    // pinch zoom, leave alone
@@ -5762,22 +5822,37 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       // Touches that start on a showcase card are "play" gestures (drag/flip the
       // card). The deck already claims them via touch-action:none + pointer
       // capture, so the pager must not also treat their vertical drift as a
-      // whole-screen page flip. The same exemption covers the thumbnail strip:
-      // it is an overflow-x scroller, and preventDefault() here would kill its
-      // native horizontal pan. Page navigation still works from any touch that
-      // begins outside the deck / strip (heading, dots, button, padding).
+      // whole-screen page flip. Thumbnail-strip touches are NOT exempted here
+      // any more — see the axis lock in onTouchMove below.
       deckGesture = !!(event.target && event.target.closest
-        && (event.target.closest('.mob-deck') || event.target.closest('.mob-thumbs')));
+        && event.target.closest('.mob-deck'));
+      thumbsGesture = !!(event.target && event.target.closest
+        && event.target.closest('.mob-thumbs'));
+      thumbsAxisLocked = false;
+      thumbsIsVertical = false;
       window.clearTimeout(touchEndTimer);
     };
 
     const onTouchMove = (event) => {
       if (deckGesture || !touchTracking || event.touches.length !== 1) return;
-      event.preventDefault();
-      if (touchConsumed || isLocked()) return;
       const touch = event.touches[0];
       const deltaX = touch.clientX - touchStartX;
       const deltaY = touch.clientY - touchStartY;
+      if (thumbsGesture && !thumbsAxisLocked) {
+        // 轴锁定：横向优势（含对角拉扯阶段）放行给原生横 pan，绝不 preventDefault
+        // （那会杀死 overflow-x 滚动）；纵向位移过起步噪声后锁定为翻页手势。
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          thumbsAxisLocked = true;
+          thumbsIsVertical = false;
+          return;
+        }
+        if (Math.abs(deltaY) < 12) return;
+        thumbsAxisLocked = true;
+        thumbsIsVertical = true;
+      }
+      if (thumbsGesture && !thumbsIsVertical) return;   // native horizontal pan
+      event.preventDefault();
+      if (touchConsumed || isLocked()) return;
       if (Math.abs(deltaY) < HOME_TOUCH_THRESHOLD || Math.abs(deltaY) < Math.abs(deltaX)) return;
       touchConsumed = true;
       step(deltaY < 0 ? 1 : -1);
@@ -5788,6 +5863,9 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         touchTracking = false;
         touchConsumed = false;
         deckGesture = false;
+        thumbsGesture = false;
+        thumbsAxisLocked = false;
+        thumbsIsVertical = false;
       }, HOME_TOUCH_END_DELAY_MS);
     };
 
@@ -6430,7 +6508,15 @@ function WorksPage({
       const vv = window.visualViewport;
       const raw = vv ? vv.height * vv.scale : window.innerHeight;
       const h = Math.round(raw);
-      if (h > 0) document.documentElement.style.setProperty('--mw-vh', `${h}px`);
+      /* ⚠ 2026-10-10 性能:--mw-vh 写在 documentElement 上,写一次就是**全文档**
+         样式失效(它喂 .works-index-page 的 height 与 --mw-card-h/--mob-pitch/
+         --cross-scale)。而转场里 620ms 的 window.scrollTo(0,0)(见 goWorks)会触发
+         visualViewport 的 scroll → setVh,写回一个**完全相同**的值 —— 白送一次
+         全文档重算。实测这一笔就是转场期间那次 Layout 的触发栈之一
+         (setVh ← commitHookEffectListMount)。值没变就不写。 */
+      if (h > 0 && document.documentElement.style.getPropertyValue('--mw-vh') !== `${h}px`) {
+        document.documentElement.style.setProperty('--mw-vh', `${h}px`);
+      }
     };
     setVh();
     window.addEventListener('resize', setVh);
