@@ -16,10 +16,16 @@ html[data-device="mobile"] {
   scrollbar-gutter: auto;
   overflow-y: auto;
   /* 卡片宽度变量:一级/二级卡面 base 宽度不同(一级由舞台高 3:5、二级由动态视口
-     min 约束)。2026-10-10 第 16 轮起圆角**不再**跨级补偿(两级恒 20px),
-     该比例只保留给 box-shadow 的跨级补偿(见 .mw-slide 一节)。 */
+     min 约束)。
+     2026-10-10 第 17 轮起圆角改**比例制**(见统一卡面一节的「圆角比例制」),
+     --cross-scale 只保留给 box-shadow 的跨级补偿(见 .mw-slide 一节)。 */
   --mob-card-w: calc(min(42dvh, 354px) * 0.6);
   --works-card-w: calc(min(calc(var(--mw-vh, 100dvh) * 0.58), 500px, calc(74vw * 5 / 3)) * 0.6);
+  /* 圆角比例常数 = 20 / 一级基准卡宽 212.4px(= 舞台高上限 354 × 3/5)。
+     一级卡在该基准处恰好 20px(业主口径),二级卡按同一比例放大。
+     ⚠ 两级卡面都乘**同一个常数**,这是「交接帧圆角严格等值」成立的前提
+       (证明见统一卡面一节的「圆角比例制」)。改这个数会同时改两级的圆角。 */
+  --mob-radius-ratio: 0.09416;
   /* 跨级缩放补偿系数 = 二级卡面宽 / 一级卡面宽(≈1.41)。
      卡面内所有**固定 px** 的光影量(box-shadow 的偏移/模糊、text-shadow 的模糊)
      都会被卡面自身的 transform:scale() 一起缩放。两级卡面 base 宽度不同 →
@@ -1177,15 +1183,63 @@ html[data-device="mobile"] .mob-deck.grabbing { cursor: grabbing; }
 html[data-device="mobile"] .mob-card,
 html[data-device="mobile"] .mw-card {
   container-type: size;
-  border-radius: 20px;
   overflow: hidden;
   background: #11131a;
   box-shadow: 0 24px 56px rgba(0, 0, 0, .55);
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* 两级卡片统一沿用一级的 20px 圆角，不执行圆角补间。
-     投影声明保留，但当前性能排查版在文件末尾统一关闭投影。 */
+  /* 投影声明保留，但当前性能排查版在文件末尾统一关闭投影。
+     ⚠ border-radius **不能进过渡列表**：圆角走比例制后跨级自动连续，
+       任何补间都是多余的（业主明确「不需要圆角的过渡帧」）——
+       见下方「圆角比例制」一节。 */
   transition: box-shadow 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ===== 圆角比例制 (2026-10-10 第 17 轮) =====
+   业主口径(原话):「在一级页面初始 20px,然后按等比例制来执行 —— 等比例这个
+   思路是对的。让卡片过渡后保留圆角不变,不需要圆角的过渡帧。」
+
+   机理:两级卡面的 base 宽度不同(一级 ≈212px、二级 ≈298px),跨级靠
+   transform:scale() 缩放 ⇒ 屏幕上的**视觉**圆角 = 声明半径 × 该卡的 scale。
+   声明写死同一个 px 时,同一个值在两级屏幕上并不等值:
+      一级主卡  scale 1     → 20.0px
+      二级 armed scale .714 → 14.3px      ← 交接帧两边差 5.7px
+      一级副卡  scale .86   → 17.2px
+      二级副卡  scale .61   → 12.2px
+   回程收拢的**终点姿态**就是 armed 姿态(把二级卡缩到一级卡尺寸),二级层在
+   那一帧卸载、一级层现身 ⇒ 圆角从 14.3 硬切回 20。逐帧实测(改前):进入方向
+   20.00 → 14.28、返回方向 14.28 → 20.00,Δ = 5.72px。
+
+   修法:**圆角 = 卡面宽 × 常数**(常数 --mob-radius-ratio 取一级基准卡宽
+   212.4px 处恰为 20px)。于是 视觉圆角 ∝ 视觉卡宽,任意时刻两级同尺寸的卡
+   圆角严格相等 —— 交接帧算一遍就知道(数值取 402×874 视口):
+      一级声明 = 212.4 × k = 20.00px,一级主卡 scale 1  ⇒ 视觉 20.00px
+      二级声明 = 297.5 × k = 28.02px;armed 的 scale 不是拍脑袋值,而是 JS
+        实测「二级卡矩形 → 一级卡矩形」反推的,恒等于 212.4/297.5 = 0.7141
+        ⇒ 视觉 = 28.02 × 0.7141 = 20.00px ✓ 逐值相等
+   ⇒ 交接帧 Δ = 0,不需要任何补偿。
+   ⭐ 这是几何自洽解:**不需要按状态改数值、不需要 border-radius 过渡**
+     (业主明确不要过渡帧),跨级方向两侧都天然连续。
+   ⚠⚠ **不能用 cqw**:容器查询单位在容器**自身**上不解析为自身宽度 ——
+     `.mob-card`/`.mw-card` 自己就是容器(`container-type: size`),
+     `border-radius: 6.9cqw` 实测回退成「视口宽 × 系数」(402 × .069 = 27.74px),
+     两级都错。只能在卡面自身上用**显式算式**,并按各自卡宽的真实来源分两条写。
+     (卡面内部的后代元素用 cqw 是对的 —— 它们相对容器解析,见 .mob-copy 一节。)
+   ⚠ 一级用 `vh`、不用 `--mob-card-w`:后者是 `dvh`,地址栏收放时与 `.mob-stage`
+     的 vh 高不同步(实测差 2.7%),而 `.mob-card` 的宽度实际由舞台高经
+     `aspect-ratio: 3/5` 决定 ⇒ 必须用同源的 vh 表达式。
+   ⚠ 历史:2026-10-08 第 7 轮用「跨级态乘 --cross-scale + border-radius 过渡」
+     的补偿式修过同一个 bug,第 16 轮连同过渡一起删掉、只留固定 20px,于是
+     回归(本次);2026-10-10 先试了一版「补偿 + 同步过渡」也被业主否掉
+     (「不需要过渡帧」)。**比例制是几何自洽解,别再退回补偿式。** */
+html[data-device="mobile"] .mob-card {
+  /* 一级卡面宽 = 舞台高 × 3/5(.mob-stage 高 = min(42vh,354px),卡 height:100%
+     + aspect-ratio:3/5)。 */
+  border-radius: calc(min(42vh, 354px) * 0.6 * var(--mob-radius-ratio));
+}
+html[data-device="mobile"] .mw-card {
+  /* 二级卡面宽 = --mw-card-w(定义在 .mw-stage 上,= --mw-card-h × 0.6)。 */
+  border-radius: calc(var(--mw-card-w) * var(--mob-radius-ratio));
 }
 html[data-device="mobile"] .mob-card-img,
 html[data-device="mobile"] .mw-card-img {
@@ -1697,9 +1751,10 @@ html[data-device="mobile"] .mw-card {
   text-align: inherit;
 }
 
-/* 两级主副卡及 armed/entering/leaving 全部继承统一卡面的 20px 圆角。
-   不再按尺寸或副卡缩放补偿圆角，也不再执行 border-radius 动画。
-   卡片自身的 transform 缩放保留，缩放后的视觉圆角自然随整张卡缩放。 */
+/* 两级主副卡及 armed/entering/leaving 全部继承统一卡面的**比例制**圆角 ——
+   圆角 ∝ 卡面宽 ⇒ 跨级交接两端(armed 姿态与一级源卡同尺寸、落定帧与静止态
+   同尺寸)自动等值,不需要按状态补偿、也不执行 border-radius 过渡
+   (见统一卡面一节的「圆角比例制」)。 */
 html[data-device="mobile"] .works-index-page.mw-armed .mw-slide .mw-card {
   /* armed 只存在一帧,必须 instantly 落到源卡姿态,不加过渡。 */
   transition: none;
@@ -1953,15 +2008,22 @@ html[data-device="mobile"] .mw-under-return {
 /* 2026-10-08(业主):三级页头图删除(PC / 移动端同规),原 .detail-hero /
    .detail-hero-copy(含 ::before 渐变)/ .detail-hero-main 全族样式移除。
    顶部黑底间距由 .detail-content 的 padding-top 承担:导航栏底(52px)之下
-   再留 ~44px 呼吸,与 PC 的 170px 同一「黑底即间距」的思路。 */
+   再留 ~44px 呼吸,与 PC 的 170px 同一「黑底即间距」的思路。
+   2026-10-10(业主):三级页不再预留左右间距,画面(长图带/设计图)直接满宽;
+   图带全是 width:100% + height:auto 等比缩放,满宽只放大不变形。
+   同轮(业主):底部黑色区域一并去掉 ⇒ padding-bottom 清零,滚到底 = 最后一张
+   图的底边(detail 层内 detail-content 之后没有其他节点,黑区就是这段 padding)。 */
 html[data-device="mobile"] .detail-content {
   width: auto;
-  margin-left: max(20px, env(safe-area-inset-left));
-  margin-right: max(20px, env(safe-area-inset-right));
-  padding: 96px 0 108px;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 96px 0 0;
 }
 
 html[data-device="mobile"] .detail-title {
+  /* 2026-10-10(业主):满宽只给图带;顶部标题文字区保留原 20px 左右呼吸 */
+  margin-left: max(20px, env(safe-area-inset-left));
+  margin-right: max(20px, env(safe-area-inset-right));
   margin-bottom: 46px;
 }
 
