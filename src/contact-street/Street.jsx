@@ -358,6 +358,20 @@ const HOST_CSS = `
 #navigation button[aria-current=true] { background: #b4c5d8 !important; }
 .controls button:hover { color: #a4c2e4 !important; }
 .controls button[aria-pressed=true] { color: #adbfd4 !important; }
+/* 业主 2026-10-09 第三轮：「点击后那个框还是没移除掉」——指 #quality（HIGH）。
+   demo 的 .controls button:hover{border-color:#69818b} 会在鼠标移上去/点完之后
+   现出一个 42×34 的圆角描边盒（截图为证：点击前不可见、hover 后整框显形）。
+   业主不要这个框 ⇒ 只对 #quality 关掉描边，rain / motion 的悬停反馈保留。
+   ⚠ 只改 border-color、不改 border-width：盒模型不变 ⇒ 不产生任何回流。 */
+.controls #quality,
+.controls #quality:hover,
+.controls #quality:focus,
+.controls #quality:focus-visible,
+.controls #quality:active {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
 .primary-action { color: #b2c8e2 !important; border-color: #76818d !important; }
 .primary-action:hover { background: #9db7d4 !important; }
 .inspiration-note { color: #c9d3df !important; border-left-color: #76889c !important; }
@@ -398,8 +412,8 @@ const HOST_CSS = `
 }
 /* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
 .sq-ico-fill { fill: currentColor; stroke: none; }
-/* 提示行到「发封邮件」的间距由脚本写入常量（--sq-hint-mt），底边同时钉在图标上沿 */
-.sq-hint { margin: var(--sq-hint-mt, 52px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* 提示行到「发封邮件」的间距由脚本写入常量（--sq-hint-mt，PC 40px），底边同时钉在图标上沿 */
+.sq-hint { margin: var(--sq-hint-mt, 40px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
 /* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
    桌面 20px / ≤700 段 10px，各拉开一档（宿主层覆盖，demo 产物不动）。 */
 .actions { gap: 24px !important; }
@@ -980,14 +994,20 @@ function injectDetailCopy(doc) {
 
 // ── 尾屏初始态精确排版（业主 2026-10-09 设计稿终版 + 终轮微调）────────────────
 //  PC（提示行在）：
-//   ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
+//   ① 左下文案**墨迹**底边（.intro-foot 看得见的字底）＝ 右下图标行**墨迹**底边
 //   ② 「点击 / 拖动 探索场景」提示行底边 ＝ 图标上沿 − HINT_OFF
 //   ③ 两个按钮行距 ＝ 标题行距 × 0.56（设计稿 38/68，比标题两行紧）
-//   ④ 提示行 ↔「发封邮件」间距 ＝ 常量 HINT_MT
+//  ④ 提示行 ↔「发封邮件」间距 ＝ 常量 HINT_MT（变小＝两按钮整体下移）
 // 移动端（提示行已隐藏）：
 //   ① 同 PC；② 整列底边钉在图标上沿 − MOB_ICON_GAP（业主「贴近图标」）；行距交回 CSS。
-// 三条位置关系全部 getBoundingClientRect 实测反推、不写死 px ⇒ 任何机型、地址栏/安全区
-// 变化、缩放都自动跟随（CSS 里的 bottom / 行距只作 JS 执行前的兜底）。
+// 两端共通：
+//   ⑤ 右缘：整块右边缘 ＝ #quality 里 "HIGH" 的文字**墨迹**右缘（不是那个按钮盒）
+// 位置关系全部实测反推、不写死 px ⇒ 任何机型、地址栏/安全区变化、缩放都自动跟随
+// （CSS 里的 bottom / 行距只作 JS 执行前的兜底）。
+// ⚠ ① ⑤ 的量取口径是**墨迹**（眼睛看到的边）而不是盒：文字走 canvas measureText 的
+//   actualBoundingBox，svg 走 getBBox 映射。原因：.intro-foot 的行盒含 2px 下伸部、
+//   图标按钮是 34px 盒里居中 16px 图形、#quality 是带 6px 内边距的按钮 —— 按盒对齐
+//   时"看着没对齐"，业主 2026-10-09 连着两轮都是指这个。
 // ⚠ 图标自身的抬升在 HOST_CSS ⑨ 里用 --sq-lift 声明（PC 56px、移动端 0）：本文只负责
 //   「数量关系」，不碰绝对位置，所以业主改主意要再抬/再压，只动那一个 CSS 变量。
 //
@@ -1015,14 +1035,20 @@ function startStreetAlign(doc) {
     return true;
   }
   const HINT_OFF = 10;      // PC：提示行底边到图标行上沿的间距（设计稿 ≈10px）
-  const HINT_MT = 52;       // PC：提示行到「发封邮件」的间距（设计稿 60 − 视觉余量）
+  // PC：提示行到「发封邮件」的间距。⚠ 整块是**底部锚定**的（提示行底边钉在图标上沿），
+  // 所以这个值变小＝两个按钮整体**下移**（提示行不动）。业主 2026-10-09 第二轮：
+  // 「右边的电话和邮箱按钮再往下移动一些」⇒ 52 → 40（按钮下移 12px）。
+  const HINT_MT = 40;
   const BTN_PITCH_RATIO = 0.56; // PC：两按钮行距 ÷ 标题行距（设计稿 38/68）
   const MIN_BTN_PITCH = 34; // PC：行距下限（窄屏标题变小，而按钮字号恒 12.5px）
   const MOB_ICON_GAP = 14;  // 移动端：「发封邮件」底边到图标上沿（业主「贴近图标」）
+  // demo 的 #quality 标签集合（源码：e.currentTarget.textContent = ['HIGH','ECO'][f]）。
+  // 右缘锚点按「最宽的那个」算 ⇒ 切换标签时锚点恒定（业主 2026-10-09 第三轮）。
+  const Q_LABELS = ['HIGH', 'ECO'];
   const WINDOW_MS = 2500;  // 每次触发后的连续校准窗口（覆盖进场过渡）
   // 诊断计数器（探针读）：tick 跑了几次 / 卡在 pick 还是 iconBox / 有没有真的写值。
   // 静默 catch 会把异常吞掉，没有这个就只能靠猜。
-  const dbg = { tick: 0, align: 0, pick: 0, box: 0, wrote: 0, err: '', kick: 0 };
+  const dbg = { tick: 0, align: 0, pick: 0, box: 0, wrote: 0, err: '', kick: 0, ink: '' };
   win.__streetAlignDbg = dbg;
 
   let timerId = 0;
@@ -1060,6 +1086,7 @@ function startStreetAlign(doc) {
     const h1 = d.querySelector('.intro h1');
     const footEl = d.querySelector('.intro-foot');
     const controls = d.querySelector('.controls');
+    const quality = d.getElementById('quality');
     const quick = d.getElementById('street-quick');
     const hint = quick && quick.querySelector('.sq-hint');
     const rows = quick ? Array.prototype.slice.call(quick.querySelectorAll('.sq-row')) : [];
@@ -1072,7 +1099,116 @@ function startStreetAlign(doc) {
     //   缺了它只影响 PC 分支的"贴图标"关系，不该让整条对齐静默失效。
     if (!hint) dbg.noHint = 1;
     if (rows.length !== 2) { dbg.miss = 'rows=' + rows.length; return null; }
-    return { introEl, h1, footEl, controls, quick, hint, rows };
+    return { introEl, h1, footEl, controls, quality, quick, hint, rows };
+  };
+
+  // ── 视觉墨迹框（"眼睛看到的边"）─────────────────────────────────────────────
+  // ⚠ 业主 2026-10-09 两轮都指同一件事：按**盒**对齐 ≠ 按**看得见的边**对齐。
+  //   左英文 .intro-foot：8.5px 字体 + line-height:normal ⇒ 行盒底比字底多 2px
+  //     下伸部（全大写，实际无下伸字母）；
+  //   右图标：34px 的 .controls button 里居中一个 16px 的 svg ⇒ 上下各 9px 空白。
+  //   于是"盒对盒"看着差 ≈10px（实测：英文墨迹底 976.5 / 图标墨迹底 966.5）。
+  //   这里把口径换成墨迹：文字用 canvas measureText 的 actualBoundingBox，
+  //   svg 用 getBBox() 映射回屏幕坐标。量不到时上层退回旧的"盒"算法。
+  const ctxFor = (el) => {
+    let step = 'cs';
+    try {
+      const c = win.getComputedStyle(el);
+      step = 'create';
+      // ⚠ 必须走 win.document：本函数在 startStreetAlign 作用域，取不到 pick() 里的 d
+      const cv = win.document.createElement('canvas');
+      step = 'ctx';
+      const g = cv.getContext && cv.getContext('2d');
+      if (!g) { dbg.ink = 'ctxnull'; return null; }
+      step = 'font';
+      g.font = [c.fontStyle, c.fontWeight, c.fontSize, c.fontFamily].join(' ');
+      step = 'ok';
+      return g;
+    } catch (e) { dbg.ink = 'ctx@' + step + ':' + (e && e.message); return null; }
+  };
+  // 元素里**最后一个**非空文本节点（.sq-row 里 svg 之后那段文字 / #quality 的 "HIGH"）
+  // ⚠ 不要用 TreeWalker + NodeFilter：注入上下文里 `NodeFilter` 取不到（实测 dbg.ink='notn'，
+  //   被 try/catch 静默吞掉、整条墨迹对齐悄悄退回盒对齐）。这里只认 nodeType 数字。
+  const textNodeOf = (el) => {
+    let last = null;
+    const walk = (node) => {
+      const kids = node.childNodes;
+      for (let i = 0; i < kids.length; i++) {
+        const c = kids[i];
+        if (c.nodeType === 3) { if ((c.textContent || '').trim()) last = c; }
+        else if (c.nodeType === 1) walk(c);
+      }
+    };
+    try { walk(el); } catch (_) { return null; }
+    return last;
+  };
+  const textInk = (el) => {
+    if (!el) { dbg.ink = 'noel'; return null; }
+    const tn = textNodeOf(el);
+    if (!tn) { dbg.ink = 'notn'; return null; }
+    const cv = ctxFor(el);
+    if (!cv) return null; // ctxFor 内部已写 dbg.ink 的失败步骤码，这里别再覆盖
+    let m;
+    try { m = cv.measureText((tn.textContent || '').trim()); } catch (e) { dbg.ink = 'mt:' + (e && e.message); return null; }
+    if (!m || m.actualBoundingBoxAscent == null) { dbg.ink = 'nomb'; return null; }
+    let r = null;
+    try {
+      const rg = win.document.createRange();
+      rg.selectNodeContents(tn);
+      r = rg.getClientRects()[0];
+    } catch (e) { dbg.ink = 'rg:' + (e && e.message); return null; }
+    if (!r) { dbg.ink = 'norect'; return null; }
+    dbg.ink = 'ok';
+    // line-height:normal ⇒ 行盒高 = fontBoundingBoxAscent + fontBoundingBoxDescent，
+    // 基线就在 r.top + fontAscent 处（无 half-leading）
+    const fa = m.fontBoundingBoxAscent != null ? m.fontBoundingBoxAscent : m.actualBoundingBoxAscent;
+    const base = r.top + fa;
+    // ⚠ 横向不用 canvas 的 actualBoundingBoxRight：它不含 letter-spacing，而布局里每个
+    //   字后都补了字距（尾字也补）⇒ 会低估右缘。行盒右缘减掉尾随字距才是"看得见的右缘"
+    //   （实测：行盒右 1866 − 字距 1.5 ⇒ 墨迹右 1864.5，像素量到 1864）。
+    const ls = parseFloat(win.getComputedStyle(el).letterSpacing);
+    const lsx = isFinite(ls) ? ls : 0;
+    return {
+      left: r.left,
+      right: r.right - lsx,
+      top: base - m.actualBoundingBoxAscent,
+      bottom: base + m.actualBoundingBoxDescent,
+    };
+  };
+  // svg 内容的墨迹框：getBBox() 是用户坐标，按 preserveAspectRatio(默认 xMidYMid meet) 映射
+  const svgInk = (svg) => {
+    try {
+      const r = svg.getBoundingClientRect();
+      const bb = svg.getBBox();
+      const vb = svg.viewBox && svg.viewBox.baseVal;
+      if (!vb || !vb.width || !vb.height || !isFinite(bb.width) || !isFinite(bb.height)) return null;
+      const sc = Math.min(r.width / vb.width, r.height / vb.height);
+      const ox = r.left + (r.width - vb.width * sc) / 2 - vb.x * sc;
+      const oy = r.top + (r.height - vb.height * sc) / 2 - vb.y * sc;
+      return {
+        left: ox + bb.x * sc, right: ox + (bb.x + bb.width) * sc,
+        top: oy + bb.y * sc, bottom: oy + (bb.y + bb.height) * sc,
+      };
+    } catch (_) { return null; }
+  };
+  // .controls 子元素墨迹的并集（有 svg 就用 svg 墨迹，纯文字就用文字墨迹）
+  const ctrlInk = (controls) => {
+    let t = Infinity; let b = -Infinity; let l = Infinity; let r = -Infinity;
+    Array.prototype.forEach.call(controls.children, (el) => {
+      if (win.getComputedStyle(el).display === 'none') return;
+      const svg = el.querySelector('svg');
+      let ink = (svg && !(el.textContent || '').trim()) ? svgInk(svg) : textInk(el);
+      if (!ink) {
+        const rr = el.getBoundingClientRect();
+        if (rr.height > 0) ink = { left: rr.left, right: rr.right, top: rr.top, bottom: rr.bottom };
+      }
+      if (!ink) return;
+      if (ink.top < t) t = ink.top;
+      if (ink.bottom > b) b = ink.bottom;
+      if (ink.left < l) l = ink.left;
+      if (ink.right > r) r = ink.right;
+    });
+    return (isFinite(t) && b > t) ? { top: t, bottom: b, left: l, right: r } : null;
   };
 
   // 图标行 = .controls 里可见子元素的并集（.controls 自身可能含 padding）。
@@ -1106,14 +1242,67 @@ function startStreetAlign(doc) {
     const box = iconBox(n.controls);
     if (!box) { dbg.box += 1; return false; }
     const vh = win.innerHeight;
-    // ① 文案底部对齐图标底部。inGap = .intro 盒底 到 .intro-foot 盒底 的距离
-    //    （demo 的 .intro 盒底比 foot 低一点）；属「盒内」常量，与视口/机型无关。
+    // ① 左英文的**墨迹**底边 = 图标行的**墨迹**底边（业主 2026-10-09 第二轮：
+    //    「查看红色线框，左边英文和右边图标底部还没有进行对齐」）。旧实现用盒：
+    //    foot 行盒底含 2px 下伸部、图标按钮 34px 盒里居中 16px 图形 ⇒ 看着差 ≈10px。
+    //    descendGap = foot 行盒底 − foot 墨迹底（字体常量，与位置无关）；
+    //    目标 foot 盒底 = 图标墨迹底 + descendGap ⇒ 两端"看得见的边"重合。
     //    图标本身已被 CSS 的 --sq-lift 抬过（见 HOST_CSS ⑨），量到多少就贴多少
-    //    ⇒ 两端（PC 抬过 / 移动端没抬）同一套代码，业主说的「一起上移且保持底部对齐」
-    //    就是这么落地的。
+    //    ⇒ 两端（PC 抬过 / 移动端没抬）同一套代码。
     const inGap = n.introEl.getBoundingClientRect().bottom - n.footEl.getBoundingClientRect().bottom;
-    setPx(n.introEl, 'bottom', vh - box.bottom - inGap);
+    const fInk = textInk(n.footEl);
+    const cInk = ctrlInk(n.controls);
+    if (fInk && cInk) {
+      const descendGap = n.footEl.getBoundingClientRect().bottom - fInk.bottom;
+      setPx(n.introEl, 'bottom', vh - (cInk.bottom + descendGap) - inGap);
+    } else {
+      setPx(n.introEl, 'bottom', vh - box.bottom - inGap); // 兜底：字体未就绪时退回盒对齐
+    }
     const rowH = n.rows[0].getBoundingClientRect().height;
+
+    // ⑤ 右缘：锚点必须**与当前标签无关**，否则 HIGH↔ECO 切换时整块跟着动。
+    //    业主 2026-10-09 第三轮：「从 high 切换到 ECO 的时候，因为字体数量减少导致上面
+    //    这些内容全部产生位移」。探针复核（probe-high-toggle.mjs）：demo 自己不动 ——
+    //    .controls / #rain / #motion / #quality 四个盒切换前后完全一致；动的是我这条对齐，
+    //    它跟着「当前标签的墨迹右缘」跑了 2px（1865 ↔ 1863）。
+    //    demo 的 #quality 是 width:42px 的定宽盒 + 文字居中（.controls button 带
+    //    place-items:center），所以稳定锚点 ＝「盒中心 ± 最宽标签的墨迹半宽」：
+    //    与文案无关，且在最宽的那个标签（HIGH）显示时正好等于 HIGH 的墨迹右缘。
+    //    ⚠ 标签集合取自 demo 源码：textContent = ['HIGH','ECO'][f]（点击在两者间循环）。
+    const qAnchor = (() => {
+      const q = n.quality;
+      if (!q) return null;
+      const rect = q.getBoundingClientRect();
+      const cv = ctxFor(q);
+      if (!cv) return null;
+      const ls2 = parseFloat(win.getComputedStyle(q).letterSpacing);
+      const cur = (q.textContent || '').trim();
+      const list = [];
+      Q_LABELS.forEach((s) => { if (list.indexOf(s) < 0) list.push(s); });
+      if (cur && list.indexOf(cur) < 0) list.push(cur);
+      let w = 0;
+      list.forEach((s) => {
+        let m2;
+        try { m2 = cv.measureText(s); } catch (_) { return; }
+        const t = (m2.actualBoundingBoxLeft || 0) + (m2.actualBoundingBoxRight || 0);
+        if (t > w) w = t;
+      });
+      if (!w) return null;
+      // 行盒（含尾随字距）在盒里居中 ⇒ 墨迹中心 = 盒中心 − ls/2
+      return rect.left + rect.width / 2 - (isFinite(ls2) ? ls2 : 0) / 2 + w / 2;
+    })();
+    let rowInkRight = -Infinity;
+    const track = (el) => { const i2 = textInk(el); if (i2 && i2.right > rowInkRight) rowInkRight = i2.right; };
+    n.rows.forEach(track);
+    // 移动端提示行 display:none：跳过（否则 textInk 会往 dbg.ink 里写个 'norect' 假故障）
+    if (n.hint && win.getComputedStyle(n.hint).display !== 'none') track(n.hint);
+    dbg.qAnchor = qAnchor == null ? -1 : Math.round(qAnchor);
+    dbg.rowInk = isFinite(rowInkRight) ? Math.round(rowInkRight) : -1;
+    if (qAnchor != null && isFinite(rowInkRight)) {
+      const curRight = parseFloat(win.getComputedStyle(n.quick).right);
+      if (isFinite(curRight)) setPx(n.quick, 'right', curRight - (qAnchor - rowInkRight));
+    }
+
     // 提示行是否参战 = PC / 移动 的分支判据（移动端业主已按 ⑨ 隐藏它）
     const hintOn = !!n.hint && win.getComputedStyle(n.hint).display !== 'none'
       && n.hint.getBoundingClientRect().height > 0;
@@ -1125,8 +1314,7 @@ function startStreetAlign(doc) {
       // ③ 两按钮行距 = 标题行距 × 0.56（设计稿 38/68）。业主 2026-10-09：「打个电话
       //    跟发封邮件的间距太宽」—— 旧实现取的是"与标题两行同心"⇒ 行距 = 标题行距
       //    67px，比设计稿紧 29px 的观感差一截。
-      // ④ 提示行到「发封邮件」的间距 = 常量（设计稿 60px）。旧实现是反解出来的，
-      //    为的是满足"第一行按钮落在标题第一行中线上"，现在这条约束取消。
+      // ④ 提示行到「发封邮件」的间距 = 常量 HINT_MT（变小＝两按钮一起下移）。
       const lineH = n.h1.getBoundingClientRect().height / 2;
       const pitch = Math.max(MIN_BTN_PITCH, Math.round(lineH * BTN_PITCH_RATIO));
       const rowGap = Math.max(0, pitch - rowH);
