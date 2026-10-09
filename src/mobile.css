@@ -3437,3 +3437,9 @@ html[data-device="mobile"] .mob-fold svg {
     transition-delay: 0ms !important;
   }
 }
+
+/* Mobile works shadow isolation test: keep motion, text shadows and PC unchanged. */
+html[data-device="mobile"] .mob-card,
+html[data-device="mobile"] .mw-card {
+  box-shadow: none !important;
+}
