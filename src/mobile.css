@@ -1749,16 +1749,17 @@ html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
    而入场第一个相位 mw-armed(useLayoutEffect 里写初始姿态、持续到双 rAF 后才切
    entering)漏了 —— .mw-hint 基态是常驻 bob 动画(opacity 0.7↔1),于是进二级
    起跑的那几帧它**真的画在屏幕上**,业主捕捉到"二级的下拉 icon 瞬间闪一下又消失"。
-   把 armed 与 mw-handoff(一级层还在场、二级正在淡入的整个交接窗口)一并压掉。 */
-html[data-device="mobile"] .works-index-page.mw-armed .mw-hint,
-html[data-device="mobile"] .works-index-page.mw-handoff .mw-hint { opacity: 0; animation: none; }
-/* 2026-10-10 业主：下滑提示应该在「进入动效执行完之前」就入场。
-   旧写法在这里把提示整个压掉（opacity:0 + animation:none），于是它的循环只能等
-   mw-entering 摘掉（700+40ms）才开始，再加基态 350ms 延迟与 12% 的淡入 ⇒ 真正
-   看见约在点击后 1.4s —— 业主体感就是"出现得太晚"。
-   现在：armed / handoff（起跑那两帧，防"闪一下"）照旧压住；进入动效一开始就让
-   循环按**与基态完全同一套参数**跑（延迟 400ms + 12% 淡入 ⇒ 约 690ms 起可见），
-   正好在入场 700ms 收尾之前入场。参数与基态一致是关键：摘类时不会重启动画。 */
+   只压 mw-armed(起跑那 1~2 帧,此时 track 姿态还没写完)。 */
+html[data-device="mobile"] .works-index-page.mw-armed .mw-hint { opacity: 0; animation: none; }
+/* 2026-10-10 业主(两轮)：下滑提示应该在「进入动效执行完之前」就入场，且还要更早。
+   第一轮:只压 entering/leaving,mw-handoff(一级层还在场、二级底淡入的 620ms 交接
+     窗口)也一并压 ⇒ 动画要等 620ms 才开始,再加 120ms 延迟 + 12% 淡入 ⇒ 真正
+     看见约在点击后 1.0s。
+   第二轮:**不再压 mw-handoff** —— 基态循环的首帧就是 opacity 0、且此时二级层
+     自身的背景正在做 360ms 淡入,提示与底色同步渐显,不会像旧 bob 那样「凭空
+     闪一下」;再把延迟去掉(120ms → 0)、淡入段提前(12% → 9%)。
+     ⇒ 点击后约 0.22s 起可见,远早于入场 700ms 收尾。参数仍与基态同一套,摘类
+     不重启动画。 */
 html[data-device="mobile"] .works-index-page.mw-entering .mw-stage { pointer-events: none; }
 /* 离场(二级→一级)是这个入场的**镜像**:主卡与两张副卡一起收拢回它们在一级
    卡组里各自的姿态,结束时二级页卸下,屏幕上剩下一级卡组里的同三张卡,
@@ -1821,12 +1822,15 @@ html[data-device="mobile"] .mw-hint {
   background: transparent;
   color: rgba(255, 255, 255, 0.75);
   transform: translateX(-50%);
-  animation: mwHintLoop 2.4s linear 120ms infinite backwards;
+  /* 2026-10-10 第二轮:delay 120ms → 0(见上面 .mw-hint 提前入场的说明)。 */
+  animation: mwHintLoop 2.4s linear 0s infinite backwards;
 }
 
 @keyframes mwHintLoop {
   0% { opacity: 0; transform: translateX(-50%) translateY(-5px); }
-  12% { opacity: 0.85; transform: translateX(-50%) translateY(-3px); }
+  /* 淡入段 12% → 9%(= 216ms):与二级层背景 360ms 淡入大致同步,又明显早于
+     入场动效(700ms)收尾。 */
+  9% { opacity: 0.85; transform: translateX(-50%) translateY(-3px); }
   62% { opacity: 0.85; transform: translateX(-50%) translateY(7px); }
   70% { opacity: 0; transform: translateX(-50%) translateY(9px); }
   /* 完全隐没一段：明确的静止节拍后再从顶部重新进入（与 Hero 提示同构）。 */

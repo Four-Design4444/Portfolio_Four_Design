@@ -557,20 +557,13 @@
             }, 520);
           }, wait);
         };
-        // 广播揭幕信号：首屏 SVG 入场由 app:ready 计时，所以**任何**让遮罩消失的
-        // 路径都必须带着它，否则标题会永远停在 opacity:0。
-        var announceReady = function () {
-          window.__appRevealed = true;
-          try { window.dispatchEvent(new Event('app:ready')); } catch (_) { /* noop */ }
-        };
-        window.__hideAppLoader = function () { announceReady(); hide(true); };
+        window.__hideAppLoader = function () { hide(true); };
         window.addEventListener('app:ready', function () { ready = true; window.__appRevealed = true; hide(true); });
         var timer = window.setInterval(tick, 120);
         window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
         // 兜底：无论如何 HARD_CAP 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下
         // 始终不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
-        // 硬超时也必须播报：只淡出遮罩而不给 app:ready，首屏标题就永远不入场。
-        window.setTimeout(function () { if (!hidden) { announceReady(); hide(true); } }, HARD_CAP);
+        window.setTimeout(function () { if (!hidden) hide(true); }, HARD_CAP);
         // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
         // 也要揭幕（不补满进度）。
         window.setTimeout(function () { hide(false); }, HARD_CAP);
