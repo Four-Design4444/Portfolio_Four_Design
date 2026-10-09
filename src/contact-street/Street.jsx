@@ -947,9 +947,199 @@ function injectDetailCopy(doc) {
   return true;
 }
 
+// ── 尾屏初始态精确排版（业主 2026-10-09 设计稿终版）──────────────────────────
+//  ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
+//  ② 「点击 / 拖动 探索场景」紧贴图标上方（底边离线 HINT_OFF，设计稿实测值）
+//  ③ 两个按钮行分别与 h1 的两行**同心**，行距＝标题行距
+// 设计稿里 h1 两行与右侧两个按钮是同一节奏（第一行对第一行），提示行贴着底部
+// 控制条、与「发封邮件」拉开距离。控制条 = demo 的 .controls，其可见子元素就是
+// 设计稿里那排 ☁ ‖ 图标。三条关系全部 getBoundingClientRect 实测反推、不写死 px
+// ⇒ 任何机型、地址栏/安全区变化、缩放都自动跟随（CSS 里的 bottom/行距只作兜底）。
+//
+// ⚠⚠ 第十九轮（业主 2026-10-09「PC 端还是没有对齐」）真根因：
+//   原实现把 rAF 校准循环写在 injectStreetQuick 内部「插入 DOM 之后」，而
+//   injectStreetQuick 是**一次性**的（#street-quick 已存在就 early-return）。
+//   首次注入发生在 iframe 文档刚创建、body 才开始解析的瞬间 —— 那一刻
+//   <main>/.intro 还没被解析出来 ⇒ 守卫 `if (introEl && …)` 失败，校准循环
+//   **从未启动**；而 #street-quick 已经插进 DOM，后续每次重入都 early-return，
+//   永远没有第二次机会。真实渲染就全程停在 CSS 写的兜底值上（hint/按钮离线很远），
+//   即业主看到的"完全没对齐"。headless 本地加载极快，第一次读 contentDocument
+//   时文档已解析完，所以探针一直测不出来 —— 典型的时序型 bug。
+//   修法：排版抽成**幂等、可重入**的 startStreetAlign()：
+//     · 每次调用先立刻校准一次，并重开一段有期限的 rAF 校准窗口；
+//     · 节点没齐不算失败，窗口内继续等（不消耗预算，等文档解析完自然成）；
+//     · MutationObserver 自愈（进场动画/字体晚到/data-mode 切换都会改几何）；
+//     · 暴露 win.__streetAlignNow()，React 侧在「滑到尾屏(active)」时再触发一次。
+function startStreetAlign(doc) {
+  if (!doc || !doc.body) return false;
+  const win = doc.defaultView;
+  if (!win) return false;
+  // 幂等：已装过就只触发一次即时校准（不再挂监听、不再起循环）
+  if (typeof win.__streetAlignNow === 'function') {
+    try { win.__streetAlignNow(); } catch (_) { /* noop */ }
+    return true;
+  }
+  const HINT_OFF = 10;     // 提示行底边到图标行上沿的间距（设计稿 ≈10px）
+  const MIN_HINT_MT = 8;   // 提示行到「发封邮件」的最小间距，防极端视口贴死
+  const WINDOW_MS = 2500;  // 每次触发后的连续校准窗口（覆盖进场过渡）
+  // 诊断计数器（探针读）：tick 跑了几次 / 卡在 pick 还是 iconBox / 有没有真的写值。
+  // 静默 catch 会把异常吞掉，没有这个就只能靠猜。
+  const dbg = { tick: 0, align: 0, pick: 0, box: 0, wrote: 0, err: '', kick: 0 };
+  win.__streetAlignDbg = dbg;
+
+  let timerId = 0;
+  let deadline = 0;
+  let moRef = null;
+  let moTimer = 0;
+  const OBS_OPTS = {
+    childList: true, subtree: true,
+    attributes: true, attributeFilter: ['class', 'style', 'data-mode'],
+  };
+
+  // ⚠ 校准窗口用 win.setTimeout 而不是 rAF：宿主把 iframe 的 requestAnimationFrame
+  //   包成「尾屏不在视野就降频/推迟」（见 HOST_JS 的 __streetPaused），空转档下要等
+  //   满一个保活间隔才喂一帧 —— 实测 walk 循环 20s 一次都没跑（dbg.tick = 0）。
+  //   setTimeout 不受那层包装影响，100ms 一轮、2.5s 窗口 = 25 次实测，足够覆盖
+  //   进场过渡；真正的实时性由「尾屏激活时父页面侧多点重触发」保证。
+
+  const pick = () => {
+    // ⚠ 用 win.document 而不是闭包捕获的 doc：startStreetAlign 可能在 iframe 还停在
+    //   about:blank 时就被调用，那个 document 随导航一起失效（查询恒 null）⇒
+    //   修复前必须确认这里取的是"当前活着的文档"。
+    const d = win.document || doc;
+    dbg.sameDoc = (d === doc);
+    dbg.docUrl = String(d.URL || '');
+    if (win.__streetAlignObserved) dbg.obsLive = (win.__streetAlignObserved === d.documentElement);
+    // ⚠ 文档对象会被替换（实测：注入后 win.document 换了一个新对象，旧对象成死节点）
+    //   ⇒ 观察器必须每次校准自检、发现目标变了就重新 observe，否则等于没挂。
+    if (moRef) {
+      const root = d.documentElement;
+      if (root && win.__streetAlignObserved !== root) {
+        try { moRef.observe(root, OBS_OPTS); win.__streetAlignObserved = root; } catch (_) { /* noop */ }
+      }
+    }
+    const introEl = d.querySelector('.intro');
+    const h1 = d.querySelector('.intro h1');
+    const footEl = d.querySelector('.intro-foot');
+    const controls = d.querySelector('.controls');
+    const quick = d.getElementById('street-quick');
+    const hint = quick && quick.querySelector('.sq-hint');
+    const rows = quick ? Array.prototype.slice.call(quick.querySelectorAll('.sq-row')) : [];
+    if (!introEl) { dbg.miss = 'intro'; return null; }
+    if (!h1) { dbg.miss = 'h1'; return null; }
+    if (!footEl) { dbg.miss = 'foot'; return null; }
+    if (!controls) { dbg.miss = 'controls'; return null; }
+    if (!quick) { dbg.miss = 'quick'; return null; }
+    if (!hint) { dbg.miss = 'hint'; return null; }
+    if (rows.length !== 2) { dbg.miss = 'rows=' + rows.length; return null; }
+    return { introEl, h1, footEl, controls, quick, hint, rows };
+  };
+
+  // 图标行 = .controls 里可见子元素的并集（.controls 自身可能含 padding）。
+  // ⚠ 只排除 display:none，**不要**排除 visibility:hidden —— 非 overview 模式下
+  //   demo 给 .controls 挂的是 `visibility:hidden`（保留布局），而那正是我们要
+  //   锚定的几何；一旦按可见性过滤，iconBox() 恒为 null、整条对齐静默失效
+  //   （2026-10-09 实测踩过：探针里 inline 值全空就是这个原因）。
+  const iconBox = (controls) => {
+    let t = Infinity; let b = -Infinity;
+    Array.prototype.forEach.call(controls.children, (el) => {
+      if (win.getComputedStyle(el).display === 'none') return;
+      const r = el.getBoundingClientRect();
+      if (r.height <= 0) return;
+      if (r.top < t) t = r.top;
+      if (r.bottom > b) b = r.bottom;
+    });
+    return (isFinite(t) && b > t) ? { top: t, bottom: b } : null;
+  };
+
+  // 「变了才写」——既是省开销，也是防 MutationObserver 自激（写 style 会触发观察器）
+  const setPx = (el, prop, value) => {
+    const v = Math.round(value) + 'px';
+    if (el.style.getPropertyValue(prop) !== v) el.style.setProperty(prop, v);
+  };
+
+  // 返回 false = 几何还没齐（不是错误，等待下一帧/下一次触发）
+  const align = () => {
+    dbg.align += 1;
+    const n = pick();
+    if (!n) { dbg.pick += 1; return false; }
+    const box = iconBox(n.controls);
+    if (!box) { dbg.box += 1; return false; }
+    const vh = win.innerHeight;
+    // ① 文案底部对齐图标底部。inGap = .intro 盒底 到 .intro-foot 盒底 的距离
+    //    （demo 的 .intro 盒底比 foot 低一点）；属「盒内」常量，与视口/机型无关。
+    const inGap = n.introEl.getBoundingClientRect().bottom - n.footEl.getBoundingClientRect().bottom;
+    setPx(n.introEl, 'bottom', vh - box.bottom - inGap);
+    // h1 里放了 <br>（见 injectIntroCopy）⇒ 恒两行、等高，可直接二分
+    const hr = n.h1.getBoundingClientRect();
+    const lineH = hr.height / 2;
+    const line1Center = hr.top + lineH / 2;
+    const rowH = n.rows[0].getBoundingClientRect().height;
+    // ③ 行距 = 标题行距 ⇒ 两行按钮分别落在两行标题中线上
+    const rowGap = Math.max(0, Math.round(lineH - rowH));
+    if (n.quick.style.getPropertyValue('--sq-gap') !== rowGap + 'px') {
+      n.quick.style.setProperty('--sq-gap', rowGap + 'px');
+    }
+    // ② 先钉 hint 底边 = 图标上沿 - HINT_OFF，再反解 hint 与「发封邮件」的间距，
+    //    使第一行按钮正好与标题第一行同心（两个约束联立，唯一解）。
+    const hintH = n.hint.getBoundingClientRect().height;
+    const hintBottom = box.top - HINT_OFF;
+    const mt = Math.max(MIN_HINT_MT, Math.round(hintBottom - hintH - 1.5 * rowH - rowGap - line1Center));
+    if (n.quick.style.getPropertyValue('--sq-hint-mt') !== mt + 'px') {
+      n.quick.style.setProperty('--sq-hint-mt', mt + 'px');
+    }
+    setPx(n.quick, 'bottom', vh - hintBottom);
+    dbg.wrote += 1;
+    return true;
+  };
+
+  const tick = () => {
+    timerId = 0;
+    dbg.tick += 1;
+    try { align(); } catch (e) { dbg.err = 'align:' + (e && e.message); }
+    try {
+      if (win.performance.now() < deadline) timerId = win.setTimeout(tick, 100);
+    } catch (e) { dbg.err = 'tick-to:' + (e && e.message); }
+  };
+  const kick = (ms) => {
+    dbg.kick += 1;
+    try {
+      deadline = Math.max(deadline, win.performance.now() + (ms || WINDOW_MS));
+      if (!timerId) timerId = win.setTimeout(tick, 0);
+    } catch (e) { dbg.err = 'kick-to:' + (e && e.message); }
+  };
+  const now = () => {
+    try { align(); } catch (_) { /* noop */ }
+    kick(WINDOW_MS);
+  };
+  win.__streetAlignNow = now;
+  try { win.addEventListener('resize', now); } catch (_) { /* noop */ }
+  // 自愈：进场动画(transform)、字体晚到、data-mode 切换、demo 自己挪布局都会改几何。
+  // 变更后延迟一次重排；align 内部「变了才写」⇒ 收敛后零写入、零自激。
+  try {
+    moRef = new win.MutationObserver(() => {
+      if (moTimer) return;
+      moTimer = win.setTimeout(() => {
+        moTimer = 0;
+        try { align(); } catch (_) { /* noop */ }
+      }, 120);
+    });
+    // ⚠ 必须盯**活着的**文档（win.document），而且要在每次 align 里自检重挂：
+    //   实测注入后 win.document 会被替换成一个新对象（旧对象成死节点），一次性
+    //   observe 挂上去等于没挂（探针 obsLive=false、观察器全程零回调）。真正的
+    //   自愈主力是父页面侧的周期重触发，这里只作附加保险。
+    const el = (win.document || doc).documentElement || (win.document || doc);
+    moRef.observe(el, OBS_OPTS);
+    win.__streetAlignObserver = moRef;
+    win.__streetAlignObserved = el;
+  } catch (_) { /* noop */ }
+  kick(WINDOW_MS);
+  return true;
+}
+
 function injectStreetQuick(doc) {
   if (!doc || !doc.body) return false;
-  if (doc.getElementById('street-quick')) return true;
+  if (doc.getElementById('street-quick')) { startStreetAlign(doc); return true; }
   const host = doc.body;
   host.insertAdjacentHTML('beforeend', STREET_QUICK_HTML);
   // 点击 → 转发给 demo 自己的 #navigation 按钮（它被 display:none 但仍在 DOM 里，
@@ -962,75 +1152,8 @@ function injectStreetQuick(doc) {
     const target = doc.querySelector('#navigation button[data-mode="' + mode + '"]');
     if (target) target.click();
   });
-  // ── 业主 2026-10-09（设计稿终版）：尾屏初始态精确排版 ──────────────────────
-  //  ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
-  //  ② 「点击 / 拖动 探索场景」紧贴图标上方（底边离线 10px，设计稿实测值）
-  //  ③ 两个按钮行分别与 h1 的两行**同心**，行距＝标题行距
-  // 设计稿里 h1 两行与右侧两个按钮是同一节奏（第一行对第一行），提示行贴着
-  // 底部控制条、与「发封邮件」拉开距离 —— 这三条关系 PC / 移动共用（业主：
-  // 「移动端按此，PC 参考同一张稿的排版和对齐方式」）。
-  // 控制条 = demo 的 .controls，它的可见子元素就是设计稿里那排 ☁ ‖ 图标；
-  // 三个关系全部用 getBoundingClientRect 实测反推，不写死 px ⇒ 任何机型、
-  // 地址栏/安全区变化、缩放都自动跟随（旧的 bottom:105/115/93 只作 JS 前的兜底）。
-  // ⚠ 注入瞬间 .intro 还在入场动画/字体未就绪，量一次会拿到过渡值 ⇒ rAF 连续
-  //   校准 ~3.3s（200 帧）后停；resize 由监听跟随。
-  try {
-    const win = doc.defaultView;
-    const introEl = doc.querySelector('.intro');
-    const h1 = doc.querySelector('.intro h1');
-    const footEl = doc.querySelector('.intro-foot');
-    const controls = doc.querySelector('.controls');
-    const rows = Array.prototype.slice.call(quick.querySelectorAll('.sq-row'));
-    const hint = quick.querySelector('.sq-hint');
-    if (introEl && h1 && footEl && controls && rows.length === 2 && hint) {
-      const HINT_OFF = 10;    // 提示行底边到图标行上沿的间距（设计稿 ≈10px）
-      const MIN_HINT_MT = 8;  // 提示行到「发封邮件」的最小间距，防极端视口贴死
-      // 图标行 = .controls 里可见子元素的并集（.controls 自身可能含 padding）
-      const iconBox = () => {
-        let t = Infinity; let b = -Infinity;
-        Array.prototype.forEach.call(controls.children, (el) => {
-          if (win.getComputedStyle(el).display === 'none') return;
-          const r = el.getBoundingClientRect();
-          if (r.height <= 0) return;
-          if (r.top < t) t = r.top;
-          if (r.bottom > b) b = r.bottom;
-        });
-        return (isFinite(t) && b > t) ? { top: t, bottom: b } : null;
-      };
-      const align = () => {
-        const box = iconBox();
-        if (!box) return;
-        const vh = win.innerHeight;
-        // ① 文案底部对齐图标底部。inGap = .intro 盒底 到 .intro-foot 盒底 的距离
-        //    （demo 的 .intro 盒底比 foot 低一点），先量后改，是常量。
-        const inGap = introEl.getBoundingClientRect().bottom - footEl.getBoundingClientRect().bottom;
-        introEl.style.bottom = Math.round(vh - box.bottom - inGap) + 'px';
-        // h1 里放了一个 <br>（见 injectIntroCopy）⇒ 恒两行、等高，可直接二分
-        const hr = h1.getBoundingClientRect();
-        const lineH = hr.height / 2;
-        const line1Center = hr.top + lineH / 2;
-        const rowH = rows[0].getBoundingClientRect().height;
-        const hintH = hint.getBoundingClientRect().height;
-        // ③ 行距 = 标题行距 ⇒ 两行按钮分别落在两行标题中线上
-        const rowGap = Math.max(0, Math.round(lineH - rowH));
-        quick.style.setProperty('--sq-gap', rowGap + 'px');
-        // ② 先钉 hint 底边 = 图标上沿 - HINT_OFF，再反解 hint 与「发封邮件」的
-        //    间距，使第一行按钮正好与标题第一行同心（两个约束联立，唯一解）。
-        const hintBottom = box.top - HINT_OFF;
-        const mt = Math.round(hintBottom - hintH - 1.5 * rowH - rowGap - line1Center);
-        quick.style.setProperty('--sq-hint-mt', Math.max(MIN_HINT_MT, mt) + 'px');
-        quick.style.bottom = Math.round(vh - hintBottom) + 'px';
-      };
-      let runs = 0;
-      const alignLoop = () => {
-        align();
-        runs += 1;
-        if (runs < 200) win.requestAnimationFrame(alignLoop);
-      };
-      win.requestAnimationFrame(alignLoop);
-      win.addEventListener('resize', align);
-    }
-  } catch (_) { /* 对齐失败退回写死的 bottom，不影响可用性 */ }
+  // 排版：三条关系全实测反推，见 startStreetAlign（幂等可重入）
+  startStreetAlign(doc);
   return true;
 }
 
@@ -1081,6 +1204,33 @@ function useStreetWheelBridge(enabled) {
 }
 
   useStreetWheelBridge(mounted && active);
+
+  // 业主滑到尾屏时**再触发一次**尾屏排版校准（见 startStreetAlign 的长注释）：
+  // 注入可能发生在文档刚创建那几帧（那时 .intro/.controls 还没解析出来，或文档随后
+  // 被导航替换 ⇒ 闭包里的 doc 失效），这里是"真的到了尾屏"这个确定时机的兜底。
+  // 用**父页面侧**的 setTimeout 触发，不依赖 iframe 内的 rAF（被宿主包装降频）/
+  // MutationObserver（实测在 iframe 里能工作，但作为唯一自愈手段不可靠）。
+  // 定点 7 次覆盖进场过渡，之后 600ms 一轮共 12s：把「几何被挪走」这类问题也兜住，
+  // 12s 后停（不长期空转）。每次触发都会重开 iframe 内的校准窗口。
+  useEffect(() => {
+    if (!active) return undefined;
+    const poke = () => {
+      const frame = frameRef.current;
+      let w = null;
+      try { w = frame && frame.contentWindow; } catch (_) { w = null; }
+      if (w && typeof w.__streetAlignNow === 'function') {
+        try { w.__streetAlignNow(); } catch (_) { /* noop */ }
+      }
+    };
+    const timers = [0, 120, 320, 700, 1200, 2000, 3200].map((ms) => window.setTimeout(poke, ms));
+    const iv = window.setInterval(poke, 600);
+    const stop = window.setTimeout(() => window.clearInterval(iv), 12000);
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(iv);
+      window.clearTimeout(stop);
+    };
+  }, [active]);
 
   // 揭幕协调器（P-03 的核心）。
   //

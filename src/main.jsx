@@ -924,6 +924,11 @@ function App() {
      判定，完全不碰 DOM 结构与时序 —— 与已有的翻页锁同一机制。 */
   const armMorphGuard = () => {};
   const disarmMorphGuard = () => {};
+  /* ★ 2026-10-10 业主第 2 条（正确做法）：转场期间禁止操作 —— 走**处理器**这一层，
+     不碰 DOM 结构、不碰渲染时序。转场起跑时置位 `window.__worksMorphUntil`
+     （goWorks / goHome），转场真正结束（onEntryArmed / onLeavingDone）清零。
+     任何"会引发新转场/翻页"的入口先问一句 morphLocked()。 */
+  const morphLocked = () => performance.now() < (window.__worksMorphUntil || 0);
   /* ★ 2026-10-10「进二级页闪一帧 hero」的取证（业主反馈:来回切换时很快闪过一个
      接近 hero 的画面）。逐帧探针 outputs/perf-reveal/flash-hunt.mjs 实测:
      移动端点卡进二级时，一级层按设计留在场上演 620ms 的元素退场，而这 620ms 里
@@ -1299,6 +1304,12 @@ function App() {
   };
 
   const goHome = () => {
+    /* ★ 2026-10-10 行为验证抓到的真 bug（behavior-check.mjs 的 F1）：
+       进入转场的守卫期内，二级页的「返回」按钮**仍然点得动** —— 实测点下去 900ms 后
+       二级页已被卸载。原因是此前只给"点卡 / 切分类 / 详情返回"加了锁，漏了 goHome
+       本身。这里补上：正在演形变时，返回按钮不接受操作（回程结束由 onLeavingDone
+       清零，之后恢复正常）。 */
+    if (morphLocked()) return;
     // 回程也要挂一个 motion 类:`works-to-home` 在 mobile.css 里被用来把
     // **回程的配色节奏**翻过来(线先转白、白圆慢半拍再淡出,见「回程的配色
     // 节奏必须与去程相反」)。此前这里一律置 '',回程就会沿去程的配色时序跑,
@@ -1419,7 +1430,12 @@ function App() {
        .works-index-page),不依赖窗口滚动,所以交接路径把复位推迟到一级层
        隐藏(homeHandoff 撤)之后;非交接路径(导航直跳/查看全部/PC)照旧立即复位。 */
     const mobileHandoff = isMobileDevice() && Boolean(opts?.rect && opts?.src);
-    if (!mobileHandoff) window.scrollTo(0, 0);
+    /* ★ 2026-10-10 业主：「一级进入二级时闪一下 hero」。这里原先**同步**写了一次
+       window.scrollTo(0, 0)：它在渲染提交**之前**执行，而一级层此刻还在画面上
+       （它的隐藏发生在紧接着的那次提交里）—— 于是那一帧很可能就是"滚动已归 0 的
+       一级层"，也就是首屏 hero。二级层是 position:fixed、不依赖窗口滚动，这次
+       同步复位没有任何必要；下面那次 rAF 复位已经足够，而 rAF 在下一帧绘制之前
+       执行，那时一级层已经隐藏。 */
     const workId = opts?.workId ?? '';
     window.location.hash = `/works?category=${category}${workId ? `&work=${workId}` : ''}`;
     setRoute({ page: 'works', category, workId });
@@ -1450,8 +1466,13 @@ function App() {
          这里不再做无用的逐帧重写。 */
       chromeTimerRef.current = window.setTimeout(() => {
         setHomeHandoff(false);
-        /* 一级层此刻才隐藏;在此之前复位滚动会让 hero 闪进来(见上)。 */
-        window.scrollTo(0, 0);
+        /* ★ 2026-10-10 逐帧探针实测（morph-probe.mjs）：进入方向**只差这 1 帧** hero。
+           上面那句 setHomeHandoff(false) 是**异步**的 —— 一级层的隐藏发生在这次
+           state 更新落地后的那次提交里；而原先紧跟其后的 window.scrollTo(0, 0) 是
+           **同步**的，它当场就把滚动清零，此刻一级层还画在屏幕上 ⇒ 正好闪 1 帧 hero。
+           放进 rAF：rAF 在本轮提交之后、下一帧绘制之前执行，那时一级层已经隐藏，
+           所以既不会闪、也不会漏掉复位。 */
+        window.requestAnimationFrame(() => window.scrollTo(0, 0));
       }, 620);
     }
   };
@@ -1517,6 +1538,8 @@ function App() {
   };
 
   const goDetailBack = () => {
+    /* 转场期间禁止操作（业主第 2 条）：正在演形变时不再接受新的转场入口。 */
+    if (morphLocked()) return;
     const entryCategory = window.sessionStorage.getItem('portfolioDetailEntryCategory');
     const shouldRestore = entryCategory === route.category;
     setWorksActiveLocked(true);
@@ -1610,7 +1633,7 @@ function App() {
               aria-hidden={route.page !== 'home'}
             >
               <HomePage
-                openWorks={goWorks}
+                openWorks={(c, restore, opts) => { if (morphLocked()) return; goWorks(c, restore, opts); }}
                 paging={paging && route.page === 'home'}
                 active={route.page === 'home'}
                 deckFocusId={deckFocusId}
@@ -2502,7 +2525,7 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             data-category-pill={category.id}
             className={category.id === activeCategory.id ? 'active' : ''}
             aria-label={category.title}
-            onClick={() => goWorks(category.id)}
+            onClick={() => { if (morphLocked()) return; goWorks(category.id); }}
           >
             {hideSharedWorksLabel && category.id === activeCategory.id ? null : category.title}
           </button>
