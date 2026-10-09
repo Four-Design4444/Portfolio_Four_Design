@@ -2494,6 +2494,28 @@ html[data-device="mobile"] .mob-profile-stats {
   display: flex;
   align-items: stretch;
   gap: var(--mob-stat-gap);
+  /* ⚠⚠ 行高必须显式给出（2026-10-10 · 微信端「上方文字跳帧」BUG）。
+     症状：微信里点经验卡，动效播完后「标题 + 联系方式 + 选项卡」整体向下跳 ~7px；
+     其他手机浏览器正常。
+     根因：`height` 原本是 auto —— 由子项**同时进行**的三路过渡**涌现**出来
+     （数字字号 clamp(19,5.9vw,28) ↔ clamp(14,4.2vw,19)、收起芯片 gap 7→0、
+     芯片 margin-top 0→22.9px）。只要任一路过渡的落地时机与别的不同，行高就会
+     偏离终值；而 .mob-profile-info 是 justify-content:flex-end 的**底对齐**列 ——
+     行高一变，其上所有内容（标题/联系方式/选项卡）整体跟着位移。实测微信里
+     行高停在静止值 75.72px，随后才落到终值 68.88px，于是「上方向下跳一下」。
+     修法与描述卡 --mob-card-h 同源：**把要动画的那个尺寸变成显式可插值量** ——
+     行高自己走一条 height 过渡，不再依赖任何子项的过渡结果。
+     行高 = 卡片 border-box 高 = 上下描边 2px + 2×纵向 padding + 数字盒高
+            + 列 gap + 标签固定行高 17px。
+     数值已用探针逐项核对：静止 75.7188px / dock 68.8906px，与实测逐位相同。
+     ⚠ 下面三个变量与 .mob-profile-stat 的 padding/gap、strong 的 font-size、
+       .mob-profile-stat-label 的 height、以及 --mob-chip-w 引用的是同一组常量，
+       共四处，改一处必须同步其余三处。 */
+  --mob-stat-pad-y: clamp(9px, 1.9vh, 13px);
+  --mob-stat-gap-y: clamp(5px, 1.3vh, 7px);
+  --mob-stat-num: clamp(19px, 5.9vw, 28px);
+  --mob-stat-num-dock: clamp(14px, 4.2vw, 19px);
+  height: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num) + var(--mob-stat-gap-y) + 17px);
   /* dock 态专用常量，单一来源（JS 量宽也读这三个，见 measureStatDockWidth）：
      --mob-dock-name-font 选中卡英文 dock 字号（比静止态小一档，静止态不碰）
      --mob-dock-pad-x     选中卡 dock 水平 padding（收边距）
@@ -2506,11 +2528,15 @@ html[data-device="mobile"] .mob-profile-stats {
   --mob-dock-name-font: clamp(8px, 2.25vw, 10px);
   --mob-dock-pad-x: clamp(8px, 2.2vw, 11px);
   --mob-chip-w: calc(2 * clamp(9px, 1.9vh, 13px) + 17px + clamp(5px, 1.3vh, 7px) - clamp(4px, 1.1vh, 6px));
-  /* gap 也要过渡：dock 态归零、收回态还原，漏了它收回复原时缝隙瞬跳 */
+  /* gap 与 height 都要过渡：gap 漏了收回复原时缝隙瞬跳；height 是显式量
+     （见规则开头的注释），静态 ↔ dock 的 75.72px ↔ 68.88px 要走同一条过渡。
+     ⚠ 文件后面还有一条 `.mob-profile-stats, .mob-profile-skills` 的 transition
+       规则（同特异性、位置更后）会覆盖本行 —— 那份列表里也必须带 height。 */
   transition:
     opacity var(--mob-dock-dur) var(--mob-dock-ease),
     gap var(--mob-dock-dur) var(--mob-dock-ease),
     margin var(--mob-dock-dur) var(--mob-dock-ease),
+    height var(--mob-dock-dur) var(--mob-dock-ease),
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
@@ -2642,6 +2668,9 @@ html[data-device="mobile"] .mob-profile-stat-name {
    ③ dock 与下方描述卡左缘对齐(设计稿如此),不再右移 14px。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked {
   gap: 0;
+  /* 显式行高另一半：dock 态数字换用 --mob-stat-num-dock（clamp(14,4.2vw,19)），
+     其余分项不变。见 .mob-profile-stats 开头的推导注释。 */
+  height: calc(2px + 2 * var(--mob-stat-pad-y) + var(--mob-stat-num-dock) + var(--mob-stat-gap-y) + 17px);
   /* 左侧让出 14px：dock 态描述卡与标签条相接，选中卡是「上圆角」，
      行若与下方描述卡左缘对齐会撞上描述卡的左上圆角(同技能 dock 的缩进) */
   margin-left: 14px;
@@ -2877,8 +2906,12 @@ html[data-device="mobile"] .mob-profile-shell.is-collapsed .mob-profile-skills {
 
 html[data-device="mobile"] .mob-profile-stats,
 html[data-device="mobile"] .mob-profile-skills {
+  /* ⚠ 本条位置更后、特异性与 .mob-profile-stats 基础规则相同 ⇒ **整条覆盖**
+     那里的 transition 列表。height 必须带在这里，否则上面那条 height 过渡
+     会被静默吃掉（2026-10-10 显式行高随附）。 */
   transition:
     opacity 400ms cubic-bezier(0.34, 1.2, 0.44, 1),
+    height var(--mob-dock-dur) var(--mob-dock-ease),
     transform var(--mob-dock-dur) var(--mob-dock-ease);
 }
 
