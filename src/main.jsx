@@ -514,145 +514,6 @@ const fourLetterPaths = {
   ]
 };
 
-function HeroMotionDemo() {
-  const [hovered, setHovered] = useState(false);
-  const letters = Object.entries(fourLetterPaths);
-  const markRef = useRef(null);
-  const letterRefs = useRef([]);
-  const subtitleRef = useRef(null);
-  const pointerRef = useRef({ x: 0.5, y: 0.5 });
-  const hoverTargetRef = useRef(0);
-
-  const handlePointerMove = (event) => {
-    const rect = markRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    pointerRef.current = { x: x / 100, y: y / 100 };
-    markRef.current.style.setProperty('--hero-pointer-x', `${x.toFixed(2)}%`);
-    markRef.current.style.setProperty('--hero-pointer-y', `${y.toFixed(2)}%`);
-  };
-
-  const handlePointerEnter = (event) => {
-    hoverTargetRef.current = 1;
-    setHovered(true);
-    handlePointerMove(event);
-  };
-
-  const handlePointerLeave = () => {
-    hoverTargetRef.current = 0;
-    setHovered(false);
-    pointerRef.current = { x: 0.5, y: 0.5 };
-  };
-
-  useEffect(() => {
-    let frame = 0;
-    let hoverMix = 0;
-    let lastTime = performance.now();
-    const start = performance.now();
-    const centers = [
-      { x: 0.08, y: 0.5 },
-      { x: 0.36, y: 0.5 },
-      { x: 0.63, y: 0.5 },
-      { x: 0.86, y: 0.5 }
-    ];
-
-    const smooth = (value) => {
-      const t = Math.min(Math.max(value, 0), 1);
-      return t * t * t * (t * (t * 6 - 15) + 10);
-    };
-
-    const render = (now) => {
-      const dt = Math.min((now - lastTime) / 1000, 0.05);
-      lastTime = now;
-      hoverMix += (hoverTargetRef.current - hoverMix) * (1 - Math.exp(-dt * 9));
-      const p = pointerRef.current;
-
-      letterRefs.current.forEach((node, index) => {
-        if (!node) return;
-        const introDelay = index * 520;
-        const introDuration = 2600;
-        const intro = smooth((now - start - introDelay) / introDuration);
-        const center = centers[index] ?? centers[0];
-        const dx = p.x - center.x;
-        const dy = p.y - center.y;
-        const distance = Math.sqrt(dx * dx * 1.2 + dy * dy * 2.8);
-        const proximity = Math.max(0, 1 - distance / 0.58);
-        const pull = proximity * proximity * hoverMix;
-        const wave = Math.sin(now * 0.0028 + index * 1.1) * pull;
-        const x = dx * 64 * pull;
-        const y = dy * 44 * pull + wave * 3;
-        const scaleX = 1 + pull * 0.09;
-        const scaleY = 1 + pull * 0.18;
-        const blur = 0;
-
-        node.style.opacity = String(intro);
-        node.style.filter = `blur(${blur.toFixed(3)}px)`;
-        node.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
-      });
-
-      if (subtitleRef.current) {
-        const intro = smooth((now - start - 1750) / 1200);
-        const dx = p.x - 0.5;
-        const dy = p.y - 0.82;
-        const distance = Math.sqrt(dx * dx * 1.1 + dy * dy * 4.2);
-        const proximity = Math.max(0, 1 - distance / 0.74);
-        const pull = proximity * proximity * hoverMix;
-        const wave = Math.sin(now * 0.0031) * pull;
-        const x = -50 + dx * 36 * pull;
-        const y = dy * 24 * pull + wave * 2;
-        const scaleX = 1 + pull * 0.025;
-        const scaleY = 1 + pull * 0.075;
-        const blur = (1 - intro) * 8 + pull * (0.3 + proximity * 2.6);
-
-        subtitleRef.current.style.opacity = String(intro);
-        subtitleRef.current.style.filter = `blur(${blur.toFixed(3)}px)`;
-        subtitleRef.current.style.transform = `translate3d(${x.toFixed(2)}%, ${y.toFixed(2)}px, 0) scale(${scaleX.toFixed(4)}, ${scaleY.toFixed(4)})`;
-      }
-
-      frame = requestAnimationFrame(render);
-    };
-
-    frame = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  return (
-    <section className="hero-motion-demo">
-      <div className="hero-motion-bg" />
-      <div
-        ref={markRef}
-        className={`hero-motion-mark${hovered ? ' is-hovered' : ''}`}
-        onPointerEnter={handlePointerEnter}
-        onPointerMove={handlePointerMove}
-        onPointerLeave={handlePointerLeave}
-      >
-        <svg className="hero-motion-svg" width="701" height="200" viewBox="0 0 701 200" aria-label="FOUR">
-          <g className="hero-motion-logo-core">
-            {letters.map(([key, paths], index) => (
-              <g
-                className="hero-motion-letter"
-                style={{ '--letter-delay': `${index * 520}ms` }}
-                ref={(node) => {
-                  letterRefs.current[index] = node;
-                }}
-                key={key}
-              >
-                {paths.map((path) => <path d={path} key={path} />)}
-              </g>
-            ))}
-          </g>
-        </svg>
-        <p className="hero-motion-subtitle" ref={subtitleRef}>Personal works exhibition</p>
-      </div>
-      <div className="hero-motion-note">
-        <span>BlurText style SVG entrance</span>
-        <span>Hover FOUR to preview logo blur diffusion</span>
-      </div>
-    </section>
-  );
-}
-
 /* The mark is inlined rather than loaded through <img src=...svg>.
    Why (2026-10-07): as an <img> the SVG is rasterised into its own composited
    layer, and on real phones the edges of that layer showed up as a 2px
@@ -698,9 +559,6 @@ const isMobileDevice = () => document.documentElement.getAttribute('data-device'
 
 function parseRoute() {
   const hash = window.location.hash;
-  if (hash.startsWith('#/hero-motion-demo')) {
-    return { page: 'heroMotionDemo', category: 'ui', workId: '' };
-  }
   if (hash.startsWith('#/detail')) {
     const params = new URLSearchParams(hash.split('?')[1] ?? '');
     return { page: 'detail', category: params.get('category') ?? 'ui', workId: params.get('work') ?? '' };
@@ -1654,27 +1512,22 @@ function App() {
         )}
       </div>
       <main>
-        {route.page !== 'heroMotionDemo' && (
-          <MorphNav
-            page={route.page}
-            navMotion={navMotion}
-            homeActiveSection={homeActiveSection}
-            hasSharedWorksPill={Boolean((sharedPill || worksActiveLocked) && route.page === 'works')}
-            activeCategory={activeCategory}
-            activeIndex={activeIndex}
-            total={works.length}
-            goHome={goHome}
-            goWorks={goWorks}
-            goWorksBack={goDetailBack}
-            goDetailByIndex={goDetailByIndex}
-            goDetailCategory={goDetailCategory}
-          />
-        )}
+        <MorphNav
+          page={route.page}
+          navMotion={navMotion}
+          homeActiveSection={homeActiveSection}
+          hasSharedWorksPill={Boolean((sharedPill || worksActiveLocked) && route.page === 'works')}
+          activeCategory={activeCategory}
+          activeIndex={activeIndex}
+          total={works.length}
+          goHome={goHome}
+          goWorks={goWorks}
+          goWorksBack={goDetailBack}
+          goDetailByIndex={goDetailByIndex}
+          goDetailCategory={goDetailCategory}
+        />
         {sharedPill && <SharedCategoryPill pill={sharedPill} />}
-        {route.page === 'heroMotionDemo' ? (
-          <HeroMotionDemo />
-        ) : (
-          <>
+        <>
             {/* The home layer is never unmounted, only hidden. Its images,
                 video and scroll position survive a trip into works or detail,
                 so coming back needs no reload and lands on the same screen.
@@ -1750,8 +1603,7 @@ function App() {
                 onBack={!exitDetail && isMobileDevice() ? goDetailBack : null}
               />
             ) : null}
-          </>
-        )}
+        </>
       </main>
     </>
   );

@@ -241,9 +241,9 @@
     <script>
       (function () {
         // 路由判定与 src/main.jsx 的 parseRoute 保持一致：凡是不是 works /
-        // detail / hero-motion-demo 的 hash 都算首页。
+        // detail 的 hash 都算首页。
         var hash = window.location.hash || '';
-        var isHome = !/^#\/(works|detail|hero-motion-demo)/.test(hash);
+        var isHome = !/^#\/(works|detail)/.test(hash);
         if (!isHome) return; // 二级/三级页刷新：连遮罩节点都不建
 
         var el = document.createElement('div');
