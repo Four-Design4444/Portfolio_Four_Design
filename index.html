@@ -23,7 +23,11 @@
         position: fixed;
         inset: 0;
         z-index: 99999;
+        /* 底色与 demo 注入后的 main 背景同源（radial #161d1e → #111719）。iframe 还没
+           解析出 .rail 的那段等待期里（有时几十到几百 ms），遮罩不再是"一块纯黑"，
+           而是与随后出现的 demo 同色同构 ⇒ 视觉无缝，不再被读成"先黑一下"。 */
         background: #111719;
+        background: radial-gradient(ellipse at 50% 49%, #161d1e 0%, #111719 68%);
         opacity: 1;
         transition: opacity .5s ease;
       }
@@ -82,6 +86,12 @@
     </style>
     <noscript><style>#app-loader { display: none; }</style></noscript>
     <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin />
+    <!-- 首屏 Loading 的 iframe 文档（/loading/loader.html，21.5KB 同域）在 head 阶段就
+         preload。不加这一条时浏览器把 iframe 导航排在主 JS/CSS 之后（iframe 是低优先级
+         destination），无缓存实测要等 ~1.5s 才解析出 .rail，而这段等待里 iframe 恒
+         opacity:0 ⇒ 遮罩只剩一块纯色，业主报的「进入 Loading 一瞬间短暂黑屏」就是它。
+         preload 后该文档与首屏并行到达，注入落位的等待期压到网络往返量级。 -->
+    <link rel="preload" as="document" href="/loading/loader.html?embed" />
     <title>UI / Visual / AI Designer Portfolio</title>
     <script>
       (function () {
