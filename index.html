@@ -226,10 +226,14 @@
     </script>
   </head>
   <body>
-    <!-- 首屏 Loading（typing-cat v1.1）：动画放在 public/loading/ 下，
-         仅提高眨眼频率；这里做「嵌入 + 背景/接触阴影 + 进度 + 揭幕」。
-         demo 自带嵌入模式（?embed）：自动隐藏左上 mast / 底部控制台 / 副标题，
-         并把画面收窄到 min(570px,97vw)，正是为被嵌入准备的形态。
+    <!-- 首屏 Loading：动画放在 public/loading/loader.html，仅提高眨眼频率；
+         这里做「嵌入 + 背景/接触阴影 + 进度 + 揭幕」。
+         ⚠ 2026-10-10 业主「loading 进入一瞬间能看到 demo 残留」：该文件原先是从
+         猫动画 demo 直接拷来的，自带左上角版本标 .mast(v1.1 / TUXEDO CAT) 与底部
+         版本切换条 .controls(v1.0/v1.1/02/03/04 + 暂停/1.0×/纯净)，只靠运行时 JS
+         加 .embedded 类隐藏 —— 挂载首帧来不及，于是闪一下。现在这些节点连同其
+         CSS/交互代码已从文件里**整体删除**（不是隐藏），并把文件名去掉 demo 味。
+         剩余 ?embed 只用于让画面收窄到 min(570px,97vw) 的嵌入排版。
          只有首页会显示：二级(works)/三级(detail)页刷新直接进内容，不挡路。 -->
     <!-- 遮罩本体由下面的脚本创建，HTML 里故意不放这个 div：Chrome 会在解析过程中
          穿插绘制，若 div 先于脚本出现，二级/三级页刷新就有可能闪一帧纯色遮罩。
@@ -255,7 +259,7 @@
         frame.title = 'Loading';
         frame.setAttribute('tabindex', '-1');
         frame.setAttribute('aria-hidden', 'true');
-        frame.src = '/loading/typing-cat-v1.1.html?embed';
+        frame.src = '/loading/loader.html?embed';
         // ② 真实进度读数。节点先建好，正常情况会在 iframe load 后搬进 demo，
         //    替换掉 demo 自带那条假进度条、坐在动画正下方；拿不到 iframe 文档时
         //    才退回遮罩底部（降级），两种情况下都只有一个条。
