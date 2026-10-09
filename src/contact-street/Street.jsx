@@ -502,8 +502,15 @@ const HOST_JS = `
   //   · 每帧在 demo 的帧回调**之前**写 fov + updateProjectionMatrix：demo 从不写
   //     fov（bundle 已核：fov 只在初始化出现一次）⇒ 不会打架；射线拾取用的是
   //     同一份 projectionMatrix ⇒ 点击判定与看到的画面严格一致。
-  // ⚠ 运行时可调：window.__streetMobileZoom（>1 越大越近，改完下一帧生效）。
+  // ⚠ 运行时可调（不必重新构建，下一帧生效）：
+  //     window.__streetMobileZoom —— ≤700px 的倍率（>1 越大越近）
+  //     window.__streetZoomPc     —— ≥701px 的倍率
+  //   铁律不变：只拉近 overview（初始镜头），交互模式 fov 恒为 demo 原始 40。
   var BASE_FOV = 40;
+  // 业主 2026-10-10 第二轮：移动端在 1.25 基础上再微微放大；PC 端同样拉近初始
+  // 镜头（PC 视口宽、街景本身已经看得比较全 ⇒ 用更温和的倍率）。
+  var ZOOM_MOBILE = 1.32;
+  var ZOOM_PC = 1.18;
   var ZOOM_MS = 1400;                       // 与 demo 镜头转场同量级
   var ZOOM_DUR = ZOOM_MS / 1000;
   var zoomBlend = 1;                        // 1 = 完全拉近，0 = demo 原视角
@@ -514,10 +521,8 @@ const HOST_JS = `
   };
   var applyOverviewZoom = function (now) {
     var cam = carCamera;
-    if (!cam || window.innerWidth > 700) {   // 只作用于移动端；PC 一帧都不碰
-      if (cam && window.innerWidth > 700 && cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); zoomBlend = 1; zoomLastMode = null; }
-      return;
-    }
+    if (!cam) return;
+    var narrowViewport = window.innerWidth <= 700;
     var mode = (window.__four && window.__four.mode) || 'overview';
     if (mode !== zoomLastMode) {
       zoomLastMode = mode;
@@ -529,8 +534,10 @@ const HOST_JS = `
       var p = ZOOM_DUR > 0 ? Math.min(1, (now - zoomT0) / ZOOM_MS) : 1;
       zoomBlend = zoomFrom + (zoomTo - zoomFrom) * smoothstep(p);
     }
-    var z = typeof window.__streetMobileZoom === 'number' ? window.__streetMobileZoom : 1.25;
-    var mag = 1 + (z - 1) * zoomBlend;        // 实际放大倍率
+    var knob = narrowViewport
+      ? (typeof window.__streetMobileZoom === 'number' ? window.__streetMobileZoom : ZOOM_MOBILE)
+      : (typeof window.__streetZoomPc === 'number' ? window.__streetZoomPc : ZOOM_PC);
+    var mag = 1 + (knob - 1) * zoomBlend;     // 实际放大倍率
     if (mag <= 1.0005) {
       if (cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); }
       return;
@@ -544,7 +551,8 @@ const HOST_JS = `
       blend: +zoomBlend.toFixed(3),
       fov: carCamera ? +carCamera.fov.toFixed(2) : null,
       mode: (window.__four && window.__four.mode) || null,
-      wide: window.innerWidth > 700
+      wide: window.innerWidth > 700,
+      mag: +(1 / Math.tan(carCamera ? carCamera.fov * Math.PI / 360 : BASE_FOV * Math.PI / 360) * Math.tan(BASE_FOV * Math.PI / 360)).toFixed(3)
     };
   };
   // Reflector 每帧以主相机为 WeakMap key，支持宿主注入晚于相机创建。
