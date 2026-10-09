@@ -461,6 +461,24 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
   /* ⑨ 业主「FOUR DESIGN / INDEPENDENT CREATIVE STUDIO 之间间距收窄」：
      demo 是 gap:18px + letter-spacing 1px（6.5px 字号下相当于 3 个字宽）。 */
   .intro-foot { font-size: 6.5px; letter-spacing: .8px; margin-top: 12px; gap: 8px; }
+  /* ── 修12（2026-10-09 移动端镜头拉近）────────────────────────────────────
+     业主：移动端尾屏场景太小，拉近镜头，但绝不能影响各种交互的镜头过渡。
+     做法 = 给 WebGL canvas 做纯视觉放大（CSS transform scale），相机一概不动：
+     · demo 的相机数学全部基于 innerWidth/innerHeight 与指针位移增量（已核
+       bundle：aspect=innerWidth/innerHeight、hotspots 投影无人消费、canvas
+       无自身 transform），CSS 缩放不改变这些输入 ⇒ 平移/拖拽、面板飞入、
+       转场动画的逻辑与曲线全部原样，只是画面整体放大；
+     · .intro / .hud / .street-quick / #detail 都是 DOM 覆盖层，不在 canvas
+       里，位置一像素不动；
+     · transform-origin 取楼群中心（水平居中、垂直 ≈45%），放大后楼群基本
+       原地变大；放大的越界部分被视口裁掉，不会有空边；
+     · 缩放系数做成变量 --street-zoom，业主嫌大/嫌小只改这一个值。 */
+  :root { --street-zoom: 1.25; }
+  body { overflow: hidden !important; }
+  canvas {
+    transform: scale(var(--street-zoom, 1.25));
+    transform-origin: 50% 45%;
+  }
 }
 `;
 
