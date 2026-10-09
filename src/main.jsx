@@ -4431,6 +4431,25 @@ function HeroSection({ active = true, onVideoReady }) {
       if (jsmpegPlayerRef.current === player) jsmpegPlayerRef.current = null;
     };
   }, [useJsmpeg]);
+  // 微信移动端走 canvas 解码（WebCodecs / JSMpeg），页面里根本没有 <video> 元素，
+  // 下面那个「playing + readyState>=3 + 缓冲余量」的就绪判据对它完全不成立 —— 那条
+  // effect 直接 return，onVideoReady 永远不回调。后果是 HomePage 的揭幕闸门
+  // （heroVideoReady && …）永久不开 → app:ready 永不到来 → 首屏 SVG 入场始终停在
+  // opacity:0（loading 一消失就只剩视频、标题不出现）。
+  // canvas 路径的就绪信号就是「首帧画上画布」，这里补上；解码器始终不出帧时
+  // （WebCodecs 是空壳、JSMpeg 超时回落）再用同一个兜底时长强放，绝不让闸门卡死。
+  useEffect(() => {
+    if (!onVideoReady || !(useJsmpeg || useWebCodecs)) return undefined;
+    if (videoReadyRef.current) return undefined;
+    const mark = () => {
+      if (videoReadyRef.current) return;
+      videoReadyRef.current = true;
+      try { onVideoReady(); } catch (_) { /* noop */ }
+    };
+    if (canvasPainted) { mark(); return undefined; }
+    const t = window.setTimeout(mark, HERO_SMOOTH_FAILSAFE_MS);
+    return () => window.clearTimeout(t);
+  }, [onVideoReady, useJsmpeg, useWebCodecs, canvasPainted]);
   // WeChat kernels block programmatic video.play() until either the visitor
   // interacts OR the page answers WeixinJSBridgeReady (WeChat's own unlock
   // event, which grants playback without a gesture). Retry on a short ladder
@@ -5595,6 +5614,14 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     const t = window.setTimeout(reveal, 6000);
     return () => window.clearTimeout(t);
   }, [heroVideoReady, coversPreloaded, reveal]);
+  // 终极兜底：上面两道都以 heroVideoReady / coversPreloaded 为前置条件，任一闸门永远
+  // 不来（微信 canvas 解码不出帧、封面请求全挂…）reveal 就永不发生 → app:ready 不来 →
+  // 首屏 SVG 入场停在 opacity:0。这里不看任何闸门，到点无条件揭幕（reveal 幂等）。
+  // 9s 长于正常路径（≈5s），只在异常时生效。
+  useEffect(() => {
+    const t = window.setTimeout(reveal, 9000);
+    return () => window.clearTimeout(t);
+  }, [reveal]);
   const [projectsRef, projectsSeen, projectsResync] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);
@@ -6711,13 +6738,16 @@ function WorksPage({
       if (Math.abs(rawDx) > 8) d.moved = true;
       railApply(rawDx, 0, false, 0);
     } else {
+      /* ⚠ 2026-10-10 业主:「轨道卡片这里手指似乎能拖着卡片上滑,不应该出现
+         上滑,只能左右滑动切换轨道卡片」。
+         原来这里会把 rawDy 直接喂给 railApply —— 整条轨道跟着手指上下位移
+         (dy × 0.3),读起来就是「卡片被拖着走」,且松手时还有一次回弹或反向
+         上翻的顿挫。现在垂直方向**只记录位移用于松手判定,不再产生任何跟手
+         位移**:轨道始终钉在自己的位置上,视觉上只可能左右动。
+         翻页(进详情)仍在松手时按阈值提交 —— 那是「上下翻屏」的入口,不属
+         于轨道本体的位移。 */
       d.dy = rawDy;
       if (Math.abs(rawDy) > 8) d.moved = true;
-      // 2026-10-07 翻屏方向修正后,「下一屏在下方」= 屏幕上移:只有向上滑
-      // 才跟手(二级页随手指上移,与翻屏同向)。向下滑同样提交翻页(手势
-      // 方向容错,避免用户习惯性下滑没反应),但不反向跟手 —— 否则松手时
-      // 先回弹再上翻,中间多一次方向反转的顿挫。
-      railApply(0, rawDy < 0 ? rawDy : 0, false, 0);
     }
   };
   const railUp = (e) => {
