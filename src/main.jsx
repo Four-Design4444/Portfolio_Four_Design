@@ -922,7 +922,24 @@ function App() {
   /* 回程滚动复位(2026-10-07 业主第五轮):一级层是 display:none 隐藏的,隐藏
      期间文档高度塌掉、窗口滚动被浏览器钳回 0;路由切回 home 的同一提交里
      一级层重新可见,若此刻还停在 0,用户会看到首屏 hero 闪一帧再跳回原屏。
-     useLayoutEffect 在提交后、绘制前同步滚回,连一帧都不会露。 */
+     useLayoutEffect 在提交后、绘制前同步滚回,连一帧都不会露。
+
+     ⚠ 2026-10-10 复测:上面这句"连一帧都不会露"**没有完全做到**。业主反馈
+     "来回切换时很快闪过一个接近 hero 的画面";逐帧探针
+     (outputs/perf-reveal/flash-hunt.mjs,判据:一级层已可见 + 窗口 scrollY≈0
+     而用户原本停在 1697)稳定量到 **2 帧**(约 12~17ms),实测时序:
+       t+0     一级层 display:none, document 高 852(只有二级页那么高)
+       t+11ms  一级层恢复 block      但 scrollY 仍是 0 ⇒ **这一帧画的就是 hero**
+       t+17ms  scrollY 才回到 1697
+     根因:写入发生在"一级层刚从 display:none 出来、浏览器还没重算布局"的那一刻,
+     文档高度还是旧的 → scrollTo 被钳成 0。已验证**"补写"这条路走不通**:
+       · rAF 里逐帧重申 window.scrollY → 钳位发生在 rAF 之后的布局阶段,每次被覆盖;
+       · 写入后强制重排再写(最多 3 次)→ 计数仍是 1~2 帧;
+       · 改成"反复重申直到落位"(最多 12 帧)→ 揭示正好落在两次 rAF 之间,第一帧
+         仍会漏;而且这版还有真实风险:用户回程后立刻滑动会被拽回最长 200ms,已撤。
+     结论:唯一稳的修法是**别让文档在隐藏期间塌到装不下这个偏移**(即一级层隐藏时
+     保留其高度 / 给文档一个不小于 saved+视口的最小高度),这样浏览器根本没有机会
+     把它钳成 0,揭示那一帧天然就是对的。属于结构性改动,待业主拍板后再动。 */
   const pendingHomeScrollRef = useRef(null);
   useLayoutEffect(() => {
     if (route.page !== 'home' || pendingHomeScrollRef.current === null) return undefined;
@@ -930,17 +947,57 @@ function App() {
     pendingHomeScrollRef.current = null;
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
-    /* ⚠ 2026-10-10:这一刻一级层刚从 display:none 出来,**浏览器尚未重算布局**,
-       文档还是"二级页那么高"(实测 852) → scrollTo 被钳成 0,而钳位结果留到下一帧,
-       于是**揭示的那一帧画的就是首屏 hero**。写完之后确认落位,没落位就强制一次重排
-       (读 scrollHeight)再写,最多三次 —— 高度一生效写入就成立,且全都发生在绘制之前。 */
     window.scrollTo(0, y);
-    for (let i = 0; i < 3 && Math.abs(window.scrollY - y) > 1; i += 1) {
-      void document.documentElement.scrollHeight;
-      window.scrollTo(0, y);
-    }
     return undefined;
   }, [route.page]);
+  /* ★ 2026-10-10（业主拍板）「一级↔二级来回切换闪一帧 hero」的结构性修法。
+
+     取证见 outputs/perf-reveal/flash-hunt.mjs：回程时一级层刚从 display:none 出来、
+     浏览器还没重算布局，文档仍只有"二级页那么高"，于是"回到用户原位置"的写入被钳成 0
+     —— 揭示那一帧画的就是首屏 hero，稳定 2 帧（约 12~17ms）。三种"事后补写"都被钳位
+     打败（都撤了，见上面 useLayoutEffect 的注释）。
+
+     所以改治源头：**一级层隐藏期间，把它的高度占回来**（body 给一个不小于
+     「用户原位置 + 一屏高」的最小高度），浏览器就没有机会把滚动位置清零；
+     等回程揭示时位置本来就是对的，不需要任何补写。
+
+     同时**锁掉根节点滚动**：二级层是 position:fixed、有自己的滚动容器，不依赖窗口滚动；
+     但文档被垫高之后，在二级页上拖动有可能把背后（不可见的）一级页滚走，所以锁住。
+     只作用于移动端的二级页（PC 的二级页走文档滚动，不动），且两步都在绘制前完成。 */
+  useLayoutEffect(() => {
+    if (!isMobileDevice() || route.page !== 'works' || homeHandoff) return undefined;
+    const body = document.body;
+    const saved = Math.max(
+      Number(window.sessionStorage.getItem('portfolioHomeScrollY') || 0),
+      window.scrollY || 0
+    );
+    const need = Math.ceil(saved + (window.innerHeight || 0) + 1);
+    body.style.minHeight = need + 'px';
+    /* ⚠ 不要用 html{overflow:hidden} 来锁滚动 —— 实测（hash-scroll-check.mjs ⑤⑦）
+       它会把滚动位置**直接清零**（1704 → 0），正好把我上面保住的位置又抹掉。
+       改用"滚动监听按回原位":一级层此刻不可见,所以推回去完全无感;
+       而且它不动 overflow,不会触发清零。 */
+    const onScroll = () => {
+      if (Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    /* ⚠ 关键的一笔:上面那句"复位到 0"（goWorks 的 620ms timeout）已经把滚动清零了,
+       而**文档后来变高并不会把被清零的位置自己找回来** —— 必须在这里补写回去。
+       此刻高度已经够(刚垫的 minHeight),写入一定成立;而且一级层还不可见,
+       用户看不到这一下。补写之后,回程揭示时位置本来就是对的 → 不再有 hero 帧。 */
+    if (saved > 0 && Math.abs(window.scrollY - saved) > 1) {
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.body.style.scrollBehavior = 'auto';
+      window.scrollTo(0, saved);
+    }
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      body.style.minHeight = '';
+      /* 回程揭示这一提交里把位置落定(在绘制之前),这样第一帧画的就是原位置。 */
+      if (saved > 0 && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    };
+  }, [route.page, homeHandoff]);
+
   /* 环境光(SideRays)单例 (2026-10-07):一级首页与二级作品页**共用同一个实例**。
      以前两级各挂一份(一级 .home-rays-layer、二级 .works-side-rays),跨级时是两个
      WebGL 上下文、各自 shader,视觉参数虽同但始终是"两个光"。现在提升到 App 顶层:
@@ -1228,23 +1285,7 @@ function App() {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
-    /* ⚠ 2026-10-10 修「一级↔二级来回切换时闪一下、颜色接近 hero」（业主反馈）。
-       逐帧探针实测（outputs/perf-reveal/flash-hunt.mjs）回一级页那一提交的时序:
-         t+0ms    一级层 display:none  → document 只有二级页那么高（852）
-         t+15ms   一级层恢复 block     → 但窗口滚动仍在 0 ⇒ **当帧画的是首屏 hero**
-         t+17ms   滚动才被另一条路径补成 1697
-       根因:恢复写入发生在"一级层刚从 display:none 出来、浏览器还没重算布局"的那一刻,
-       文档高度还是旧的 → scrollTo 被钳成 0;而原来的两次写入（rAF 套 rAF）**都落在
-       这个还没长高的窗口里**,于是谁也救不回来,连露 2 帧 hero（约 12~17ms,肉眼就是
-       "闪一下"）。改为**反复重申直到真的落位**（最多 12 帧）:高度一旦生效写入就成立，
-       且每次写入都在该帧绘制之前,所以一帧都不会露。 */
-    let tries = 0;
-    const apply = () => {
-      tries += 1;
-      window.scrollTo(0, saved);
-      if (Math.abs(window.scrollY - saved) > 1 && tries < 12) window.requestAnimationFrame(apply);
-    };
-    window.requestAnimationFrame(apply);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo(0, saved)));
   };
 
   const goHome = () => {
@@ -1283,6 +1324,8 @@ function App() {
       pendingHomeScrollRef.current =
         Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? homeScrollY) || 0;
       restoreScroll('portfolioHomeScrollY', homeScrollY);
+      /* 转场期间锁一级页翻页(见 isLocked);收拢结束由 onLeavingDone 清零。 */
+      window.__worksMorphUntil = performance.now() + 1400;
       return;
     }
 
@@ -1292,6 +1335,8 @@ function App() {
        一级页的滚动位置也不受影响。 */
     const leavingWorksOnPc = route.page === 'works' && !isMobileDevice();
     if (leavingWorksOnPc) {
+      /* 转场期间锁一级页翻页(见 isLocked):PC 二级层要浮在上面把坠落演完。 */
+      window.__worksMorphUntil = performance.now() + PC_WORKS_EXIT_MS + 400;
       setPcWorksExit(true);
       window.clearTimeout(pcWorksExitTimerRef.current);
       pcWorksExitTimerRef.current = window.setTimeout(() => setPcWorksExit(false), PC_WORKS_EXIT_MS);
@@ -1311,6 +1356,9 @@ function App() {
     // 免得那 85ms 的空转帧砸进 520ms 的轨道动画里。
     if (isMobileDevice()) holdStreetIdleFrames();
     if (route.page === 'home') {
+      /* 转场期间锁一级页翻页(见 isLocked):入场 700+40ms 里一级层还在场,
+         此时翻页会让形变落点跑到别的屏;onEntryArmed 清零。 */
+      window.__worksMorphUntil = performance.now() + 900;
       setNavMotion('home-to-works');
       // 2026-10-06 移动端:首页点卡 → 二级页。移动端把源卡矩形交给二级轨道,
       // 由**同一张卡**自己从源卡姿态张开 —— 覆盖层没有蒙版/标题/阴影,交接
@@ -1571,8 +1619,10 @@ function App() {
                 entry={worksEntry}
                 leaving={exitWorks || pcWorksExit}
                 handingOff={homeHandoff}
-                onEntryArmed={() => setWorksEntry(null)}
+                onEntryArmed={() => { window.__worksMorphUntil = 0; setWorksEntry(null); }}
                 onLeavingDone={() => {
+                  /* 转场结束 → 立刻解除一级页翻页锁(见 isLocked)。 */
+                  window.__worksMorphUntil = 0;
                   /* 收拢结束的**同一提交**里:撤二级层 + 解除一级卡组遮挡。
                      (「其余元素」的入场已提前到回程开始时与收拢同步起跑,
                      这里只剩兜底:万一 chromeHidden 仍为 true 再补一刀。)
@@ -5626,7 +5676,13 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       if (viewport) viewport.removeEventListener('resize', schedule);
     };
   }, [paging]);
-  const isLocked = () => performance.now() < lockedUntilRef.current;
+  /* ⚠ 2026-10-10 业主：「二级返回一级时，动效还没执行完毕就能触发翻页，会把主卡副卡
+     的动效出现在第二屏/尾屏」。转场期间一级页虽然还在场(PC)或已开始回程(移动端),
+     它的翻页监听是活的 —— 一旦翻页,形变要落到的那个"源卡位置"就被挪到了别的屏。
+     这里把「形变转场进行中」也算作锁定:goHome/goWorks 起跑时置一个上限,
+     转场真正结束(onLeavingDone / onEntryArmed)时清零。 */
+  const isLocked = () => performance.now() < lockedUntilRef.current
+    || performance.now() < (window.__worksMorphUntil || 0);
   const lockFor = (ms) => { lockedUntilRef.current = performance.now() + ms; };
 
   const goToPage = (next, { instant = false } = {}) => {
@@ -6510,9 +6566,14 @@ function WorksPage({
       if (Math.abs(event.deltaY) < 2) return;
       event.preventDefault();
       const now = performance.now();
+      /* ⚠ 2026-10-10 业主「进入二级后马上滑动鼠标没有任何反应，禁止的时间太长」:
+         原来 `last = now` 写在下面那两行判断**之前** —— 于是入场动效期间(700+40ms)
+         的每一次滚轮都会把这个节流计数器刷新，人却什么也看不到；等动效结束、真正
+         允许操作时，第一下又被 620ms 节流吃掉 ⇒ 体感死区 ≈ 740 + 620 ≈ 1.3s。
+          now 只在**事件真正被接受**时才刷新计数器（620ms 防连翻保持原值）。 */
       if (now - last < 620) return;
-      last = now;
       if (leavingRef.current || phaseRef.current !== 'idle') return;
+      last = now;
       if (event.deltaY > 0) openDetailRef.current(workAt(posRef.current));
       else if (homeRef.current) homeRef.current();
     };

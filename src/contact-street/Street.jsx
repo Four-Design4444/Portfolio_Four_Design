@@ -216,6 +216,10 @@ const HOST_CSS = `
 .intro-foot { font-size: 8.5px; letter-spacing: 1.6px; margin-top: 34px; }
 .intro-foot span:first-child { color: #f0f1f1; }
 .intro-foot span:last-child { color: #4e6b82; }
+/* ⚠ 2026-10-09 业主：移动端「INDEPENDENT CREATIVE STUDIO」不显示 —— demo 写死了
+   .intro-foot span:last-child{display:none}（各尺寸段都隐藏）。设计稿里这行是
+   显示的，宿主层强制开启（两端一致）。 */
+.intro-foot span:last-child { display: inline !important; }
 
 /* ── ⑦ 详情面板文案按参考图严格替换（2026-10-09）───────────────────────────
    四个面板的文本由 HOST_JS 的 MutationObserver 重写（demo 的 innerHTML 模板
@@ -371,7 +375,12 @@ const HOST_CSS = `
   fill: none; stroke: currentColor; stroke-width: 1.2px;
   stroke-linecap: round; stroke-linejoin: round;
 }
-.sq-hint { margin: 28px 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
+.sq-ico-fill { fill: currentColor; stroke: none; }
+.sq-hint { margin: 30px 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
+   桌面 20px / ≤700 段 10px，各拉开一档（宿主层覆盖，demo 产物不动）。 */
+.actions { gap: 24px !important; }
 /* demo 进入 phone/mail/car 面板时 #detail 从右侧盖住 44% —— 新块同步淡出 */
 body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: none; }
 
@@ -387,7 +396,9 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
   .sq-ico { width: 13px; height: 13px; }
   .sq-row + .sq-row { margin-top: 16px; }
-  .sq-hint { margin-top: 20px; font-size: 8px; }
+  .sq-hint { margin-top: 30px; font-size: 8px; }
+  /* 业主 2026-10-09：移动端面板「复制号码/复制邮箱」贴主按钮（demo ≤700 段 gap:10px） */
+  .actions { gap: 18px !important; }
   /* ⚠ ⑥ 的字号是照参考图（1920 宽PC）量的，直接搬到 402px 宽的移动端会让
      .intro 从w192 涨到 w311、高 142→204，**同时横向与纵向撞上右下新块**
      （探针实测 overlapIntro=true）。这里按demo 移动端基准缩回：
@@ -407,42 +418,44 @@ const HOST_JS = `
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
 
-  // 移动端汽车特写低机位。只包装原相机，demo 产物保持原样。
-  // lookAt 前应用偏移，帧结束还原，避免下一帧插值累加偏移。
+  // 移动端汽车前侧特写，按参考图保留侧身透视和轻微俯角。
+  // lookAt 前应用机位偏移，下次回调前还原，避免插值累加偏移。
   var carCamera = null;
-  var carCameraOffset = 0;
-  var perspectiveFlag = Object.getOwnPropertyDescriptor(Object.prototype, 'isPerspectiveCamera');
-  if (!perspectiveFlag) {
-    Object.defineProperty(Object.prototype, 'isPerspectiveCamera', {
-      configurable: true,
-      set: function (value) {
-        Object.defineProperty(this, 'isPerspectiveCamera', {
-          value: value, writable: true, enumerable: true, configurable: true,
-        });
-        if (!value) return;
-        var camera = this;
-        var originalLookAt = camera.lookAt;
-        camera.lookAt = function () {
-          if (camera.fov === 40 && camera.near === 0.18 && camera.far === 120) {
-            carCamera = camera;
-            if (Object.getOwnPropertyDescriptor(Object.prototype, 'isPerspectiveCamera')) {
-              delete Object.prototype.isPerspectiveCamera;
-            }
-            var state = window.__four;
-            if (window.innerWidth <= 700 && state && state.mode === 'car') {
-              var transition = state.transition;
-              var progress = transition.active ? Math.min(1, Math.max(0, transition.elapsed / 1.4)) : 1;
-              var eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
-              carCameraOffset = 2.4 * eased;
-              camera.position.y -= carCameraOffset;
-            }
+  var carCameraOffset = null;
+  if (window.innerWidth <= 700) {
+    // Reflector 每帧以主相机为 WeakMap key，支持宿主注入晚于相机创建。
+    // 捕获一次即恢复 get，后续只包装当前 iframe 的主相机。
+    var originalWeakGet = WeakMap.prototype.get;
+    var captureCamera = function (key) {
+      if (key && key.isPerspectiveCamera && key.fov === 40 && key.near === 0.18 && key.far === 120) {
+        carCamera = key;
+        WeakMap.prototype.get = originalWeakGet;
+        window.__streetCarCameraReady = true;
+        var originalLookAt = key.lookAt;
+        key.lookAt = function () {
+          var state = window.__four;
+          if (window.innerWidth <= 700 && state && state.mode === 'car') {
+            var transition = state.transition;
+            var progress = transition.active ? Math.min(1, Math.max(0, transition.elapsed / 1.4)) : 1;
+            var eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+            carCameraOffset = { x: 1.35 * eased, y: -1.6 * eased, z: -0.25 * eased };
+            key.position.x += carCameraOffset.x;
+            key.position.y += carCameraOffset.y;
+            key.position.z += carCameraOffset.z;
+            var view = key.view;
+            key.setViewOffset(window.innerWidth, window.innerHeight,
+              (view && view.enabled ? view.offsetX : 0) + window.innerWidth * 0.025 * eased,
+              (view && view.enabled ? view.offsetY : 0) + window.innerHeight * 0.009 * eased,
+              window.innerWidth, window.innerHeight);
           }
           return originalLookAt.apply(this, arguments);
         };
-      },
-    });
+      }
+      return originalWeakGet.apply(this, arguments);
+    };
+    WeakMap.prototype.get = captureCamera;
     window.setTimeout(function () {
-      if (!carCamera) delete Object.prototype.isPerspectiveCamera;
+      if (WeakMap.prototype.get === captureCamera) WeakMap.prototype.get = originalWeakGet;
     }, 15000);
   }
 
@@ -521,8 +534,12 @@ const HOST_JS = `
       window.__streetBurnFrames += 1;
     }
     if (carCamera && carCameraOffset) {
-      if (window.__four && window.__four.mode === 'car') carCamera.position.y += carCameraOffset;
-      carCameraOffset = 0;
+      if (window.__four && window.__four.mode === 'car') {
+        carCamera.position.x -= carCameraOffset.x;
+        carCamera.position.y -= carCameraOffset.y;
+        carCamera.position.z -= carCameraOffset.z;
+      }
+      carCameraOffset = null;
     }
     cb(at);
   };
@@ -715,11 +732,11 @@ const HOST_JS = `
 const STREET_QUICK_HTML = `
 <div class="street-quick" id="street-quick" aria-label="快捷联系">
   <button class="sq-row" type="button" data-sq-mode="phone">
-    <svg class="sq-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5c0 8 6 14 14 14l2-3-4-2-2 2c-3-1.5-5.5-4-7-7l2-2-2-4z"/></svg>
+    <svg class="sq-ico sq-ico-fill" viewBox="0 0 17 17" aria-hidden="true"><path d="M1.11101 7.5624C0.773845 6.44865 -0.0604549 2.7024 3.35876 1.12695C3.68397 0.974487 4.04365 0.910494 4.40149 0.941425C4.75933 0.972357 5.10269 1.09712 5.39692 1.30312C6.02445 1.79696 6.5466 2.4116 6.9325 3.11071C7.3184 3.80982 7.56022 4.5792 7.64366 5.37337C7.68315 5.88594 7.53736 6.39566 7.23282 6.80983C6.92827 7.224 6.4852 7.51511 5.98417 7.63024C6.18667 8.24989 6.88631 9.55399 9.24037 10.6323C9.47325 9.90229 10.0645 8.57287 11.315 8.42809C12.3352 8.47047 13.3059 8.8796 14.0487 9.58031C14.7409 10.0809 15.2345 10.8093 15.4429 11.6377C15.613 13.8227 13.1648 15.1977 11.805 15.3222C11.522 15.349 11.2378 15.3625 10.9535 15.3627C4.83802 15.3617 1.60207 9.17632 1.11101 7.5624ZM3.69288 1.84987C0.935845 3.1236 1.50285 6.10744 1.87038 7.33053C2.50927 9.43451 6.04289 15.0427 11.7311 14.5284C12.7892 14.4322 14.7767 13.3448 14.6491 11.6995C14.4617 11.0869 14.0715 10.5563 13.5425 10.1949C12.9585 9.63996 12.2059 9.29606 11.4041 9.21784C10.2964 9.34642 9.89647 11.2368 9.89445 11.256C9.88267 11.3137 9.85846 11.3682 9.82348 11.4155C9.78851 11.4629 9.74362 11.5021 9.69195 11.5304C9.63983 11.5581 9.5823 11.5741 9.52336 11.5772C9.46442 11.5804 9.4055 11.5706 9.35073 11.5486C5.30985 9.88811 5.10937 7.4247 5.09823 7.32142C5.09424 7.26801 5.10117 7.21435 5.11857 7.1637C5.13598 7.11304 5.16351 7.06646 5.19948 7.02679C5.23564 6.98682 5.27967 6.95477 5.3288 6.93265C5.37794 6.91052 5.43112 6.89879 5.48501 6.8982C5.67727 6.89579 5.86692 6.85342 6.04192 6.77376C6.21692 6.6941 6.37343 6.57891 6.50151 6.4355C6.62959 6.29209 6.72643 6.12361 6.78587 5.94076C6.84532 5.7579 6.86608 5.56468 6.84682 5.37337C6.68506 4.04003 6.01163 2.82167 4.96863 1.97542C4.74643 1.82188 4.48432 1.73638 4.21432 1.72939C4.03377 1.7308 3.85575 1.77193 3.69288 1.84987ZM13.9343 6.27247C13.7725 5.14389 13.2449 4.09954 12.4325 3.29959C11.6201 2.49963 10.5677 1.98823 9.4368 1.8438C9.33518 1.82665 9.24414 1.77085 9.18275 1.68808C9.12136 1.6053 9.09438 1.50199 9.10747 1.39977C9.12056 1.29755 9.1727 1.20436 9.25296 1.13973C9.33322 1.07509 9.43539 1.04402 9.53804 1.05304C10.8433 1.21913 12.0579 1.80902 12.9955 2.73215C13.9331 3.65528 14.5418 4.86062 14.7281 6.16312C14.7429 6.26784 14.7154 6.37413 14.6518 6.45862C14.5882 6.5431 14.4936 6.59888 14.3889 6.61369C14.3704 6.61473 14.3518 6.61473 14.3332 6.61369C14.2366 6.61513 14.1428 6.58127 14.0693 6.51845C13.9959 6.45563 13.9479 6.36817 13.9343 6.27247ZM11.5549 6.17122C11.4865 5.69206 11.2625 5.24864 10.9175 4.90914C10.5725 4.56963 10.1256 4.35282 9.64537 4.29202C9.59352 4.28537 9.54348 4.26858 9.49811 4.24259C9.45275 4.2166 9.41295 4.18194 9.38098 4.14057C9.34901 4.0992 9.32551 4.05194 9.3118 4.00149C9.2981 3.95104 9.29447 3.89838 9.30112 3.84652C9.30777 3.79467 9.32456 3.74463 9.35055 3.69926C9.37654 3.6539 9.41121 3.6141 9.45257 3.58213C9.49394 3.55017 9.5412 3.52666 9.59165 3.51296C9.64211 3.49926 9.69476 3.49562 9.74662 3.50227C10.3999 3.5853 11.0079 3.88034 11.4774 4.34214C11.9469 4.80394 12.2519 5.40701 12.3457 6.05884C12.3531 6.11063 12.3503 6.16339 12.3373 6.21408C12.3243 6.26478 12.3015 6.31241 12.2701 6.35426C12.2387 6.39612 12.1993 6.43136 12.1543 6.45798C12.1092 6.4846 12.0593 6.50207 12.0075 6.5094C11.9887 6.51113 11.9697 6.51113 11.9508 6.5094C11.8557 6.50874 11.7639 6.4741 11.692 6.41171C11.6202 6.34933 11.573 6.26332 11.559 6.1692L11.5549 6.17122Z"/></svg>
     <span>打个电话</span>
   </button>
   <button class="sq-row" type="button" data-sq-mode="mail">
-    <svg class="sq-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 6.5 12 13l8-6.5"/></svg>
+    <svg class="sq-ico" viewBox="0 0 18 17" aria-hidden="true"><path d="M0.989649 7.99435L10.4095 0.900871C10.608 0.751368 10.8901 0.791115 11.0396 0.989647L15.9122 7.4602C16.0617 7.65873 16.022 7.94087 15.8234 8.09037L6.40362 15.1838C6.20509 15.3334 5.92295 15.2936 5.77345 15.0951L0.900872 8.62452C0.751369 8.42599 0.791116 8.14385 0.989649 7.99435Z"/><path d="M0.931641 8.27344L7.26486 8.09936C8.03364 8.07823 8.70407 7.571 8.93347 6.83694L10.8 0.864038"/><rect y="14.814" width="17.1" height="0.9" rx="0.45"/></svg>
     <span>发封邮件</span>
   </button>
   <p class="sq-hint">点击 / 拖动 探索场景</p>
@@ -937,6 +954,43 @@ function injectStreetQuick(doc) {
     const target = doc.querySelector('#navigation button[data-mode="' + mode + '"]');
     if (target) target.click();
   });
+  // 业主 2026-10-09：移动端尾屏底部按设计稿精确对齐 ——
+  //   · 左下 .intro-foot 的底边 = 右下 .controls 的底边（设计稿两者同线）
+  //   · 右下快捷块的底边（hint 底）= .controls 的顶边
+  // .intro 在 demo 里是写死的 bottom:156px，.controls 由 safe-area 定位，两者
+  // 基准不同 ⇒ 任何机型都对不上。这里统一以 .controls 实测盒为准反推两个
+  // bottom 值（controls 自身已含 safe-area，锚在它上面就自动跟随）。
+  // ⚠ 注入瞬间 .intro 还在入场动画/字体未就绪，量一次会拿到过渡值 ⇒ rAF
+  //   连续校准 ~3.3s（200 帧）后停；resize 由监听跟随。仅 ≤700 生效，
+  //   PC 端 bottom 是按参考图量的定稿，不动。
+  try {
+    const win = doc.defaultView;
+    const introEl = doc.querySelector('.intro');
+    const footEl = doc.querySelector('.intro-foot');
+    let runs = 0;
+    const align = () => {
+      if (!win.matchMedia('(max-width:700px)').matches) {
+        if (introEl) introEl.style.bottom = '';
+        quick.style.bottom = '';
+        return;
+      }
+      const controls = doc.querySelector('.controls');
+      if (!controls || !introEl || !footEl) return;
+      const vh = win.innerHeight;
+      const cRect = controls.getBoundingClientRect();
+      const inGap = introEl.getBoundingClientRect().bottom - footEl.getBoundingClientRect().bottom;
+      introEl.style.bottom = Math.round(vh - cRect.bottom - inGap) + 'px';
+      // hint 底落在 controls 顶上方 10px（设计稿实测两者的呼吸间距）
+      quick.style.bottom = Math.max(80, Math.round(vh - cRect.top + 10)) + 'px';
+    };
+    const alignLoop = () => {
+      align();
+      runs += 1;
+      if (runs < 200) win.requestAnimationFrame(alignLoop);
+    };
+    win.requestAnimationFrame(alignLoop);
+    win.addEventListener('resize', align);
+  } catch (_) { /* 对齐失败退回写死的 bottom，不影响可用性 */ }
   return true;
 }
 

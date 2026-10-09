@@ -1804,7 +1804,13 @@ html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
    把 armed 与 mw-handoff(一级层还在场、二级正在淡入的整个交接窗口)一并压掉。 */
 html[data-device="mobile"] .works-index-page.mw-armed .mw-hint,
 html[data-device="mobile"] .works-index-page.mw-handoff .mw-hint { opacity: 0; animation: none; }
-html[data-device="mobile"] .works-index-page.mw-entering .mw-hint { opacity: 0; animation: none; }
+/* 2026-10-10 业主：下滑提示应该在「进入动效执行完之前」就入场。
+   旧写法在这里把提示整个压掉（opacity:0 + animation:none），于是它的循环只能等
+   mw-entering 摘掉（700+40ms）才开始，再加基态 350ms 延迟与 12% 的淡入 ⇒ 真正
+   看见约在点击后 1.4s —— 业主体感就是"出现得太晚"。
+   现在：armed / handoff（起跑那两帧，防"闪一下"）照旧压住；进入动效一开始就让
+   循环按**与基态完全同一套参数**跑（延迟 400ms + 12% 淡入 ⇒ 约 690ms 起可见），
+   正好在入场 700ms 收尾之前入场。参数与基态一致是关键：摘类时不会重启动画。 */
 html[data-device="mobile"] .works-index-page.mw-entering .mw-stage { pointer-events: none; }
 /* 离场(二级→一级)是这个入场的**镜像**:主卡与两张副卡一起收拢回它们在一级
    卡组里各自的姿态,结束时二级页卸下,屏幕上剩下一级卡组里的同三张卡,
@@ -1853,7 +1859,7 @@ html[data-device="mobile"] .mw-hint {
   background: transparent;
   color: rgba(255, 255, 255, 0.75);
   transform: translateX(-50%);
-  animation: mwHintLoop 2.4s linear 350ms infinite backwards;
+  animation: mwHintLoop 2.4s linear 400ms infinite backwards;
 }
 
 @keyframes mwHintLoop {
