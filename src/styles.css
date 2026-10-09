@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color: #ffffff;
   background: #000000;
   font-family: "PingFang SC", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -493,8 +493,12 @@ img {
   border-radius: 0;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.58);
-  backdrop-filter: blur(24px) saturate(1.16);
-  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+  /* 2026-10-10: 与移动端同步 24px → 12px(业主定的)。这层背景模糊是逐像素重采样，
+     而 620ms 形变期间这条导航的宽高一直在变 → 每帧都要重算;移动端同版单变量 A/B
+     实测掉帧超出量 −27%,PC 未单独做降速 A/B,但同一层同一机制、方向一致。
+     像素差可忽略(移动端实测 24px→12px 平均差 1.72/255 = 0.67%)。 */
+  backdrop-filter: blur(12px) saturate(1.16);
+  -webkit-backdrop-filter: blur(12px) saturate(1.16);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
   transform: translate3d(-50%, 0, 0);
   isolation: isolate;
@@ -512,7 +516,12 @@ img {
     width 620ms cubic-bezier(0.22, 1, 0.36, 1),
     height 620ms cubic-bezier(0.22, 1, 0.36, 1),
     padding 620ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1);
+    border-radius 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    /* 2026-10-10: 背景模糊也进过渡。首页态是 backdrop-filter:none,二/三级是这层玻璃,
+       不写过渡的话"玻璃从无到有"会在一帧内跳出来(移动端同问题实测:进入 2 档、
+       补上后 12 档中间值)。进出两个方向都要有,所以写在基础态这条总表里。 */
+    -webkit-backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1);
   /* ⚠ 这里**故意不给 will-change**。
      曾在 2026-10-05 加过 `will-change: top, width, height, padding, border-radius`,
      本意是让形变更顺,但那五个属性全是几何属性:每次切换 top/width/height/padding
@@ -559,8 +568,8 @@ img {
   --nav-border-color: rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.38);
-  -webkit-backdrop-filter: blur(30px) saturate(1.35);
-  backdrop-filter: blur(30px) saturate(1.35);
+  -webkit-backdrop-filter: blur(12px) saturate(1.35);
+  backdrop-filter: blur(12px) saturate(1.35);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
 }
 
@@ -571,13 +580,21 @@ img {
   /* 2026-10-05: 三级页导航对齐二级页（works）玻璃观感，只改颜色/边框/阴影/模糊，
      布局、过渡、交互逻辑一行未动。 */
   background: rgba(183, 208, 250, 0.024);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-  backdrop-filter: blur(24px) saturate(120%);
+  /* 2026-10-10: 24px → 12px(与移动端、与二级页统一)。 */
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
   --nav-border-color: rgba(214, 229, 255, 0.09);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
   /* 主题翻转过渡:亮背景采样切换(body.nav-on-light)时颜色平滑过渡,
-     只影响 background/shadow,不动页面切换的 top/width/height 过渡 */
-  transition: background-color 260ms ease, box-shadow 260ms ease;
+     只影响 background/shadow,不动页面切换的 top/width/height 过渡。
+     2026-10-10: 再把背景模糊列进来 —— 这条过渡比基础态更具体,会把基础态那条
+     背景模糊过渡整个顶掉(与移动端同一个坑)。现在三态都是 12px、模糊本身不变,
+     列上它是为了将来任何一处调值都不会变成"一帧跳完"。 */
+  transition:
+    -webkit-backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    backdrop-filter 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 260ms ease,
+    box-shadow 260ms ease;
 }
 
 /* 2026-10-05: 三级导航实时自适应亮背景。main.jsx useDetailNavOnLight 采样
@@ -608,8 +625,9 @@ body.nav-on-light .shared-active-pill-detail {
 .morph-nav.nav-works {
   --nav-border-color: rgba(214, 229, 255, 0.09);
   background: rgba(183, 208, 250, 0.024);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-  backdrop-filter: blur(24px) saturate(120%);
+  /* 2026-10-10: 24px → 12px(与移动端同步,业主定的参数)。 */
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
 }
 
