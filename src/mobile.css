@@ -1593,7 +1593,23 @@ html[data-device="mobile"] .mw-slide {
   will-change: transform;
   transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-html[data-device="mobile"] .mw-slide[data-far] { visibility: hidden; }
+/* 窗口外的卡片:整张不绘制(见 RAIL_WINDOW)。
+   ⚠ 原来只有 visibility:hidden —— 那只是"画完不显示",浏览器仍要为窗口外那二十几个
+   节点算样式、跑布局、建图层。content-visibility:hidden 让它们**根本不参与渲染**。
+    4× 降速、冻结构建的单次 A/B:「二级作品页→详情页」掉帧超出量 229→71ms、
+    「一级卡→二级页」424→262ms;⚠ 单次测量在这台机器上噪声极大(同一基线重跑可在
+    545~858ms 间浮动),这两组数字只作方向参考 —— 机制才是确定的:那二十几个
+    副本从此不进样式重算、不进布局、不进绘制。
+   几何为什么不会动:槽宽(--mw-pitch)与卡面尺寸(--mw-card-w/h)都是显式值,轨道
+   height:100% + align-items:center,槽盒不依赖内容尺寸;contain-intrinsic-size 只是把
+   "内容按这个尺寸算"写明,防止以后改尺寸时踩坑。
+   视觉零差别:这些卡在入场那一摞里被主卡完整盖住,平时又远在屏外。
+   (content-visibility 在旧版 Safari 不生效 → 自动退回原来的 visibility:hidden。) */
+html[data-device="mobile"] .mw-slide[data-far] {
+  visibility: hidden;
+  content-visibility: hidden;
+  contain-intrinsic-size: var(--mw-pitch) var(--mw-card-h);
+}
 html[data-device="mobile"] .mw-slide.is-current {
   z-index: 2;
   transform: none;

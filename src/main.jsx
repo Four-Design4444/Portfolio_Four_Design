@@ -317,14 +317,17 @@ const worksByCategory = {
 const WORKS_RAIL = Object.entries(worksByCategory).flatMap(([category, list]) =>
   list.filter((work) => work.id !== 'motion-space').map((work) => ({ ...work, category }))
 );
-/* 闭环轮回:轨道渲染三份副本,当前索引始终待在中间那份,越界时整轨瞬移一份。
+/* 闭环轮回:轨道渲染两份副本,当前索引始终待在允许区间内,越界时整轨瞬移一份。
    瞬移前后可见窗口里的卡与位置逐像素相同(同一批卡的同一批顺序),所以看不见。
-   11 = WORKS_RAIL.length,写成常量以便算窗口边界。 */
+   11 = WORKS_RAIL.length,写成常量以便算窗口边界。
+   ⚠ 2026-10-09(项4):副本数 3 → 2。三份 = 33 个节点,**一次性挂载**的样式重算 +
+      布局实测就是跨级转场里最贵的那一块(4× 手机降速下「样式/布局」自耗稳定在
+      500ms 上下,占该阶段一半以上)。两份仍然满足下面那个前提:任何允许停留的位置
+      ±RAIL_WINDOW 都落在数组范围内(见 RAIL_LO / RAIL_HI)。 */
 const RAIL_N = WORKS_RAIL.length;
-const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL, ...WORKS_RAIL];
-const RAIL_LO = RAIL_N;          // 允许停留的最左索引(中间副本的第一张)
-const RAIL_HI = RAIL_N * 2 - 1;  // 允许停留的最右索引(中间副本的最后一张)
-const RAIL_HOME = RAIL_N;        // 初始落点 = 中间副本
+const RAIL_COPIES = 2;
+const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL];
+const RAIL_HOME = RAIL_N;        // 初始落点 = 第二份的第一张
 /* 「活跃窗口」(2026-10-07 性能):只有距当前索引 ±RAIL_WINDOW 的卡参与绘制
    (data-far → visibility:hidden),再远的整份副本既不渲染也不解码图片。
    ⚠ 为什么必须这么做:入场初始姿态要求「源卡尺寸」的每张卡都缩到主卡位置上,
@@ -332,11 +335,16 @@ const RAIL_HOME = RAIL_N;        // 初始落点 = 中间副本
      (每张都带大圆角 + 56px 投影 + 蒙版渐变 + 圆角裁剪的位图)。实测这一个
      绘制任务就把主线程堵了 60~200ms,正好卡在动画起跑那一帧,读起来就是
      「点了没反应,然后突然张开」。去掉投影/滤镜/蒙版任一项只能省一部分,
-     33 → 9 才是量级上的解法。
-   为什么不会露馅:窗口边缘(±4)距中心 4×312px ≈ 1250px,视口才 393px 宽,
+     33 → 9 才是量级上的解法(2026-10-09 再往下压一档:副本 3→2、窗口 ±4→±2,
+     同时参与绘制的只剩 5 张)。
+   为什么不会露馅:窗口边缘(±2)距中心 2×270px ≈ 541px,视口半宽才 196px,
      所以卡「进入窗口」这件事永远发生在屏外;而入场那一摞里,窗口外的副本
      本来就被主卡(z-index 2)完整盖住,隐藏它们没有任何视觉差别。 */
-const RAIL_WINDOW = 4;
+const RAIL_WINDOW = 2;
+/* 允许停留的索引区间:必须保证 pos ± RAIL_WINDOW 都落在 [0, slides-1] 内。
+   越界那一帧会读到不存在的槽位 —— 那些位置虽然落在屏外看不见,但状态机不该依赖它。 */
+const RAIL_LO = RAIL_WINDOW;
+const RAIL_HI = RAIL_N * RAIL_COPIES - 1 - RAIL_WINDOW;
 /* 跨级转场时长:入场(从源卡姿态张开到静止)与离场(收拢回首页那张卡)同值。
    必须与 .mw-entering/.mw-leaving 的过渡时长一致,否则主卡与副卡会分家。 */
 const RAIL_EMERGE_MS = 700;
@@ -1353,6 +1361,7 @@ function App() {
        那正是业主说的「二级页面的卡片像是回到一级页面后就消失了」。
        焦点瞬移发生在二级页整层仍盖着首页的时候,位移过程看不见。 */
     if (isMobileDevice() && route.page === 'works') {
+      holdStreetIdleFrames();
       setDeckFocusId(activeWork?.id ?? '');
       setWorksEntry(null);
       setExitWorks(true);
@@ -1396,6 +1405,9 @@ function App() {
   };
 
   const goWorks = (category = route.category, restore = false, opts = null) => {
+    // 移动端每一次进出二级页(含在二级页内换分类的横滑)都先挂起街景保活帧,
+    // 免得那 85ms 的空转帧砸进 520ms 的轨道动画里。
+    if (isMobileDevice()) holdStreetIdleFrames();
     if (route.page === 'home') {
       setNavMotion('home-to-works');
       // 2026-10-06 移动端:首页点卡 → 二级页。
@@ -1498,6 +1510,7 @@ function App() {
     // 2026-10-06 移动端:进入详情改为「下滑翻页」——详情层从顶部滑入盖住二级页,
     // 导航 morph(works→detail)照旧由路由驱动,这里只负责层的入场。
     if (isMobileDevice()) {
+      holdStreetIdleFrames();
       window.clearTimeout(mobileFlipTimerRef.current);
       setMobileFlip('enter');
       scheduleMobileFlipClear();
@@ -1558,6 +1571,7 @@ function App() {
       // 整体向上滑出,露出底下的二级页。route 先切 works 让导航同时开始
       // detail→works 的 morph;WorkDetailPage 借 exitDetail 保持挂载 720ms。
       window.clearTimeout(mobileFlipTimerRef.current);
+      holdStreetIdleFrames();
       setExitDetail({ category: activeCategory, work: activeWork, workId: activeWork?.id ?? '' });
       setMobileFlip('exit');
       scheduleMobileFlipClear();
@@ -1799,6 +1813,18 @@ function SharedImageTransition({ transition, onDone }) {
       <img src={transition.src} alt="" />
     </div>
   );
+}
+
+/* 跨级转场期间挂起尾屏街景的「空转保活帧」(见 contact-street/Street.jsx 的
+   __streetHoldUntil)。街景与主页共用主线程,而空转帧在手机上一帧要 82~88ms
+   (PC 仅 11~15ms),保活间隔 5s —— 一级↔二级那 520~700ms 的转场里,它有相当
+   概率正好撞进某一帧,读起来就是「动画中间莫名卡一下」。
+   只作用于「看不见时的保活」:用户真回到尾屏时走的是满帧档,一秒都不会被挂起。
+   1800ms 覆盖最长的一条转场(收拢 560ms / 入场 700ms)并留出余量。 */
+function holdStreetIdleFrames(ms = 1800) {
+  try {
+    window.__streetHoldUntil = performance.now() + ms;
+  } catch (_) { /* 极旧环境/被禁用时静默 */ }
 }
 
 function navigateToHomeSection(event, id) {
@@ -5965,7 +5991,10 @@ function WorksPage({
      同帧出发、同帧到位,所以也不再「主卡站稳了副卡才出来」。 */
   const [pos, setPos] = useState(() => {
     const i = WORKS_RAIL.findIndex((w) => w.id === workId);
-    return RAIL_HOME + (i >= 0 ? i : 0);
+    const p = RAIL_HOME + (i >= 0 ? i : 0);
+    /* 副本只有两份时,末尾几个作品会落在允许区间之外 —— 折回一份(两份逐项相同,
+       是同一件作品),免得挂载后第一帧就触发一次整轨瞬移。 */
+    return p > RAIL_HI ? p - RAIL_N : (p < RAIL_LO ? p + RAIL_N : p);
   });
   const posRef = useRef(pos);
   posRef.current = pos;
