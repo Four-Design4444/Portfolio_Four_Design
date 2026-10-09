@@ -412,6 +412,14 @@ const HOST_CSS = `
 }
 /* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
 .sq-ico-fill { fill: currentColor; stroke: none; }
+/* ⚠ 邮件图标（业主 2026-10-10 重新提供 Group 29.svg）——**一个像素都不许调**：
+   之前挂 .sq-ico 时被这里的 width/height 15px + stroke-width 1.2px 覆盖，
+   原本 18×17、0.7 描边的设计被放大加粗（业主：「把我原本的 icon 给调宽了」）。
+   现在换成独立类 .sq-ico-raw：只做「不参与 flex 收缩 + 块级」两件事，
+   尺寸、描边粗细、颜色全部由 SVG 自带的属性决定（CSS 一旦出现同名属性就会
+   压过 presentation attribute，所以这里刻意一条都不写）。
+   ⚠ 因此 ≤700 段那条 .sq-ico{width:13px} 也**不能**作用到它。 */
+.sq-ico-raw { flex: none; display: block; }
 /* 提示行到「发封邮件」的间距由脚本写入常量（--sq-hint-mt，PC 40px），底边同时钉在图标上沿 */
 .sq-hint { margin: var(--sq-hint-mt, 40px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
 /* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
@@ -436,6 +444,8 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
      上沿距视口底 123 ⇒ 137）。JS 跑起来后会再实测一次覆盖它。 */
   .street-quick { right: 16px; bottom: 140px; }
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
+  /* ⚠ 这条只命中「打个电话」的听筒（class=sq-ico）；邮件图标用的是
+     .sq-ico-raw，保持业主给的原尺寸 18×17，移动端也不缩放（见上面注释）。 */
   .sq-ico { width: 13px; height: 13px; }
   .sq-row + .sq-row { margin-top: var(--sq-gap, 16px); }
   .sq-hint { margin-top: var(--sq-hint-mt, 30px); font-size: 8px; }
@@ -892,7 +902,7 @@ const STREET_QUICK_HTML = `
     <span>打个电话</span>
   </button>
   <button class="sq-row" type="button" data-sq-mode="mail">
-    <svg class="sq-ico" viewBox="0 0 18 17" aria-hidden="true"><path d="M0.989649 7.99435L10.4095 0.900871C10.608 0.751368 10.8901 0.791115 11.0396 0.989647L15.9122 7.4602C16.0617 7.65873 16.022 7.94087 15.8234 8.09037L6.40362 15.1838C6.20509 15.3334 5.92295 15.2936 5.77345 15.0951L0.900872 8.62452C0.751369 8.42599 0.791116 8.14385 0.989649 7.99435Z"/><path d="M0.931641 8.27344L7.26486 8.09936C8.03364 8.07823 8.70407 7.571 8.93347 6.83694L10.8 0.864038"/><rect y="14.814" width="17.1" height="0.9" rx="0.45"/></svg>
+    <svg class="sq-ico-raw" width="18" height="17" viewBox="0 0 18 17" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M0.929493 7.91446L10.3493 0.820988C10.5919 0.638262 10.9368 0.686841 11.1195 0.929492L15.9921 7.40004C16.1748 7.64269 16.1262 7.98753 15.8836 8.17025L6.46378 15.2637C6.22112 15.4465 5.87629 15.3979 5.69356 15.1552L0.820989 8.68468C0.638263 8.44203 0.686842 8.09719 0.929493 7.91446Z" stroke-width="0.7" stroke="white"/><path d="M0.931641 8.27344L7.26486 8.09936C8.03364 8.07823 8.70407 7.571 8.93347 6.83694L10.8 0.864038" stroke-width="0.7" stroke="white"/><rect y="15" width="17.1" height="0.8" rx="0.4" fill="white"/></svg>
     <span>发封邮件</span>
   </button>
   <p class="sq-hint">点击 / 拖动 探索场景</p>
