@@ -871,6 +871,9 @@ function App() {
   const [sharedPill, setSharedPill] = useState(null);
   const [worksActiveLocked, setWorksActiveLocked] = useState(false);
   const previousPageRef = useRef(route.page);
+  /* 供延时回调读取"此刻真正生效的路由"(不重建闭包就能判"这次恢复还有没有效")。 */
+  const routeRef = useRef(route);
+  routeRef.current = route;
   /* 2026-10-06 移动端二级/三级交互合并:
      - mobileFlip = 'enter' 详情页正从顶部下滑翻入(works 保持在底下可见)
                   = 'cover' 详情页已落定(works 隐藏但保持挂载)
@@ -1296,11 +1299,26 @@ function App() {
     };
   }, [route.page, activeCategory.id, activeCategory.title]);
 
-  const restoreScroll = (key, fallback) => {
+  /* ★ 2026-10-10 第 16 轮(业主重点 BUG:返回一级时随机闪一帧 hero):
+     这个"延时两帧再写"原先是**无条件**的 —— 若这两帧里用户又点进了二级
+     (或别的入口改了路由),待会儿照样把窗口滚回首屏偏移,而那时一级层可能
+     正在交接期**画在屏幕上** ⇒ 直接闪一帧 hero。
+     修法:① 只在"此刻确实要回到目标页"时才落定(route 仍是目标页);
+          ② 写入前先把文档撑到"目标 + 一屏",杜绝写入被钳成 0 —— 钳位正是
+             「揭示那一帧停在页首」的物理原因(见保位 effect 的同一条机理)。 */
+  const restoreScroll = (key, fallback, expectPage = null) => {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo(0, saved)));
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      if (expectPage && routeRef.current.page !== expectPage) return;
+      if (saved > 0) {
+        const need = Math.ceil(saved + (window.innerHeight || 0) + 1);
+        if (document.documentElement.scrollHeight < need) document.body.style.minHeight = `${need}px`;
+      }
+      window.scrollTo(0, saved);
+      if (saved > 0 && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    }));
   };
 
   const goHome = () => {
@@ -1349,6 +1367,18 @@ function App() {
       setDeckFocusId(activeWork?.id ?? '');
       setWorksEntry(null);
       setExitWorks(true);
+      /* ★ 2026-10-10 第 16 轮(返回一级随机闪 hero 的另一半机理):
+         一级层此刻是 display:none,文档只有二级页那么高 ⇒ 任何"回到原位置"的
+         写入都会被浏览器钳成 0,揭示那一帧就停在页首(= hero)。
+         所以**在改路由之前**先把文档撑到「原位置 + 一屏」,让位置根本不会被抹;
+         揭示时它本来就是对的,不需要任何事后补写(旧代码的补写都被钳位打败过)。
+         高度由保位 effect 的 cleanup 撤掉;这里只是提前一拍,不改变职责归属。 */
+      (() => {
+        const y0 = Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? homeScrollY) || 0;
+        if (y0 <= 0) return;
+        const need = Math.ceil(y0 + (window.innerHeight || 0) + 1);
+        if (document.documentElement.scrollHeight < need) document.body.style.minHeight = `${need}px`;
+      })();
       /* 业主第五轮:回程的「其余元素」入场必须与收拢**同帧开始** —— 等收拢
          演完(560ms)才升回来读作"两段动效",中间是空场。这里立即摘掉
          is-chrome-out 并挂 is-chrome-in(见 chromeIn 注释:动画自带 from,
@@ -1367,7 +1397,7 @@ function App() {
       /* 转场期间禁止操作屏幕（移动端）：收拢 560ms + 落点等待，兜底 1400ms，
          真正的解除由 onLeavingDone 负责。 */
       armMorphGuard(1400);
-      restoreScroll('portfolioHomeScrollY', homeScrollY);
+      restoreScroll('portfolioHomeScrollY', homeScrollY, 'home');
       /* 转场期间锁一级页翻页(见 isLocked);收拢结束由 onLeavingDone 清零。 */
       window.__worksMorphUntil = performance.now() + 1400;
       return;
@@ -1486,13 +1516,16 @@ function App() {
          这里不再做无用的逐帧重写。 */
       chromeTimerRef.current = window.setTimeout(() => {
         setHomeHandoff(false);
-        /* ★ 2026-10-10 逐帧探针实测（morph-probe.mjs）：进入方向**只差这 1 帧** hero。
-           上面那句 setHomeHandoff(false) 是**异步**的 —— 一级层的隐藏发生在这次
-           state 更新落地后的那次提交里；而原先紧跟其后的 window.scrollTo(0, 0) 是
-           **同步**的，它当场就把滚动清零，此刻一级层还画在屏幕上 ⇒ 正好闪 1 帧 hero。
-           放进 rAF：rAF 在本轮提交之后、下一帧绘制之前执行，那时一级层已经隐藏，
-           所以既不会闪、也不会漏掉复位。 */
-        window.requestAnimationFrame(() => window.scrollTo(0, 0));
+        /* ★ 2026-10-10 第 16 轮(业主重点 BUG:进出二级随机闪一帧 hero):
+           这里原先要把窗口滚动复位到 0。但**交接期的一级层是画在屏幕上的**
+           (它要留场演完 620ms 的元素退场),把滚动清零 = 当帧把仍在场的一级层
+           拽回首屏 ⇒ 用户看到的「闪一下 hero」就是这一下。
+           放进 rAF 也不稳:setHomeHandoff 是异步宏任务,提交可能在 rAF 之后,
+           竞态仍会漏出 1 帧(探针实测过)。
+           正解:**交接期根本不复位**。二级层是 position:fixed、不需要窗口滚动;
+           保位 effect 已把文档垫到「原位置 + 一屏」并按住该位置,所以整个二级
+           期间滚动本来就等于用户离开时的值,零复位、零钳位、零闪帧。
+           回程由 pendingHomeScrollRef / 保位 cleanup 落定,位置还是原位置。 */
       }, 620);
     }
   };
@@ -6070,8 +6103,16 @@ function WorksPage({
      没有第二个元素参与交接,所以不可能出现「跳帧换了一张卡」;副卡与主卡
      同帧出发、同帧到位,所以也不再「主卡站稳了副卡才出来」。 */
   const [pos, setPos] = useState(() => {
+    /* ⚠ 2026-10-10 第 16 轮(业主第 2 条「二级导航点不动」的真根因之一):
+       无 workId 时原先一律落到**整条轨道的第 0 个作品**(恒属默认分类 ui),
+       于是「直达 / 首次进入 VI·3D·AIGC」时:轨道先报 UI 首卡 → App 把分类
+       回写成 ui → 分类 effect 又把轨道拉回目标分类首卡 → 再报 → …… 两个方向
+       互相回写,实测每次 54 次 replaceState,最终 React #185 崩溃黑屏。
+       修法:没有 workId 时落到**当前分类的第一张**,与 App 的 route.category
+       在同一帧就一致,通知回写是空操作,循环不成立。 */
     const i = WORKS_RAIL.findIndex((w) => w.id === workId);
-    const p = RAIL_HOME + (i >= 0 ? i : 0);
+    const first = WORKS_RAIL.findIndex((w) => w.category === activeCategory.id);
+    const p = RAIL_HOME + (i >= 0 ? i : Math.max(0, first));
     /* 副本只有两份时,末尾几个作品会落在允许区间之外 —— 折回一份(两份逐项相同,
        是同一件作品),免得挂载后第一帧就触发一次整轨瞬移。 */
     return p > RAIL_HI ? p - RAIL_N : (p < RAIL_LO ? p + RAIL_N : p);
