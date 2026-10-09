@@ -2629,6 +2629,24 @@ html[data-device="mobile"] .mob-profile-stat strong {
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+  /* ⚠⚠ 盒高**必须显式**（2026-10-10 第三轮 · 微信端「未选中芯片的图标仍在跳帧」）。
+     症状：前两轮把行高、芯片高都变成显式量之后，「标题/联系方式/选项卡」与芯片**框**都不
+     跳了，但收起芯片里的**图标自己**还在动效末尾跳一下（业主：「只有图标跳帧，其他正常」）。
+     根因（已用对照探针钉死）：芯片是 `justify-content: center` 的纵向 flex，内容高
+     = strong 行盒高 + 列 gap + label 17px。前两项里 gap 显式、label 固定 17，
+     **只有 strong 的行盒高是派生量** —— 它 = font-size（line-height:1）。
+     微信内核里 font-size 派生的行盒高落地时机与显式 height 不同（同一类「涌现值
+     停在旧值再瞬跳」，前两轮同一病根）：内容高偏离 ⇒ 居中的 label 连同**图标**
+     先偏一段再跳回。对照实测：把 font-size 从过渡属性里摘掉（模拟该内核行为），
+     图标相对芯片底边的偏移从 3.01px 爆到 8.86px —— 多出 ~5.9px 的纯跳变。
+     修法：盒高走自己的 height 过渡（与 font-size 用**同一组变量**、同一时长曲线
+     ⇒ 每一帧两者等值，字形零裁切），从此这一段链路里再没有派生量。
+     ⚠ height 式只此一处来源：--mob-stat-num / --mob-stat-num-dock（见
+       .mob-profile-stats 开头），与行高、芯片高的公式同源，改一处即全同步。 */
+  height: var(--mob-stat-num);
+  /* 盒高是权威量，不允许被 flex 压缩掉（内容若一时超出，宁可被 overflow 裁，
+     也不要收缩盒高 —— 收缩会让居中的 label/图标整体上移。 */
+  flex: none;
   /* 数字**不压缩**(保持文本自然宽),卡窄时由卡片的 overflow 裁掉 ——
      压扁会让数字被挤成半个字,裁切则只是被卡边挡住,配合同步的淡出看不见。 */
   max-width: 100%;
@@ -2639,6 +2657,7 @@ html[data-device="mobile"] .mob-profile-stat strong {
      淡入延迟与英文名同一变量:卡还窄时不浮现,避免看到半个数字。 */
   transition:
     opacity var(--mob-name-in-dur, 200ms) var(--mob-name-ease, ease) var(--mob-name-delay),
+    height var(--mob-dock-dur) var(--mob-dock-ease),
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
@@ -2765,9 +2784,12 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.i
 }
 
 /* dock 态整体等比缩小一档(用户要求)：数字、英文、图标同步收小。
-   2026-10-03 再缩一档:数字 clamp(14,4.2vw,19)、英文 clamp(7,1.9vw,9)、图标 7px。 */
+   2026-10-03 再缩一档:数字 clamp(14,4.2vw,19)、英文 clamp(7,1.9vw,9)、图标 7px。
+   ⚠ 字号与盒高**必须共用同一个变量**：盒高是从字号派生的那个量的显式替身，
+     两者若各写一份常量，一旦不同步就会出现「盒高 ≠ 行盒高」的字形裁切。 */
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat strong {
-  font-size: clamp(14px, 4.2vw, 19px);
+  font-size: var(--mob-stat-num-dock);
+  height: var(--mob-stat-num-dock);
 }
 
 /* 收起项数字淡出 + 盒高随字号归零：过渡写在 docked 规则里(dock 方向的
@@ -2776,9 +2798,12 @@ html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat strong
 html[data-device="mobile"] .mob-profile-stats.is-docked .mob-profile-stat:not(.is-active) strong {
   opacity: 0;
   font-size: 0;
+  /* 盒高随字号一起归零（两者同曲线同变量 ⇒ 每一帧等值，字形零裁切）。 */
+  height: 0;
   transform: translateY(3px);
   transition:
     opacity 180ms ease 0s,
+    height var(--mob-dock-dur) var(--mob-dock-ease),
     font-size var(--mob-dock-dur) var(--mob-dock-ease),
     transform 460ms cubic-bezier(0.34, 1.2, 0.44, 1);
 }
