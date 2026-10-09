@@ -300,7 +300,7 @@ const worksByCategory = {
     },
     {
       id: 'aigc-style',
-      title: 'AI吉祥物',
+      title: 'AIGC QQ',
       subtitle: '吉祥物IP',
       cover43: '/detail/aigc-style/v1/cover-43.webp',
       image: '/detail/aigc-style/v1/cover-portrait.webp',
@@ -476,7 +476,7 @@ const projectShowcases = [
     category: 'aigc',
     work: 2,
     index: '11',
-    title: 'AI吉祥物',
+    title: 'AIGC QQ',
     meta: '吉祥物IP',
     description: '为品牌角色建立可延展的表情与姿态库，让 IP 在各类物料中保持同一性格。',
     deck: { left: DECK_START_X + DECK_STEP_X * 10, rot: 1.8, restY: 2, z: 11 }
@@ -1310,6 +1310,26 @@ function App() {
        本身。这里补上：正在演形变时，返回按钮不接受操作（回程结束由 onLeavingDone
        清零，之后恢复正常）。 */
     if (morphLocked()) return;
+    /* ★ 2026-10-10 业主实测：**PC 上"预览手机端"时，从二级返回一级会闪 hero 单帧**。
+       机理（与下方"改路由 → 再恢复滚动"的顺序一致）：
+         改路由(setRoute)让一级层变可见；而滚动恢复 restoreScroll 写在它**之后**，
+         执行时一级层仍是 display:none、文档只有二级页那么高 ⇒ 这个"回到原位"的
+         写入被浏览器**当场钳成 0** ⇒ 提交完成后一级层可见，画面停在页首 = hero。
+       手机分支不受影响（那里有"先把文档撑高"的保位，逐帧探针实测 0 帧）；
+       出问题的是"布局是手机版、但 isMobileDevice() 为非手机"这条分支 —— 正是
+       PC 浏览器预览手机端的场景。
+       修法：**在改路由之前**先把文档撑到"原位置 + 一屏"，让那次写入不被钳；
+       两帧后（揭示已画完）撤掉这段临时高度。
+       仅作用于 !isMobileDevice()，不触碰任何已验证的手机路径。 */
+    (() => {
+      const y0 = Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? homeScrollY) || 0;
+      if (isMobileDevice() || y0 <= 0) return;
+      document.body.style.minHeight = Math.ceil(y0 + (window.innerHeight || 1) + 1) + 'px';
+      window.scrollTo(0, y0);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        document.body.style.minHeight = '';
+      }));
+    })();
     // 回程也要挂一个 motion 类:`works-to-home` 在 mobile.css 里被用来把
     // **回程的配色节奏**翻过来(线先转白、白圆慢半拍再淡出,见「回程的配色
     // 节奏必须与去程相反」)。此前这里一律置 '',回程就会沿去程的配色时序跑,
@@ -2525,7 +2545,14 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
             data-category-pill={category.id}
             className={category.id === activeCategory.id ? 'active' : ''}
             aria-label={category.title}
-            onClick={() => { if (morphLocked()) return; goWorks(category.id); }}
+            onClick={() => {
+              /* ⚠ 这里**不能**用 App 内那个 morphLocked()：本组件在 App 外面，
+                 拿不到它的闭包 → 点击会抛 ReferenceError，表现就是点了没反应
+                 （2026-10-10 业主实测：移动端与 PC 端导航选项全部点不动）。
+                 所以直接用同一个全局标志做判定。 */
+              if (performance.now() < (window.__worksMorphUntil || 0)) return;
+              goWorks(category.id);
+            }}
           >
             {hideSharedWorksLabel && category.id === activeCategory.id ? null : category.title}
           </button>
@@ -2818,12 +2845,11 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
         z = zFor(eff); dim = pose.dim; op = pose.o;
         front = !s.isDrag && z === 3;
       }
-      // ⚠ 内联 transition 会**覆盖** CSS 的 `.mob-card` transition(见 mobile.css
-      //   统一卡面规则),所以 box-shadow / border-radius 的过渡必须在这里一并列出,
-      //   否则一级卡切换 .front(阴影改档)时仍是硬切 —— 业主反馈的"回程卡片投影跳帧"。
+      // 内联 transition 覆盖卡面 CSS；保留位移、透明度与投影声明，
+      // 两级卡片圆角统一为 20px，不再列入动画属性。
       el.style.transition = s.isDrag ? 'none' :
         'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease,' +
-        ' box-shadow .52s cubic-bezier(.22,1,.36,1), border-radius .52s cubic-bezier(.22,1,.36,1)';
+        ' box-shadow .52s cubic-bezier(.22,1,.36,1)';
       el.style.transform = transform;
       /* ⚠ opacity === 1 时必须**摘掉**内联值、不能写死 1(2026-10-08 第14轮):
          元素一旦带 opacity 属性(哪怕值就是 1),加上 CSS 的 will-change,
