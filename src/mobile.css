@@ -1840,6 +1840,20 @@ html[data-device="mobile"] .works-side-rays { transition: opacity 260ms ease; }
      → 换用 mwHintLoop（与 heroScrollArrowMobile 同构：淡入 → 下移 → 淡出 →
      静默 → 循环）。icon 与文字在同一容器里整体动；首帧 opacity 0，
      mw-landed 落定、隐藏类一摘即自然淡入，mwHintIn 单次入场不再需要。 */
+/* ★ 2026-10-10 业主：一级↔二级转场期间禁止用户操作屏幕（移动端）。
+   全屏透明遮罩，吞掉一切指针/触摸事件（touch-action:none 让落在它上面的手势
+   既不滚动也不翻页）。**故意不用 html{overflow:hidden}** —— 实测那会把滚动位置
+   直接清零（hash-scroll-check.mjs ⑤⑦），正是"闪回 hero"的成因之一。
+   只吞事件、不参与任何动效；转场结束（onLeavingDone / onEntryArmed）即撤。 */
+html[data-device="mobile"] .morph-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 html[data-device="mobile"] .mw-hint {
   position: absolute;
   left: 50%;
@@ -1859,7 +1873,7 @@ html[data-device="mobile"] .mw-hint {
   background: transparent;
   color: rgba(255, 255, 255, 0.75);
   transform: translateX(-50%);
-  animation: mwHintLoop 2.4s linear 400ms infinite backwards;
+  animation: mwHintLoop 2.4s linear 120ms infinite backwards;
 }
 
 @keyframes mwHintLoop {

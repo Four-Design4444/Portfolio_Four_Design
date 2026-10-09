@@ -3523,6 +3523,17 @@ body:has(.work-detail-page) .work-detail-page {
   will-change: opacity, filter, transform;
 }
 
+/* ★ 2026-10-10 业主（PC）：hero 的 SVG 文字等比例放大一些，放大后往上移一些。
+   ⚠ 只改**布局尺寸与位置**：width 配 aspect-ratio 自动等比放大（SVG 走 viewBox
+     缩放，命中区域跟着一起放大，交互不受影响）；位置只改 top。
+   ⚠ 绝不碰 transform —— 这个 SVG 带鼠标交互与形变动效，很可能是 JS 直接写
+     transform/内联样式的，用 transform 会互相覆盖。
+   只作用于非移动端（移动端有自己的 .hero-title-stack-mobile 一套）。 */
+html:not([data-device="mobile"]) .hero-video-stage .hero-title-layer {
+  width: min(88vw, 1500px);
+  top: 42%;
+}
+
 .hero-video-stage .hero-video-alpha-canvas {
   z-index: 3;
   opacity: 1;

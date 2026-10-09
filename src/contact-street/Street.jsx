@@ -351,10 +351,11 @@ const HOST_CSS = `
 
 /* ── ④ 右下角新块 ──────────────────────────────────────────────────────────
    坐标全部从参考图量出后按视口反推（参考图 1920×1081）：
-     行1「打个电话」rows 818..833、行2「发封邮件」rows 856..871（行距 23px）
-     提示行 rows 901..909（距行2 底 30px）；底部 .controls rows 948..959
-   ⇒ 块底比 .controls 顶低 36px；.controls 高 34 + .hud 底 35/45/23
-     ⇒ bottom 105 / 115 / 93。字号按参考图宽度等比缩到本站。 */
+     行1「打个电话」rows 818..833、行2「发封邮件」rows 856..871
+     提示行 rows 931..937；底部控制条图标 rows 951..957
+   ⚠ 2026-10-09 终版：三个位置关系（文案底＝图标底、hint 贴图标、按钮行对
+     标题行）已改由注入脚本实测反推（见 injectStreetQuick），这里的 right /
+     bottom 只作为 JS 执行前的兜底值，不再是最终位置。 */
 .street-quick {
   position: fixed; right: 46px; bottom: 105px; z-index: 5;
   display: flex; flex-direction: column; align-items: flex-end;
@@ -368,7 +369,8 @@ const HOST_CSS = `
   color: #cfd6dd; font-size: 12.5px; letter-spacing: 1.5px;
   transition: color .2s; font-family: inherit;
 }
-.sq-row + .sq-row { margin-top: 21px; }
+/* 行距由脚本按「标题行距」实测反推（--sq-gap），保证两行按钮与标题两行同心 */
+.sq-row + .sq-row { margin-top: var(--sq-gap, 21px); }
 .sq-row:hover { color: #eaf0f6; }
 .sq-ico {
   width: 15px; height: 15px; flex: none;
@@ -377,7 +379,8 @@ const HOST_CSS = `
 }
 /* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
 .sq-ico-fill { fill: currentColor; stroke: none; }
-.sq-hint { margin: 30px 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* 提示行到「发封邮件」的间距由脚本反解（--sq-hint-mt），底边同时钉在图标上沿 */
+.sq-hint { margin: var(--sq-hint-mt, 30px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
 /* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
    桌面 20px / ≤700 段 10px，各拉开一档（宿主层覆盖，demo 产物不动）。 */
 .actions { gap: 24px !important; }
@@ -395,8 +398,8 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
   .street-quick { right: 16px; bottom: 160px; }
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
   .sq-ico { width: 13px; height: 13px; }
-  .sq-row + .sq-row { margin-top: 16px; }
-  .sq-hint { margin-top: 30px; font-size: 8px; }
+  .sq-row + .sq-row { margin-top: var(--sq-gap, 16px); }
+  .sq-hint { margin-top: var(--sq-hint-mt, 30px); font-size: 8px; }
   /* 业主 2026-10-09：移动端面板「复制号码/复制邮箱」贴主按钮（demo ≤700 段 gap:10px） */
   .actions { gap: 18px !important; }
   /* ⚠ ⑥ 的字号是照参考图（1920 宽PC）量的，直接搬到 402px 宽的移动端会让
@@ -405,7 +408,12 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
      h1 24px / 字距 2px ⇒ 「有个有趣的想法？」约 206px 宽，避开新块左沿 301。 */
   .intro .eyebrow { font-size: 8px; letter-spacing: 1.4px; }
   .intro .tiny-line { width: 26px; }
-  .intro h1 { font-size: 24px; line-height: 1.42; letter-spacing: 2px; margin: 14px 0 12px; }
+  /* ⚠ 2026-10-09 终版：margin 从 14/12 调成 8/28 —— 设计稿里 h1 两行与右侧
+     两个按钮同节奏（第一行对第一行）。文案块底边钉在图标底边后，标题原本比
+     设计稿低 ≈17px（于是按钮看起来"浮"在标题上方）；把 margin-bottom 加大
+     17px 让标题整块上移、margin-top 减小 6px 让 eyebrow 只上移 10px，即与
+     设计稿重合。数值按 402×874 实测反推，不改字号。 */
+  .intro h1 { font-size: 24px; line-height: 1.42; letter-spacing: 2px; margin: 8px 0 28px; }
   .intro p { font-size: 10px; letter-spacing: 1.4px; }
   .intro-foot { font-size: 6.5px; letter-spacing: 1px; margin-top: 18px; }
 }
@@ -954,42 +962,74 @@ function injectStreetQuick(doc) {
     const target = doc.querySelector('#navigation button[data-mode="' + mode + '"]');
     if (target) target.click();
   });
-  // 业主 2026-10-09：移动端尾屏底部按设计稿精确对齐 ——
-  //   · 左下 .intro-foot 的底边 = 右下 .controls 的底边（设计稿两者同线）
-  //   · 右下快捷块的底边（hint 底）= .controls 的顶边
-  // .intro 在 demo 里是写死的 bottom:156px，.controls 由 safe-area 定位，两者
-  // 基准不同 ⇒ 任何机型都对不上。这里统一以 .controls 实测盒为准反推两个
-  // bottom 值（controls 自身已含 safe-area，锚在它上面就自动跟随）。
-  // ⚠ 注入瞬间 .intro 还在入场动画/字体未就绪，量一次会拿到过渡值 ⇒ rAF
-  //   连续校准 ~3.3s（200 帧）后停；resize 由监听跟随。仅 ≤700 生效，
-  //   PC 端 bottom 是按参考图量的定稿，不动。
+  // ── 业主 2026-10-09（设计稿终版）：尾屏初始态精确排版 ──────────────────────
+  //  ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
+  //  ② 「点击 / 拖动 探索场景」紧贴图标上方（底边离线 10px，设计稿实测值）
+  //  ③ 两个按钮行分别与 h1 的两行**同心**，行距＝标题行距
+  // 设计稿里 h1 两行与右侧两个按钮是同一节奏（第一行对第一行），提示行贴着
+  // 底部控制条、与「发封邮件」拉开距离 —— 这三条关系 PC / 移动共用（业主：
+  // 「移动端按此，PC 参考同一张稿的排版和对齐方式」）。
+  // 控制条 = demo 的 .controls，它的可见子元素就是设计稿里那排 ☁ ‖ 图标；
+  // 三个关系全部用 getBoundingClientRect 实测反推，不写死 px ⇒ 任何机型、
+  // 地址栏/安全区变化、缩放都自动跟随（旧的 bottom:105/115/93 只作 JS 前的兜底）。
+  // ⚠ 注入瞬间 .intro 还在入场动画/字体未就绪，量一次会拿到过渡值 ⇒ rAF 连续
+  //   校准 ~3.3s（200 帧）后停；resize 由监听跟随。
   try {
     const win = doc.defaultView;
     const introEl = doc.querySelector('.intro');
+    const h1 = doc.querySelector('.intro h1');
     const footEl = doc.querySelector('.intro-foot');
-    let runs = 0;
-    const align = () => {
-      if (!win.matchMedia('(max-width:700px)').matches) {
-        if (introEl) introEl.style.bottom = '';
-        quick.style.bottom = '';
-        return;
-      }
-      const controls = doc.querySelector('.controls');
-      if (!controls || !introEl || !footEl) return;
-      const vh = win.innerHeight;
-      const cRect = controls.getBoundingClientRect();
-      const inGap = introEl.getBoundingClientRect().bottom - footEl.getBoundingClientRect().bottom;
-      introEl.style.bottom = Math.round(vh - cRect.bottom - inGap) + 'px';
-      // hint 底落在 controls 顶上方 10px（设计稿实测两者的呼吸间距）
-      quick.style.bottom = Math.max(80, Math.round(vh - cRect.top + 10)) + 'px';
-    };
-    const alignLoop = () => {
-      align();
-      runs += 1;
-      if (runs < 200) win.requestAnimationFrame(alignLoop);
-    };
-    win.requestAnimationFrame(alignLoop);
-    win.addEventListener('resize', align);
+    const controls = doc.querySelector('.controls');
+    const rows = Array.prototype.slice.call(quick.querySelectorAll('.sq-row'));
+    const hint = quick.querySelector('.sq-hint');
+    if (introEl && h1 && footEl && controls && rows.length === 2 && hint) {
+      const HINT_OFF = 10;    // 提示行底边到图标行上沿的间距（设计稿 ≈10px）
+      const MIN_HINT_MT = 8;  // 提示行到「发封邮件」的最小间距，防极端视口贴死
+      // 图标行 = .controls 里可见子元素的并集（.controls 自身可能含 padding）
+      const iconBox = () => {
+        let t = Infinity; let b = -Infinity;
+        Array.prototype.forEach.call(controls.children, (el) => {
+          if (win.getComputedStyle(el).display === 'none') return;
+          const r = el.getBoundingClientRect();
+          if (r.height <= 0) return;
+          if (r.top < t) t = r.top;
+          if (r.bottom > b) b = r.bottom;
+        });
+        return (isFinite(t) && b > t) ? { top: t, bottom: b } : null;
+      };
+      const align = () => {
+        const box = iconBox();
+        if (!box) return;
+        const vh = win.innerHeight;
+        // ① 文案底部对齐图标底部。inGap = .intro 盒底 到 .intro-foot 盒底 的距离
+        //    （demo 的 .intro 盒底比 foot 低一点），先量后改，是常量。
+        const inGap = introEl.getBoundingClientRect().bottom - footEl.getBoundingClientRect().bottom;
+        introEl.style.bottom = Math.round(vh - box.bottom - inGap) + 'px';
+        // h1 里放了一个 <br>（见 injectIntroCopy）⇒ 恒两行、等高，可直接二分
+        const hr = h1.getBoundingClientRect();
+        const lineH = hr.height / 2;
+        const line1Center = hr.top + lineH / 2;
+        const rowH = rows[0].getBoundingClientRect().height;
+        const hintH = hint.getBoundingClientRect().height;
+        // ③ 行距 = 标题行距 ⇒ 两行按钮分别落在两行标题中线上
+        const rowGap = Math.max(0, Math.round(lineH - rowH));
+        quick.style.setProperty('--sq-gap', rowGap + 'px');
+        // ② 先钉 hint 底边 = 图标上沿 - HINT_OFF，再反解 hint 与「发封邮件」的
+        //    间距，使第一行按钮正好与标题第一行同心（两个约束联立，唯一解）。
+        const hintBottom = box.top - HINT_OFF;
+        const mt = Math.round(hintBottom - hintH - 1.5 * rowH - rowGap - line1Center);
+        quick.style.setProperty('--sq-hint-mt', Math.max(MIN_HINT_MT, mt) + 'px');
+        quick.style.bottom = Math.round(vh - hintBottom) + 'px';
+      };
+      let runs = 0;
+      const alignLoop = () => {
+        align();
+        runs += 1;
+        if (runs < 200) win.requestAnimationFrame(alignLoop);
+      };
+      win.requestAnimationFrame(alignLoop);
+      win.addEventListener('resize', align);
+    }
   } catch (_) { /* 对齐失败退回写死的 bottom，不影响可用性 */ }
   return true;
 }

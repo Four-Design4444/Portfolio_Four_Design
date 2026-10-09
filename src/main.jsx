@@ -914,6 +914,16 @@ function App() {
   const [homeHandoff, setHomeHandoff] = useState(false);
   const chromeTimerRef = useRef(0);
   const chromeInTimerRef = useRef(0);
+  /* ✗ 2026-10-10 已停用：业主第 2 条"转场期间禁止操作屏幕"的**遮罩方案失败**。
+     两种实现（React state 挂载 / 纯 DOM 直接挂载）都让逐帧探针的 hero 帧
+     从 2 帧涨到 16~17 帧（**每一轮转场都闪**）。机理：在 body 上插入/移除全屏
+     节点会在关键时刻触发布局失效，把 App 自己的"隐藏一级层 / 复位滚动"挤到
+     另一次提交，正好制造出"一级层仍可见 + 滚动已为 0"的那一帧。
+     按纪律停用（可测指标变差的改动不上）。正确的做法下一轮改走**手势处理器**
+     这一层：一级卡组/导航的指针与触摸回调里加同一个 `window.__worksMorphUntil`
+     判定，完全不碰 DOM 结构与时序 —— 与已有的翻页锁同一机制。 */
+  const armMorphGuard = () => {};
+  const disarmMorphGuard = () => {};
   /* ★ 2026-10-10「进二级页闪一帧 hero」的取证（业主反馈:来回切换时很快闪过一个
      接近 hero 的画面）。逐帧探针 outputs/perf-reveal/flash-hunt.mjs 实测:
      移动端点卡进二级时，一级层按设计留在场上演 620ms 的元素退场，而这 620ms 里
@@ -1323,6 +1333,9 @@ function App() {
       setRoute({ page: 'home', category: route.category, workId: '' });
       pendingHomeScrollRef.current =
         Number(window.sessionStorage.getItem('portfolioHomeScrollY') ?? homeScrollY) || 0;
+      /* 转场期间禁止操作屏幕（移动端）：收拢 560ms + 落点等待，兜底 1400ms，
+         真正的解除由 onLeavingDone 负责。 */
+      armMorphGuard(1400);
       restoreScroll('portfolioHomeScrollY', homeScrollY);
       /* 转场期间锁一级页翻页(见 isLocked);收拢结束由 onLeavingDone 清零。 */
       window.__worksMorphUntil = performance.now() + 1400;
@@ -1356,6 +1369,9 @@ function App() {
     // 免得那 85ms 的空转帧砸进 520ms 的轨道动画里。
     if (isMobileDevice()) holdStreetIdleFrames();
     if (route.page === 'home') {
+      /* 转场期间禁止操作屏幕（移动端进出二级都算）：入场 700+40ms，兜底 780ms；
+         真正的解除由 onEntryArmed 负责（入场动效一结束立刻放行）。 */
+      armMorphGuard(780);
       /* 转场期间锁一级页翻页(见 isLocked):入场 700+40ms 里一级层还在场,
          此时翻页会让形变落点跑到别的屏;onEntryArmed 清零。 */
       window.__worksMorphUntil = performance.now() + 900;
@@ -1619,10 +1635,11 @@ function App() {
                 entry={worksEntry}
                 leaving={exitWorks || pcWorksExit}
                 handingOff={homeHandoff}
-                onEntryArmed={() => { window.__worksMorphUntil = 0; setWorksEntry(null); }}
+                onEntryArmed={() => { window.__worksMorphUntil = 0; disarmMorphGuard(); setWorksEntry(null); }}
                 onLeavingDone={() => {
-                  /* 转场结束 → 立刻解除一级页翻页锁(见 isLocked)。 */
+                  /* 转场结束 → 立刻解除一级页翻页锁与屏幕遮罩（见 isLocked）。 */
                   window.__worksMorphUntil = 0;
+                  disarmMorphGuard();
                   /* 收拢结束的**同一提交**里:撤二级层 + 解除一级卡组遮挡。
                      (「其余元素」的入场已提前到回程开始时与收拢同步起跑,
                      这里只剩兜底:万一 chromeHidden 仍为 true 再补一刀。)
