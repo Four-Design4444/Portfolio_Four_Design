@@ -44,11 +44,15 @@ const BURN_MAX_FRAMES = 130;
 const BURN_FRAME_MS = 40;
 // 墙钟兜底：demo 彻底卡死或帧率异常时，加载页也不能被它拖到永远。
 const BURN_MAX_MS = 9000;
-// 空转保活间隔（暂停档）。手机上空转帧实测 82~88ms/帧（PC 11~15ms），原来写死 1s
-// 一帧 —— 它和主页共用主线程，于是很容易正好撞在「一级作品展示 ↔ 二级作品页」
-// 的 520ms 转场里，把动画撞掉一帧。保活只要"别让上下文/纹理/shader 凉掉"，
-// 5s 一帧完全够，撞上转场的概率降到 1/5。
-const IDLE_KEEPALIVE_MS = 5000;
+// 空转保活间隔（暂停档）。手机上空转帧实测 82~88ms/帧（PC 11~15ms）。
+// ⚠ 2026-10-10：回撤 1s → 5s 那次改动（业主反馈「从首页滑到尾屏后要隔好一会才开始播」）。
+// 当初的理由是"保活只要别让 WebGL 上下文凉掉，5s 够"—— **这个理由是错的**：
+// demo 的冷启动要靠真的被喂帧才能跑完，而它落在暂停档，5s 一帧等于整个加载遮罩期
+// 只喂了一两帧 → 冷启动没跑完 → 业主滑到尾屏时现场补冷启动。
+// 实测（outputs/perf-reveal/tail-start-check.mjs，直接数街景 iframe 的 WebGL 绘制调用）：
+// 尾屏进入视野后，档位立刻是满帧，**但第 2500ms 才画出第一帧** —— 就是那段"冻住"。
+// 回到 1s（原值）后遮罩期能喂够帧。撞转场那一帧的概率会回升，但"尾屏能立刻开播"优先。
+const IDLE_KEEPALIVE_MS = 1000;
 
 export default function ContactStreet({ active, preload, onTailReady, onTailBurned }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
@@ -449,13 +453,11 @@ const HOST_JS = `
   // 降帧只能改"多久回调一次"，不能改"回调里报几点"。两者必须解耦。
   window.__streetPaused = false;
   window.__streetFrameMs = 0;
-  // 空转保活间隔（毫秒，宿主可写）。原来是写死的 1000ms —— 手机上空转帧实测
-  // 82~88ms/帧，一秒一帧刚好容易砸在「一级↔二级」转场中间，把动画撞出掉帧。
-  // 保活的目的只是「别让 WebGL 上下文/纹理/shader 凉掉」，4~6 秒一帧完全够用，
-  // 撞上转场的概率直接降到 1/5。
-  window.__streetIdleMs = 5000;
-  // 交接期挂起开关（宿主写 true/false）：转场进行时**一帧都不喂**，但继续轮询，
-  // 转场一结束立刻恢复保活（不会把场景钟或 rAF 递归弄断）。
+  // 空转保活间隔（毫秒，宿主可写）。**原值 1000ms**；2026-10-10 曾改到 5000，因业主
+  // 反馈"尾屏开播要等好一会"而回撤（原因见文件上方 IDLE_KEEPALIVE_MS 的注释）。
+  window.__streetIdleMs = 1000;
+  // ⚠ 2026-10-10 起 __streetHold 不再被消费（保活分支里的"转场期间不喂帧"已回撤）。
+  // 保留这个字段只是为了让旧宿主调用不至于报错，新代码不应再依赖它。
   window.__streetHold = false;
   // 累计场景时间（秒）：用与 demo 相同的 dt 算法（真实时钟差、clamp 到 0.05s）
   // 记账，用于诊断与探针核对；烧录是否收工另有判据（见 BURN_FRAMES）。
@@ -485,17 +487,25 @@ const HOST_JS = `
     return rawRaf(function () {
       if (window.__streetPaused) {
         nextAt = 0;
-        // 交接期挂起：宿主在父窗口写 __streetHoldUntil = performance.now() + N，
-        // 这段时间里一帧都不喂（跨级转场正好落在这窗口内）。两边同源，直接读即可，
-        // 不需要把父页面的 React 状态搬进 iframe。
-        var holdUntil = 0;
-        try { holdUntil = (window.parent && window.parent.__streetHoldUntil) || 0; } catch (_) {}
-        if (window.__streetHold || (holdUntil && window.performance.now() < holdUntil)) {
-          window.setTimeout(function () { window.requestAnimationFrame(cb); }, 250);
-          return;
-        }
-        // 空转保活：只负责「别凉」，间隔由宿主给（默认 5s，见上面的 __streetIdleMs）。
-        window.setTimeout(function () { emit(cb, false); }, window.__streetIdleMs || 5000);
+        // 空转保活：只负责「别凉」，间隔由宿主给（见上面的 __streetIdleMs）。
+        // ⚠ 2026-10-10 回撤：这里原来读父窗口的 __streetHoldUntil / __streetHold，
+        // 在跨级转场那 1.8s 里"一帧都不喂"。回撤原因是它两头不讨好：
+        //   ① 业主反馈尾屏开播变慢（喂帧变少 → demo 冷启动更晚跑完，见上面常量注释）；
+        //   ② 修好探针闸门后的配对测量里，它也拿不出可见的收益。
+        // ⚠ 同日第二处：保活等待期间**看着档位**，一旦宿主把尾屏切回满帧/烧录档就立刻
+        // 恢复喂帧，不再把已经排好的那段等待干等完。原来是一个 setTimeout 干等到点，
+        // 业主滑到尾屏后最长要等满一个保活间隔才动第一帧（实测：间隔 5s 时 2500ms
+        // 才画出第一帧、回到 1s 后仍有 1000ms）—— 这就是"隔好一会才开始播"的残余。
+        // 代价只是每 100ms 一次空 setTimeout（真正贵的是帧本身，不是这次唤醒）。
+        var idleMs = window.__streetIdleMs || 1000;
+        var idleAt = window.performance.now();
+        var watch = function () {
+          if (!window.__streetPaused) { emit(cb, window.__streetFrameMs > 0); return; }
+          var left = idleMs - (window.performance.now() - idleAt);
+          if (left <= 0) { emit(cb, false); return; }
+          window.setTimeout(watch, left > 100 ? 100 : left);
+        };
+        window.setTimeout(watch, 100);
         return;
       }
       var frameMs = window.__streetFrameMs;

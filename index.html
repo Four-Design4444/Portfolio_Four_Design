@@ -7,15 +7,18 @@
     <meta name="color-scheme" content="dark" />
     <link rel="icon" href="data:," />
     <!-- 首屏 Loading 遮罩的关键样式必须内联：外链 CSS 要等构建产物下载完才生效，
-         那时已经晚于第一帧，会先闪一下空白。底色与 demo 的 #151f2a 完全一致，
-         所以遮罩存在期间和揭幕之后看不到色差。 -->
+         那时已经晚于第一帧，会先闪一下空白。底色必须是 #111719（demo 被运行时
+         注入后的最终色）：2026-10-09 之前这里写的是 demo 原始的 #151f2a（蓝灰），
+         而 iframe 加载后的注入会把 demo 换成 #111719 —— 刷新瞬间就有一帧到几帧
+         的蓝色页面残留（业主在移动端实测看到）。三处（html / 遮罩 / demo 原始
+         背景）现在统一为 #111719，任何时刻都看不到蓝色阶段。 -->
     <style>
-      html { background: #151f2a; }
+      html { background: #111719; }
       #app-loader {
         position: fixed;
         inset: 0;
         z-index: 99999;
-        background: #151f2a;
+        background: #111719;
         opacity: 1;
         transition: opacity .5s ease;
       }

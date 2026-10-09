@@ -1633,24 +1633,23 @@ function readNavRect(selector) {
 // 移除后它只剩 PC 一级→二级一条路径,业主决定不再要这个过渡,相关 state/追踪
 // effect/渲染点/CSS 全部清掉。移动端一级/二级的卡片自执行转场(worksEntry)不受影响。
 
-/* 跨级转场期间挂起尾屏街景的「空转保活帧」(见 contact-street/Street.jsx 的
-   __streetHoldUntil)。街景与主页共用主线程,而空转帧在手机上一帧要 82~88ms
-   (PC 仅 11~15ms),保活间隔 5s —— 一级↔二级那 520~700ms 的转场里,它有相当
-   概率正好撞进某一帧,读起来就是「动画中间莫名卡一下」。
-   只作用于「看不见时的保活」:用户真回到尾屏时走的是满帧档,一秒都不会被挂起。
-   1800ms 覆盖最长的一条转场(收拢 560ms / 入场 700ms)并留出余量。
-
-   顺带挂起「测量类 hook」的 hashchange 重测(见 useMeasuredWidths /
+/* 跨级转场期间挂起「测量类 hook」的 hashchange 重测(见 useMeasuredWidths /
    MEASURE_HOLD_MS):改 hash 会触发 hashchange → 那些 hook 在 100/450/1000ms
    各重测一次,而每次重测都要逐级 getComputedStyle 查可见性、读
    getBoundingClientRect、以及往 body 插探针读 clamp() 解析值 —— 全是强制同步
    布局。探针实测(手机 4× 降速)交互期间 30 次布局里 6 次、177 次样式重算里
    18 次由这条链触发,且正好落在动画帧之间。挂起到转场结束后再测,量到的值
-   不变(只取决于字体与文案)。 */
+   不变(只取决于字体与文案)。
+
+   ⚠ 2026-10-10:这里原本还会写 window.__streetHoldUntil(尾屏街景在转场期间
+   "一帧都不喂")。业主反馈尾屏开播要等好一会 —— 因为 demo 冷启动要靠喂帧才能跑完,
+   转场不喂 + 保活间隔被我拉到 5s 之后,遮罩期基本喂不到帧,冷启动只能等业主滑到
+   尾屏时现场补(实测 2500ms 才画出第一帧)。已连同保活间隔一起回撤到原值 1s。
+   函数名保留(四处调用点不动),现在只负责"把测量推到转场之后"。 */
 const MEASURE_HOLD_MS = 980;
 function holdStreetIdleFrames(ms = 1800) {
+  void ms;   // 尾屏挂起已回撤,参数不再使用
   try {
-    window.__streetHoldUntil = performance.now() + ms;
     window.__measureHoldUntil = Math.max(window.__measureHoldUntil || 0, performance.now() + MEASURE_HOLD_MS);
   } catch (_) { /* 极旧环境/被禁用时静默 */ }
 }
