@@ -199,6 +199,25 @@ const HOST_CSS = `
 #scene-caption { display: none !important; }
 .hud { justify-content: flex-end !important; }
 
+/* ── ⑨ 2026-10-09 业主终轮微调 ─────────────────────────────────────────────
+   PC：业主「左右两边的文字信息保持底部对齐的同时一起往上移动」。
+   ⚠ 底带里左侧文案的底边是钉在图标底边上的（关系①）、提示行是钉在图标上沿的
+     （关系②）⇒ 只抬文字会让两者与图标脱开、底部对齐随之破掉。所以「一起上移」
+     只能连右下那排图标一起抬 —— 抬的是 demo 的 .hud（☁ ‖ HIGH 就在它的
+     .controls 里），值写进 --sq-lift；注入脚本量到的 iconBox 已含这一抬，
+     三条关系全部自动跟随，任何视口都不用改数。
+   56px 由设计稿反推：设计稿图标行 951..957（1081 高稿）↔ 实测盒子 1001..1035
+   ⇒ 图标盒上移 56 后落在 945..979，两个按钮行随之精确落在设计稿的
+   818..833 / 856..871（见 startStreetAlign）。
+   移动端 --sq-lift 归零：业主只要求「按钮下移贴近图标」，图标本身不动。 */
+:root { --sq-lift: 56px; }
+@media (min-width: 701px) and (max-width: 1599px) {
+  .hud { bottom: calc(35px + var(--sq-lift, 0px)) !important; }
+}
+@media (min-width: 1600px) {
+  .hud { bottom: calc(45px + var(--sq-lift, 0px)) !important; }
+}
+
 /* ── ⑥ 左下文案按参考图替换 ────────────────────────────────────────────────
    参考图实测：h1 两行基线间距 48px、字高 32px；eyebrow 字高 12px、横线宽 39px；
    p 字高 13px；foot 字高 7px。demo 原值 h1 clamp(28,3.05vw,47)/line-height 1.42、
@@ -357,7 +376,7 @@ const HOST_CSS = `
      标题行）已改由注入脚本实测反推（见 injectStreetQuick），这里的 right /
      bottom 只作为 JS 执行前的兜底值，不再是最终位置。 */
 .street-quick {
-  position: fixed; right: 46px; bottom: 105px; z-index: 5;
+  position: fixed; right: 46px; bottom: 135px; z-index: 5;
   display: flex; flex-direction: column; align-items: flex-end;
   text-align: right; pointer-events: none;
   transition: opacity .35s;
@@ -369,8 +388,8 @@ const HOST_CSS = `
   color: #cfd6dd; font-size: 12.5px; letter-spacing: 1.5px;
   transition: color .2s; font-family: inherit;
 }
-/* 行距由脚本按「标题行距」实测反推（--sq-gap），保证两行按钮与标题两行同心 */
-.sq-row + .sq-row { margin-top: var(--sq-gap, 21px); }
+/* 行距由脚本写常量（--sq-gap，PC＝设计稿行距 38 − 按钮行高；移动端回到下面兜底的 16px） */
+.sq-row + .sq-row { margin-top: var(--sq-gap, 22px); }
 .sq-row:hover { color: #eaf0f6; }
 .sq-ico {
   width: 15px; height: 15px; flex: none;
@@ -379,23 +398,29 @@ const HOST_CSS = `
 }
 /* 听筒图标是 fill 型（业主 2026-10-09 提供 SVG）——整块填色、无描边 */
 .sq-ico-fill { fill: currentColor; stroke: none; }
-/* 提示行到「发封邮件」的间距由脚本反解（--sq-hint-mt），底边同时钉在图标上沿 */
-.sq-hint { margin: var(--sq-hint-mt, 30px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
+/* 提示行到「发封邮件」的间距由脚本写入常量（--sq-hint-mt），底边同时钉在图标上沿 */
+.sq-hint { margin: var(--sq-hint-mt, 52px) 0 0; color: #7f8c96; font-size: 9px; letter-spacing: 1px; }
 /* 业主 2026-10-09：面板里「复制号码 / 复制邮箱」太贴主按钮 —— demo gap
    桌面 20px / ≤700 段 10px，各拉开一档（宿主层覆盖，demo 产物不动）。 */
 .actions { gap: 24px !important; }
 /* demo 进入 phone/mail/car 面板时 #detail 从右侧盖住 44% —— 新块同步淡出 */
 body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: none; }
 
-@media (min-width:1600px) { .street-quick { bottom: 115px; } }
+@media (min-width:1600px) { .street-quick { bottom: 145px; } }
 @media (max-width:1100px) { .street-quick { right: 28px; } }
 @media (max-width:700px) {
+  /* ⑨ 移动端：图标不抬（--sq-lift 归零）；业主删掉「点击 / 拖动 探索场景」提示行 ——
+     元素保留在 DOM 里（注入脚本要用它判断 PC/移动分支），只隐藏。 */
+  :root { --sq-lift: 0px; }
+  .sq-hint { display: none !important; }
   /*⚠ 移动端不能沿用 105px：demo 的 ≤700 段把 .controls 改成
      position:absolute; bottom:71px（.hud 自身高度因此塌成 0），实测
      .controls 顶边落在视口底往上 123px 处 —— 新块 bottom:93 会压到它身上
      （探针 probe-street-mobile.mjs 实测 overlapControls=true）。
      这里取 controls 顶再上抬 37px（≈参考图 909→948 的 39px 间距）。 */
-  .street-quick { right: 16px; bottom: 160px; }
+  /* ⑨ 移动端兜底：图标不抬、提示行隐藏 ⇒ 整列底边 = 图标上沿 − 14（实测图标
+     上沿距视口底 123 ⇒ 137）。JS 跑起来后会再实测一次覆盖它。 */
+  .street-quick { right: 16px; bottom: 140px; }
   .sq-row { gap: 10px; font-size: 11px; letter-spacing: 1px; }
   .sq-ico { width: 13px; height: 13px; }
   .sq-row + .sq-row { margin-top: var(--sq-gap, 16px); }
@@ -412,10 +437,16 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
      两个按钮同节奏（第一行对第一行）。文案块底边钉在图标底边后，标题原本比
      设计稿低 ≈17px（于是按钮看起来"浮"在标题上方）；把 margin-bottom 加大
      17px 让标题整块上移、margin-top 减小 6px 让 eyebrow 只上移 10px，即与
-     设计稿重合。数值按 402×874 实测反推，不改字号。 */
-  .intro h1 { font-size: 24px; line-height: 1.42; letter-spacing: 2px; margin: 8px 0 28px; }
+     设计稿重合。数值按 402×874 实测反推，不改字号。
+     ⚠ ⑨ 2026-10-09 业主「左边文字的高度间距收一下，现在有点宽」——
+     行高 1.42→1.24（标题两行 34→29.8）、标题 margin-bottom 28→18、
+     落款 margin-top 18→12：整块高 152→128（实测反推），底边仍钉在图标底边，
+     所以是"顶部往下收"而不是整体挪位。字号一概不动。 */
+  .intro h1 { font-size: 24px; line-height: 1.24; letter-spacing: 2px; margin: 8px 0 18px; }
   .intro p { font-size: 10px; letter-spacing: 1.4px; }
-  .intro-foot { font-size: 6.5px; letter-spacing: 1px; margin-top: 18px; }
+  /* ⑨ 业主「FOUR DESIGN / INDEPENDENT CREATIVE STUDIO 之间间距收窄」：
+     demo 是 gap:18px + letter-spacing 1px（6.5px 字号下相当于 3 个字宽）。 */
+  .intro-foot { font-size: 6.5px; letter-spacing: .8px; margin-top: 12px; gap: 8px; }
 }
 `;
 
@@ -947,14 +978,18 @@ function injectDetailCopy(doc) {
   return true;
 }
 
-// ── 尾屏初始态精确排版（业主 2026-10-09 设计稿终版）──────────────────────────
-//  ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
-//  ② 「点击 / 拖动 探索场景」紧贴图标上方（底边离线 HINT_OFF，设计稿实测值）
-//  ③ 两个按钮行分别与 h1 的两行**同心**，行距＝标题行距
-// 设计稿里 h1 两行与右侧两个按钮是同一节奏（第一行对第一行），提示行贴着底部
-// 控制条、与「发封邮件」拉开距离。控制条 = demo 的 .controls，其可见子元素就是
-// 设计稿里那排 ☁ ‖ 图标。三条关系全部 getBoundingClientRect 实测反推、不写死 px
-// ⇒ 任何机型、地址栏/安全区变化、缩放都自动跟随（CSS 里的 bottom/行距只作兜底）。
+// ── 尾屏初始态精确排版（业主 2026-10-09 设计稿终版 + 终轮微调）────────────────
+//  PC（提示行在）：
+//   ① 左下文案底部（.intro-foot 底边）＝ 右下控制条图标底部
+//   ② 「点击 / 拖动 探索场景」提示行底边 ＝ 图标上沿 − HINT_OFF
+//   ③ 两个按钮行距 ＝ 标题行距 × 0.56（设计稿 38/68，比标题两行紧）
+//   ④ 提示行 ↔「发封邮件」间距 ＝ 常量 HINT_MT
+// 移动端（提示行已隐藏）：
+//   ① 同 PC；② 整列底边钉在图标上沿 − MOB_ICON_GAP（业主「贴近图标」）；行距交回 CSS。
+// 三条位置关系全部 getBoundingClientRect 实测反推、不写死 px ⇒ 任何机型、地址栏/安全区
+// 变化、缩放都自动跟随（CSS 里的 bottom / 行距只作 JS 执行前的兜底）。
+// ⚠ 图标自身的抬升在 HOST_CSS ⑨ 里用 --sq-lift 声明（PC 56px、移动端 0）：本文只负责
+//   「数量关系」，不碰绝对位置，所以业主改主意要再抬/再压，只动那一个 CSS 变量。
 //
 // ⚠⚠ 第十九轮（业主 2026-10-09「PC 端还是没有对齐」）真根因：
 //   原实现把 rAF 校准循环写在 injectStreetQuick 内部「插入 DOM 之后」，而
@@ -979,8 +1014,11 @@ function startStreetAlign(doc) {
     try { win.__streetAlignNow(); } catch (_) { /* noop */ }
     return true;
   }
-  const HINT_OFF = 10;     // 提示行底边到图标行上沿的间距（设计稿 ≈10px）
-  const MIN_HINT_MT = 8;   // 提示行到「发封邮件」的最小间距，防极端视口贴死
+  const HINT_OFF = 10;      // PC：提示行底边到图标行上沿的间距（设计稿 ≈10px）
+  const HINT_MT = 52;       // PC：提示行到「发封邮件」的间距（设计稿 60 − 视觉余量）
+  const BTN_PITCH_RATIO = 0.56; // PC：两按钮行距 ÷ 标题行距（设计稿 38/68）
+  const MIN_BTN_PITCH = 34; // PC：行距下限（窄屏标题变小，而按钮字号恒 12.5px）
+  const MOB_ICON_GAP = 14;  // 移动端：「发封邮件」底边到图标上沿（业主「贴近图标」）
   const WINDOW_MS = 2500;  // 每次触发后的连续校准窗口（覆盖进场过渡）
   // 诊断计数器（探针读）：tick 跑了几次 / 卡在 pick 还是 iconBox / 有没有真的写值。
   // 静默 catch 会把异常吞掉，没有这个就只能靠猜。
@@ -1030,7 +1068,9 @@ function startStreetAlign(doc) {
     if (!footEl) { dbg.miss = 'foot'; return null; }
     if (!controls) { dbg.miss = 'controls'; return null; }
     if (!quick) { dbg.miss = 'quick'; return null; }
-    if (!hint) { dbg.miss = 'hint'; return null; }
+    // ⚠ hint 不列为必需：移动端业主已把它隐藏（甚至将来可能整条删掉），
+    //   缺了它只影响 PC 分支的"贴图标"关系，不该让整条对齐静默失效。
+    if (!hint) dbg.noHint = 1;
     if (rows.length !== 2) { dbg.miss = 'rows=' + rows.length; return null; }
     return { introEl, h1, footEl, controls, quick, hint, rows };
   };
@@ -1068,27 +1108,46 @@ function startStreetAlign(doc) {
     const vh = win.innerHeight;
     // ① 文案底部对齐图标底部。inGap = .intro 盒底 到 .intro-foot 盒底 的距离
     //    （demo 的 .intro 盒底比 foot 低一点）；属「盒内」常量，与视口/机型无关。
+    //    图标本身已被 CSS 的 --sq-lift 抬过（见 HOST_CSS ⑨），量到多少就贴多少
+    //    ⇒ 两端（PC 抬过 / 移动端没抬）同一套代码，业主说的「一起上移且保持底部对齐」
+    //    就是这么落地的。
     const inGap = n.introEl.getBoundingClientRect().bottom - n.footEl.getBoundingClientRect().bottom;
     setPx(n.introEl, 'bottom', vh - box.bottom - inGap);
-    // h1 里放了 <br>（见 injectIntroCopy）⇒ 恒两行、等高，可直接二分
-    const hr = n.h1.getBoundingClientRect();
-    const lineH = hr.height / 2;
-    const line1Center = hr.top + lineH / 2;
     const rowH = n.rows[0].getBoundingClientRect().height;
-    // ③ 行距 = 标题行距 ⇒ 两行按钮分别落在两行标题中线上
-    const rowGap = Math.max(0, Math.round(lineH - rowH));
-    if (n.quick.style.getPropertyValue('--sq-gap') !== rowGap + 'px') {
-      n.quick.style.setProperty('--sq-gap', rowGap + 'px');
+    // 提示行是否参战 = PC / 移动 的分支判据（移动端业主已按 ⑨ 隐藏它）
+    const hintOn = !!n.hint && win.getComputedStyle(n.hint).display !== 'none'
+      && n.hint.getBoundingClientRect().height > 0;
+    dbg.hintOn = hintOn;
+
+    if (hintOn) {
+      // ── PC ─────────────────────────────────────────────────────────────────
+      // ② 提示行底边 = 图标上沿 − HINT_OFF（业主「提示贴图标」）
+      // ③ 两按钮行距 = 标题行距 × 0.56（设计稿 38/68）。业主 2026-10-09：「打个电话
+      //    跟发封邮件的间距太宽」—— 旧实现取的是"与标题两行同心"⇒ 行距 = 标题行距
+      //    67px，比设计稿紧 29px 的观感差一截。
+      // ④ 提示行到「发封邮件」的间距 = 常量（设计稿 60px）。旧实现是反解出来的，
+      //    为的是满足"第一行按钮落在标题第一行中线上"，现在这条约束取消。
+      const lineH = n.h1.getBoundingClientRect().height / 2;
+      const pitch = Math.max(MIN_BTN_PITCH, Math.round(lineH * BTN_PITCH_RATIO));
+      const rowGap = Math.max(0, pitch - rowH);
+      if (n.quick.style.getPropertyValue('--sq-gap') !== rowGap + 'px') {
+        n.quick.style.setProperty('--sq-gap', rowGap + 'px');
+      }
+      if (n.quick.style.getPropertyValue('--sq-hint-mt') !== HINT_MT + 'px') {
+        n.quick.style.setProperty('--sq-hint-mt', HINT_MT + 'px');
+      }
+      setPx(n.quick, 'bottom', vh - (box.top - HINT_OFF));
+      dbg.wrote += 1;
+      return true;
     }
-    // ② 先钉 hint 底边 = 图标上沿 - HINT_OFF，再反解 hint 与「发封邮件」的间距，
-    //    使第一行按钮正好与标题第一行同心（两个约束联立，唯一解）。
-    const hintH = n.hint.getBoundingClientRect().height;
-    const hintBottom = box.top - HINT_OFF;
-    const mt = Math.max(MIN_HINT_MT, Math.round(hintBottom - hintH - 1.5 * rowH - rowGap - line1Center));
-    if (n.quick.style.getPropertyValue('--sq-hint-mt') !== mt + 'px') {
-      n.quick.style.setProperty('--sq-hint-mt', mt + 'px');
-    }
-    setPx(n.quick, 'bottom', vh - hintBottom);
+
+    // ── 移动端（无提示行）─────────────────────────────────────────────────────
+    // 业主：「右边的两个按钮往下移动一些，贴近右下角的 3 个图标」⇒ 整列底边直接钉在
+    // 图标上沿往下 MOB_ICON_GAP 处（旧实现钉在提示行底边，把提示行删掉后自然就位）。
+    // 行距交回 CSS 兜底 16px：不再与标题行距联动（标题这会正在被 ⑨ 收窄，联动会一并缩）。
+    if (n.quick.style.getPropertyValue('--sq-gap')) n.quick.style.removeProperty('--sq-gap');
+    if (n.quick.style.getPropertyValue('--sq-hint-mt')) n.quick.style.removeProperty('--sq-hint-mt');
+    setPx(n.quick, 'bottom', vh - box.top + MOB_ICON_GAP);
     dbg.wrote += 1;
     return true;
   };
