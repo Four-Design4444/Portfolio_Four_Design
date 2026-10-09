@@ -378,23 +378,48 @@
         // 命中缓存时 load 有可能在监听之前就已经触发，补两次机会。
         window.setTimeout(placeIntoDemo, 0);
         window.setTimeout(placeIntoDemo, 400);
-        // 降级：iframe 文档拿不到时退回遮罩底部那一条，并顺手把 demo 里的假条
-        // 隐藏掉 —— 无论如何不能同时出现两条。
-        var fallbackTimer = window.setTimeout(function () {
-          if (placed) return;
-          el.appendChild(progress.root);
-          // 降级路径也要解除门控：demo 拿不到注入就带着原貌显示，绝不能
-          // 因为门控没开而让 loading 永远停在纯色遮罩上。
-          frame.classList.add('is-in');
+        /* 降级（2026-10-10 重做，修「loading 瞬间闪出 demo 原貌」bug）：
+           原版在固定 600ms 无条件开门（is-in）+ 退回遮罩底部进度条。慢网络下
+           600ms 时 demo 文档往往还在流式加载（readyState='loading'，.rail 未
+           解析出来），而门已开 ⇒ 接下来 demo 文档一到，浏览器先画它的**注入前
+           原貌**（旧蓝渐变 #151f2a + 未居中的猫 + 假进度条 .rail），直到 load
+           事件里 placeIntoDemo 跑完才被替换 —— 业主看到的「loading 瞬间闪出
+           以前的 demo 页面 + 进度条」就是这个窗口（手机实测，弱网更明显）。
+           新逻辑分三档，失败方向永远是"多等"而不是"露原貌"：
+             ① 文档里有 .rail（demo 已解析完）→ 正常 placeIntoDemo；
+             ② 文档 readyState=complete 但没有 .rail（加载失败页/异常）→ 开门，
+                但同时强灌 #111719 深色底 + 藏 .rail，绝无原貌可露；
+             ③ 文档还在加载（readyState='loading'）→ 继续每 150ms 重试，不开门。
+           最后再垫一层 8s 硬兜底：无论文档什么状态都强灌深色底 + 藏假条后开门，
+           保证极端情况下 loading 也不会永远停在纯色遮罩上。 */
+        var forceDarkNoRail = function () {
           try {
             var d = frame.contentDocument;
             if (d && d.head) {
               var s = d.createElement('style');
-              s.textContent = '.rail{display:none}';
+              s.textContent = ':root,html,body{background:#111719!important}.rail{display:none!important}';
               d.head.appendChild(s);
             }
           } catch (_) { /* noop */ }
+        };
+        var openWithOverlay = function () {
+          el.appendChild(progress.root);
+          forceDarkNoRail();
+          frame.classList.add('is-in');
+        };
+        var fallbackTimer = window.setTimeout(function tryGate() {
+          if (placed) return;
+          var doc = null;
+          try { doc = frame.contentDocument; } catch (_) { doc = null; }
+          if (doc && doc.querySelector('.rail')) { placeIntoDemo(); return; }
+          if (doc && doc.readyState === 'complete') { openWithOverlay(); return; }
+          fallbackTimer = window.setTimeout(tryGate, 150);
         }, 600);
+        window.setTimeout(function () {
+          if (placed) return;
+          openWithOverlay();
+          window.clearTimeout(fallbackTimer);
+        }, 8000);
 
         // ---- 真实进度：每项都是一个 0..1 的探针，按权重加权 ----
         // 只有能真正观测到的量才计入，凑不出来的就不假装：
@@ -557,13 +582,20 @@
             }, 520);
           }, wait);
         };
-        window.__hideAppLoader = function () { hide(true); };
+        // 广播揭幕信号：首屏 SVG 入场由 app:ready 计时，所以**任何**让遮罩消失的
+        // 路径都必须带着它，否则标题会永远停在 opacity:0。
+        var announceReady = function () {
+          window.__appRevealed = true;
+          try { window.dispatchEvent(new Event('app:ready')); } catch (_) { /* noop */ }
+        };
+        window.__hideAppLoader = function () { announceReady(); hide(true); };
         window.addEventListener('app:ready', function () { ready = true; window.__appRevealed = true; hide(true); });
         var timer = window.setInterval(tick, 120);
         window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
         // 兜底：无论如何 HARD_CAP 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下
         // 始终不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
-        window.setTimeout(function () { if (!hidden) hide(true); }, HARD_CAP);
+        // 硬超时也必须播报：只淡出遮罩而不给 app:ready，首屏标题就永远不入场。
+        window.setTimeout(function () { if (!hidden) { announceReady(); hide(true); } }, HARD_CAP);
         // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
         // 也要揭幕（不补满进度）。
         window.setTimeout(function () { hide(false); }, HARD_CAP);
