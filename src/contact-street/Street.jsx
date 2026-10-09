@@ -407,6 +407,45 @@ const HOST_JS = `
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
 
+  // 移动端汽车特写低机位。只包装原相机，demo 产物保持原样。
+  // lookAt 前应用偏移，帧结束还原，避免下一帧插值累加偏移。
+  var carCamera = null;
+  var carCameraOffset = 0;
+  var perspectiveFlag = Object.getOwnPropertyDescriptor(Object.prototype, 'isPerspectiveCamera');
+  if (!perspectiveFlag) {
+    Object.defineProperty(Object.prototype, 'isPerspectiveCamera', {
+      configurable: true,
+      set: function (value) {
+        Object.defineProperty(this, 'isPerspectiveCamera', {
+          value: value, writable: true, enumerable: true, configurable: true,
+        });
+        if (!value) return;
+        var camera = this;
+        var originalLookAt = camera.lookAt;
+        camera.lookAt = function () {
+          if (camera.fov === 40 && camera.near === 0.18 && camera.far === 120) {
+            carCamera = camera;
+            if (Object.getOwnPropertyDescriptor(Object.prototype, 'isPerspectiveCamera')) {
+              delete Object.prototype.isPerspectiveCamera;
+            }
+            var state = window.__four;
+            if (window.innerWidth <= 700 && state && state.mode === 'car') {
+              var transition = state.transition;
+              var progress = transition.active ? Math.min(1, Math.max(0, transition.elapsed / 1.4)) : 1;
+              var eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+              carCameraOffset = 2.4 * eased;
+              camera.position.y -= carCameraOffset;
+            }
+          }
+          return originalLookAt.apply(this, arguments);
+        };
+      },
+    });
+    window.setTimeout(function () {
+      if (!carCamera) delete Object.prototype.isPerspectiveCamera;
+    }, 15000);
+  }
+
   // ── 一次性诊断通道 ────────────────────────────────────────────────────
   // demo 把运行状态挂在内部对象 zd 上（Object.defineProperty(zd, 'lighting', …)），
   // 但从不导出到 window，于是"灯光渐入到底走完没有"在外部无法观测。这里在
@@ -480,6 +519,10 @@ const HOST_JS = `
     if (isBurn) {
       if (!window.__streetBurnFrames) window.__streetBurnFirstAt = at;
       window.__streetBurnFrames += 1;
+    }
+    if (carCamera && carCameraOffset) {
+      if (window.__four && window.__four.mode === 'car') carCamera.position.y += carCameraOffset;
+      carCameraOffset = 0;
     }
     cb(at);
   };

@@ -914,6 +914,11 @@ function App() {
   const [homeHandoff, setHomeHandoff] = useState(false);
   const chromeTimerRef = useRef(0);
   const chromeInTimerRef = useRef(0);
+  /* ★ 2026-10-10「进二级页闪一帧 hero」的取证（业主反馈:来回切换时很快闪过一个
+     接近 hero 的画面）。逐帧探针 outputs/perf-reveal/flash-hunt.mjs 实测:
+     移动端点卡进二级时，一级层按设计留在场上演 620ms 的元素退场，而这 620ms 里
+     文档高度会塌、窗口滚动被浏览器钳回 0 —— **仍在场的一级层当帧跳回首屏 hero**，
+     连续 2 帧、间隔 9ms（肉眼就是"闪一下"）。修法与结论写在 goWorks 里。 */
   /* 回程滚动复位(2026-10-07 业主第五轮):一级层是 display:none 隐藏的,隐藏
      期间文档高度塌掉、窗口滚动被浏览器钳回 0;路由切回 home 的同一提交里
      一级层重新可见,若此刻还停在 0,用户会看到首屏 hero 闪一帧再跳回原屏。
@@ -925,7 +930,15 @@ function App() {
     pendingHomeScrollRef.current = null;
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
+    /* ⚠ 2026-10-10:这一刻一级层刚从 display:none 出来,**浏览器尚未重算布局**,
+       文档还是"二级页那么高"(实测 852) → scrollTo 被钳成 0,而钳位结果留到下一帧,
+       于是**揭示的那一帧画的就是首屏 hero**。写完之后确认落位,没落位就强制一次重排
+       (读 scrollHeight)再写,最多三次 —— 高度一生效写入就成立,且全都发生在绘制之前。 */
     window.scrollTo(0, y);
+    for (let i = 0; i < 3 && Math.abs(window.scrollY - y) > 1; i += 1) {
+      void document.documentElement.scrollHeight;
+      window.scrollTo(0, y);
+    }
     return undefined;
   }, [route.page]);
   /* 环境光(SideRays)单例 (2026-10-07):一级首页与二级作品页**共用同一个实例**。
@@ -1215,7 +1228,23 @@ function App() {
     const saved = Number(window.sessionStorage.getItem(key) ?? fallback);
     document.documentElement.style.scrollBehavior = 'auto';
     document.body.style.scrollBehavior = 'auto';
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => window.scrollTo(0, saved)));
+    /* ⚠ 2026-10-10 修「一级↔二级来回切换时闪一下、颜色接近 hero」（业主反馈）。
+       逐帧探针实测（outputs/perf-reveal/flash-hunt.mjs）回一级页那一提交的时序:
+         t+0ms    一级层 display:none  → document 只有二级页那么高（852）
+         t+15ms   一级层恢复 block     → 但窗口滚动仍在 0 ⇒ **当帧画的是首屏 hero**
+         t+17ms   滚动才被另一条路径补成 1697
+       根因:恢复写入发生在"一级层刚从 display:none 出来、浏览器还没重算布局"的那一刻,
+       文档高度还是旧的 → scrollTo 被钳成 0;而原来的两次写入（rAF 套 rAF）**都落在
+       这个还没长高的窗口里**,于是谁也救不回来,连露 2 帧 hero（约 12~17ms,肉眼就是
+       "闪一下"）。改为**反复重申直到真的落位**（最多 12 帧）:高度一旦生效写入就成立，
+       且每次写入都在该帧绘制之前,所以一帧都不会露。 */
+    let tries = 0;
+    const apply = () => {
+      tries += 1;
+      window.scrollTo(0, saved);
+      if (Math.abs(window.scrollY - saved) > 1 && tries < 12) window.requestAnimationFrame(apply);
+    };
+    window.requestAnimationFrame(apply);
   };
 
   const goHome = () => {
@@ -1351,6 +1380,10 @@ function App() {
       window.clearTimeout(chromeInTimerRef.current);
       setHomeHandoff(true);
       window.clearTimeout(chromeTimerRef.current);
+      /* 2026-10-10 试过在这里"每帧按住 window.scrollY":**无效** —— 文档高度塌掉后，
+         浏览器的钳位发生在 rAF 之后的布局阶段，逐帧 scrollTo 每次都被覆盖（逐帧探针
+         实测仍是 2 帧 hero 帧）。真正要治的是"高度为什么塌"，见下面 timeout 的时序；
+         这里不再做无用的逐帧重写。 */
       chromeTimerRef.current = window.setTimeout(() => {
         setHomeHandoff(false);
         /* 一级层此刻才隐藏;在此之前复位滚动会让 hero 闪进来(见上)。 */
