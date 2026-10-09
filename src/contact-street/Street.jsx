@@ -471,26 +471,37 @@ const HOST_JS = `
   if (window.__streetHostHooked) return;
   window.__streetHostHooked = true;
 
-  // 移动端汽车前侧特写，按参考图保留侧身透视和轻微俯角。
+  // 汽车机位叠加（两个平台共用一个 WeakMap 钩子，捕获即恢复）：
+  //   · 移动端 —— 位置偏移做前侧特写（按参考图保留侧身透视与轻微俯角）。
+  //   · PC 端 —— 相机沿自身右向量整体平移（注视点同步平移 ⇒ 纯平移、不转向）。
   // lookAt 前应用机位偏移，下次回调前还原，避免插值累加偏移。
+  //
+  // ⚠ PC 端为什么必须是「真平移」而不是 setViewOffset 投影横移：
+  //   投影横移是屏幕空间整体位移，车和充电桩位移**完全相同** ⇒ 桩永远出不来。
+  //   真平移才有视差（位移 ∝ 1/深度）：车近、充电桩远 ⇒ 桩相对车右移才露得出来。
+  //   右向量取 normalize(cross(forward, up))，与 demo 内部的 mf 完全同式，方向一定对。
   var carCamera = null;
   var carCameraOffset = null;
-  if (window.innerWidth <= 700) {
-    // Reflector 每帧以主相机为 WeakMap key，支持宿主注入晚于相机创建。
-    // 捕获一次即恢复 get，后续只包装当前 iframe 的主相机。
-    var originalWeakGet = WeakMap.prototype.get;
-    var captureCamera = function (key) {
-      if (key && key.isPerspectiveCamera && key.fov === 40 && key.near === 0.18 && key.far === 120) {
-        carCamera = key;
-        WeakMap.prototype.get = originalWeakGet;
-        window.__streetCarCameraReady = true;
-        var originalLookAt = key.lookAt;
-        key.lookAt = function () {
-          var state = window.__four;
-          if (window.innerWidth <= 700 && state && state.mode === 'car') {
-            var transition = state.transition;
-            var progress = transition.active ? Math.min(1, Math.max(0, transition.elapsed / 1.4)) : 1;
-            var eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+  // PC 平移量（世界单位，沿相机右向量；正值 ⇒ 相机右移 ⇒ 场景左移）。
+  // 0.5 ≈ 车中心左移 5.4% 视口宽（1512 宽下约 82px）：右侧充电桩完整露出，
+  // 车头左缘仍有约 3% 视口宽余量（再大就裁车头，实测 0.6 起前灯出画）。
+  var CAR_PAN_PC = 0.5;
+  // Reflector 每帧以主相机为 WeakMap key，支持宿主注入晚于相机创建。
+  // 捕获一次即恢复 get，后续只包装当前 iframe 的主相机。
+  var originalWeakGet = WeakMap.prototype.get;
+  var captureCamera = function (key) {
+    if (key && key.isPerspectiveCamera && key.fov === 40 && key.near === 0.18 && key.far === 120) {
+      carCamera = key;
+      WeakMap.prototype.get = originalWeakGet;
+      window.__streetCarCameraReady = true;
+      var originalLookAt = key.lookAt;
+      key.lookAt = function () {
+        var state = window.__four;
+        if (state && state.mode === 'car') {
+          var transition = state.transition;
+          var progress = transition && transition.active ? Math.min(1, Math.max(0, transition.elapsed / 1.4)) : 1;
+          var eased = progress * progress * progress * (progress * (progress * 6 - 15) + 10);
+          if (window.innerWidth <= 700) {
             carCameraOffset = { x: 1.35 * eased, y: -1.6 * eased, z: -0.25 * eased };
             key.position.x += carCameraOffset.x;
             key.position.y += carCameraOffset.y;
@@ -500,17 +511,39 @@ const HOST_JS = `
               (view && view.enabled ? view.offsetX : 0) + window.innerWidth * 0.025 * eased,
               (view && view.enabled ? view.offsetY : 0) + window.innerHeight * 0.009 * eased,
               window.innerWidth, window.innerHeight);
+          } else {
+            var tgt = arguments[0];
+            if (tgt && tgt.isVector3) {
+              var px = key.position.x, py = key.position.y, pz = key.position.z;
+              var fx = tgt.x - px, fy = tgt.y - py, fz = tgt.z - pz;
+              var fl = Math.sqrt(fx * fx + fy * fy + fz * fz) || 1;
+              fx /= fl; fy /= fl; fz /= fl;
+              // up = (0,1,0) ⇒ right = normalize(-f.z, 0, f.x)
+              var rx = -fz, rz = fx;
+              var rl = Math.sqrt(rx * rx + rz * rz) || 1;
+              rx /= rl; rz /= rl;
+              var panUnits = typeof window.__streetCarPan === 'number' ? window.__streetCarPan : CAR_PAN_PC;
+              var d = panUnits * eased;
+              carCameraOffset = { x: rx * d, y: 0, z: rz * d };
+              key.position.x = px + carCameraOffset.x;
+              key.position.z = pz + carCameraOffset.z;
+              var moved = tgt.clone();
+              moved.x += carCameraOffset.x;
+              moved.z += carCameraOffset.z;
+              window.__streetCarPanApplied = { panUnits: panUnits, eased: +eased.toFixed(3) };
+              return originalLookAt.call(this, moved);
+            }
           }
-          return originalLookAt.apply(this, arguments);
-        };
-      }
-      return originalWeakGet.apply(this, arguments);
-    };
-    WeakMap.prototype.get = captureCamera;
-    window.setTimeout(function () {
-      if (WeakMap.prototype.get === captureCamera) WeakMap.prototype.get = originalWeakGet;
-    }, 15000);
-  }
+        }
+        return originalLookAt.apply(this, arguments);
+      };
+    }
+    return originalWeakGet.apply(this, arguments);
+  };
+  WeakMap.prototype.get = captureCamera;
+  window.setTimeout(function () {
+    if (WeakMap.prototype.get === captureCamera) WeakMap.prototype.get = originalWeakGet;
+  }, 15000);
 
   // ── 一次性诊断通道 ────────────────────────────────────────────────────
   // demo 把运行状态挂在内部对象 zd 上（Object.defineProperty(zd, 'lighting', …)），
