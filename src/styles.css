@@ -3396,13 +3396,15 @@ body:has(.work-detail-page) .work-detail-page {
 }
 
 /* ★ 2026-10-10 业主（PC）：hero 的 SVG 文字等比例放大一些，放大后往上移一些。
+   ★ 2026-10-10 第二轮：再放大一档（88vw/1500px → 96vw/1680px），top 保持 42%
+     不动。等比缩放的垂直中心不变，所以只改 width 就已经是整体放大。
    ⚠ 只改**布局尺寸与位置**：width 配 aspect-ratio 自动等比放大（SVG 走 viewBox
      缩放，命中区域跟着一起放大，交互不受影响）；位置只改 top。
-   ⚠ 绝不碰 transform —— 这个 SVG 带鼠标交互与形变动效，很可能是 JS 直接写
+   ⚠ 绝不碰 transform，这个 SVG 带鼠标交互与形变动效，很可能是 JS 直接写
      transform/内联样式的，用 transform 会互相覆盖。
    只作用于非移动端（移动端有自己的 .hero-title-stack-mobile 一套）。 */
 html:not([data-device="mobile"]) .hero-video-stage .hero-title-layer {
-  width: min(88vw, 1500px);
+  width: min(96vw, 1680px);
   top: 42%;
 }
 
