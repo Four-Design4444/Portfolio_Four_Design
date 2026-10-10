@@ -4293,10 +4293,15 @@ function ProfileContentPC() {
 //   1.5s 在冷缓存 + 4G 上只有零点几秒余量，揭幕那一下尾屏/封面刚好收尾，
 //   网络稍有抖动就吃光 → 视频当场 rebuffer。2.5s 是"能连续播"而不是"能播"。
 const HERO_SMOOTH_AHEAD_SEC = 2.5;
+/* 尾屏在进度条里的权重（2026-10-11 由 2 提到 8）。
+   只影响读数在总分里占多少，**不影响揭幕时机**（揭幕看值到没到 1，不看权重）。
+   ⚠ 改这个值必须同步 Street.jsx 里所有 weight 上报，两处不一致会以先登记的那个为准，
+   后到的被忽略（注册表按 id 锁权重），改错一边不会报错、只会静默失效。 */
+const TAIL_PROGRESS_WEIGHT = 8;
 /* 尾屏在 index.html 进度注册表里的任务 id。
    ⚠ 两个 id 不一样，别混：**上报时**用的是 Street.jsx 里的裸 id 'tail'
-   （announce('tail', 2)，注册表统一加 'ext:' 前缀），**核对 pending 时**用的是
-   加过前缀的注册表 id 'ext:tail'（见 6s 兜底的"可跳过清单"）。
+   （announce('tail', TAIL_PROGRESS_WEIGHT)，注册表统一加 'ext:' 前缀），
+   **核对 pending 时**用的是加过前缀的注册表 id 'ext:tail'（见 6s 兜底的"可跳过清单"）。
    写反了会变成两个任务：一个是能完成的 ext:tail，一个是永远到不了 100% 的
    ext:ext:tail（实测踩过，会把揭幕闸门永久卡住）。 */
 const TAIL_EVENT_ID = 'tail';
@@ -6094,7 +6099,13 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id, weight, progress: 0 } }));
       } catch (_) { /* noop */ }
     };
-    announce(TAIL_EVENT_ID, 2);
+    /* ★ 2026-10-11：尾屏在进度条里的权重由 2 提到 TAIL_PROGRESS_WEIGHT(8)。
+       ⚠ 这个数**只影响读数，不影响揭幕**：揭幕问的是 __bootTasks().pending
+       （该项的值到没到 1），权重大小不进那条判据，所以调大不会推迟也不会提前揭幕。
+       为什么调大：尾屏烧录是首屏 loading 末段**唯一还在动**的任务，原先只占 2 权重 →
+       烧录那 0.5 权重只值总分的 0.9%，2 秒里读数几乎不动，观感就是"卡在 98%"。
+       提到 8 之后烧录段值约 3.1%，条子在这 2 秒里一路在爬。 */
+    announce(TAIL_EVENT_ID, TAIL_PROGRESS_WEIGHT);
   }, []);
 
   /* hero 视频"够播"了就播报一声（2026-10-13）：App 拿它当"最危险的那段下载已经过去"的

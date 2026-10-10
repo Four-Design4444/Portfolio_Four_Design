@@ -130,7 +130,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (stopped || burnedRef.current) return;
       burnedRef.current = true;
       setBurned(true);
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 1 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 1 } })); } catch (_) {}
       try { if (onTailBurned) onTailBurned(); } catch (_) { /* noop */ }
     };
     const check = () => {
@@ -140,7 +140,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       // 进度条如实反映烧录推进：0.75 → 1.0（单调，不会像按 n 那样来回跳）。
       try {
         window.dispatchEvent(new CustomEvent('loading:progress', {
-          detail: { id: 'tail', weight: 2, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
+          detail: { id: 'tail', weight: 8, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
         }));
       } catch (_) {}
       // 能读到 demo 的脉冲值就以它为准（已经最亮就直接放行，不必凑满帧数）。
@@ -1866,14 +1866,14 @@ function useStreetWheelBridge(enabled) {
     const reportTailReady = () => {
       if (tailReportedRef.current) return;
       tailReportedRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0.75 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 0.75 } })); } catch (_) {}
       try { if (onTailReady) onTailReady(); } catch (_) {}
       // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
       try { setArmed(true); } catch (_) {}
     };
     if (!tailZeroRef.current) {
       tailZeroRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 2, progress: 0 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 0 } })); } catch (_) {}
     }
 
     const attempt = () => {
