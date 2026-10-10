@@ -303,7 +303,12 @@ void main() {
         // 移动端按 frameInterval 节流：iTime 用真实时间推进，动画速度不变。
         // 跨级转场窗口内改用 MORPH_FRAME_MS（见上面的常量注释）。
         const morphing = typeof window !== 'undefined' && performance.now() < (window.__worksMorphUntil || 0);
-        const interval = morphing ? MORPH_FRAME_MS : frameInterval;
+        /* 一级页翻页窗口（2026-10-10）：与 __worksMorphUntil 分开，因为那个开关会锁翻页。
+           翻页期间连同尾屏 iframe 一起把这道全屏柔光降到 6.7fps：尾屏滑入时它本就与
+           iframe 的 Three.js 渲染叠加，是全屏片元着色，像素量直接等于开销。
+           只降频，不冻结：iTime 恒取真实时间，解冻当帧图案不跳。 */
+        const flipping = typeof window !== 'undefined' && performance.now() < (window.__raysFlipThrottleUntil || 0);
+        const interval = (morphing || flipping) ? MORPH_FRAME_MS : frameInterval;
         if (interval && time - lastRender < interval) return;
         lastRender = time;
         uniforms.iTime.value = time * 0.001;

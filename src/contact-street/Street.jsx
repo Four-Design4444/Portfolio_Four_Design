@@ -75,29 +75,28 @@ const IDLE_KEEPALIVE_MS = 1000;
    而 WebGL 上下文与已编译 shader 依旧被周期性触碰，不会凉。
    冷启动 + 烧录阶段仍然走 1s（那时候必须喂够帧，见上面 IDLE_KEEPALIVE_MS 注释）。 */
 const IDLE_BURNED_MS = 120000;
-/* 翻页飞行档（2026-10-10，业主反馈「滑进尾屏有卡顿感，PC 与移动端同样」）。
-   成因：一级页翻页动画由父页面**自己画**（main.jsx 的 goToPage，700ms、每帧
-   window.scrollTo），而尾屏是同源 iframe ⇒ 共享一条主线程。翻页一开始 active 就
-   翻真、尾屏当帧切满帧，于是「满帧 Three.js 渲染」与「自绘滚动」在同一条线程上
-   逐帧抢，父页面的每帧滚动被拖长 —— 这就是滑入尾屏那一段的卡顿。
-   做法：翻页飞行期间把 iframe 压到 30fps（33ms 间隔），落地立刻回满帧。
-   为什么不伤画面：受控档的时间戳恒取真实时钟（见下面 emit），33ms 落在 demo
-   自己的 50ms clamp 阈值内，所以场景时间按真实时间推进，降帧不降速（见文件上方
-   时间轴铁律）。快速滚动中 30fps 与 60fps 无可感差别；用户停在尾屏时仍是满帧。
-   ⚠ 作用域只有翻页那 700ms，且只写 iframe 内部这一个开关，父页面/其他页面的
-   动画一律不碰 —— 它腾出的正是别处要用的主线程。 */
-const FLIP_FRAME_MS = 33;
-/* 临近尾屏的预热档（B1，同日）。「已烧完」的长档是 120s 一帧（见 IDLE_BURNED_MS
-   的两条硬理由），代价是用户从作品屏滑进尾屏时，WebGL 上下文与纹理已经很久没被
-   触碰过 —— 满帧首帧的成本因此落在用户眼前。
-   所以进入「作品屏及之后」时把间隔收到 4s：上下文与已编译 shader 被周期性唤醒，
-   而主线程占用仍只有 1s 档的四分之一（1s 档的 85ms/秒曾被实测咬到 hero 视频）。
-   这是取舍不是等价替换：4s 仍会在每 4 秒咬一帧 85ms，只用于「用户已经在尾屏前
-   一屏」这段很短的窗口，用户在首屏与个人页时依旧走长档。
-   ⚠ 未烧完时不用这个值，那条路径必须走 IDLE_KEEPALIVE_MS（冷启动与烧录靠喂帧）。 */
-const PRIME_IDLE_MS = 4000;
+/* 翻页冻结档（2026-10-10 第二轮）。
+   背景：第一轮用 33ms 降频（FLIP_FRAME_MS），业主反馈「没有改善」。
+   真机测量复核后确认第一轮方向错了，原因有三条，都指向同一个结论：
+     ① 父页面主线程本来就不忙。强机上翻页窗口内 rAF 间隔 p95 ≤ 13ms、长任务 0 次，
+        所以「腾出主线程」这个收益根本不存在，降频自然无可感回报。
+     ② 降频不降低**单帧成本**。demo 一帧的渲染耗时是固定的（真实 GPU 上
+        __streetState.frameMs ≈ 7ms，移动端实测 85ms）。当单帧耗时已经大于目标
+        间隔时，把间隔从 16ms 放宽到 33ms 不会减少任何工作量，只会让帧数变化。
+     ③ 真正被抢的是弱设备。用 CPU 节流 4x 复现后，进入尾屏那次翻页的
+        screencast 帧里出现 3 帧 >33ms（最长 90ms）；把 iframe 渲染整个停掉，
+        同一窗口归零（0 帧 >33ms，最长 23ms）。
+   做法：翻页飞行期间 iframe **完全不渲染**（冻结），落地立刻恢复满帧。
+   与降频的区别：冻结把这段窗口的主线程与 GPU 占用直接归零，而不是摊薄帧率。
+   为什么不伤画面：冻结不做任何事，只是不调渲染回调。解冻后第一帧的时间戳仍取
+   真实时钟（见 emit），dt 被 clamp 到 0.05s，场景时间只损失一次 clamp，
+   后续照常推进。翻页只有 700ms，且尾屏此刻正在从视口外升上来，
+   场景定格在该窗口内不可辨。
+   ⚠ 作用域只有翻页那 700ms，且由 `active && flipping` 双门控：
+     · active 为假（用户还没到尾屏，或正在往上翻）时永不冻结，走空转保活；
+     · 只写 iframe 内部这一个开关，父页面与其他页面的动画一律不碰。 */
 
-export default function ContactStreet({ active, preload, flipping = false, nearTail = false, onTailReady, onTailBurned }) {
+export default function ContactStreet({ active, preload, flipping = false, onTailReady, onTailBurned }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
   // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
   const [mounted, setMounted] = useState(false);
@@ -181,24 +180,21 @@ export default function ContactStreet({ active, preload, flipping = false, nearT
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
       const burning = armed && !burnedRef.current;
       try {
-        /* 满帧只在「用户真的在尾屏」且「没有正在翻页」时给。
-           翻页飞行档见 FLIP_FRAME_MS：700ms 内压到 30fps，落地立即回满帧。 */
-        win.__streetFrameMs = active
-          ? (flipping ? FLIP_FRAME_MS : 0)
-          : (burning ? BURN_FRAME_MS : 0);
+        /* 翻页冻结：双门控（active 且 flipping）。见文件上方「翻页冻结档」注释。 */
+        win.__streetFrozen = active && flipping;
+        win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
-        /* 空转间隔分三档：
-             没烧完      = 1s（冷启动与烧录都靠喂帧推进，是功能性的）；
-             烧完 + 临近 = 4s（预热档，只为让上下文别凉，见 PRIME_IDLE_MS）；
-             烧完 + 其余 = 2 分钟（纯粹保上下文，见 IDLE_BURNED_MS 的两条理由）。 */
-        win.__streetIdleMs = !burnedRef.current
-          ? IDLE_KEEPALIVE_MS
-          : (nearTail ? PRIME_IDLE_MS : IDLE_BURNED_MS);
+        /* 空转保活间隔两档：
+             没烧完 = 1s（冷启动与烧录都靠喂帧推进，是功能性的）；
+             烧完   = 2 分钟（纯粹保上下文，见 IDLE_BURNED_MS 的两条理由）。
+           ⚠ 2026-10-10 回撤「临近尾屏预热档（4s）」：它每 4 秒咬一帧 85ms（移动端），
+             并且把场景钟推得比 2 分钟档快 30 倍（灯更快灭），收益与副作用不成比例。 */
+        win.__streetIdleMs = burnedRef.current ? IDLE_BURNED_MS : IDLE_KEEPALIVE_MS;
       } catch (_) { /* 已销毁 / 跨域时静默 */ }
     };
     apply();
     return () => { stopped = true; if (timer) window.clearTimeout(timer); };
-  }, [mounted, active, armed, burned, flipping, nearTail]);
+  }, [mounted, active, armed, burned, flipping]);
 
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
 // ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header）。
@@ -753,6 +749,9 @@ const HOST_JS = `
   // 降帧只能改"多久回调一次"，不能改"回调里报几点"。两者必须解耦。
   window.__streetPaused = false;
   window.__streetFrameMs = 0;
+  /* 翻页冻结档（宿主写 active && flipping）：为真时不渲染任何一帧，
+     但循环保持可恢复。见文件上方「翻页冻结档」注释。 */
+  window.__streetFrozen = false;
   // 空转保活间隔（毫秒，宿主可写）。**原值 1000ms**；2026-10-10 曾改到 5000，因业主
   // 反馈"尾屏开播要等好一会"而回撤（原因见文件上方 IDLE_KEEPALIVE_MS 的注释）。
   window.__streetIdleMs = 1000;
@@ -815,6 +814,19 @@ const HOST_JS = `
           window.setTimeout(watch, left > 100 ? 100 : left);
         };
         window.setTimeout(watch, 100);
+        return;
+      }
+      /* 冻结档：本帧不渲染，也不排渲染帧；只用一个 50ms 的轻轮询等解冻。
+         ⚠ 不能直接 return 就完 —— demo 的循环是 rAF 递归，只有再调用 cb 才会续上。
+         所以这里自己接手调度：轮询到 __streetFrozen 摘掉，立刻 emit 一次恢复满帧。
+         真正贵的是帧本身（demo 一帧 7ms~85ms），这次唤醒可以忽略。 */
+      if (window.__streetFrozen) {
+        nextAt = 0;
+        var thaw = function () {
+          if (!window.__streetFrozen) { emit(cb, false); return; }
+          window.setTimeout(thaw, 50);
+        };
+        window.setTimeout(thaw, 50);
         return;
       }
       var frameMs = window.__streetFrameMs;
@@ -1838,8 +1850,21 @@ function useStreetWheelBridge(enabled) {
         //   移动端实测就是这个路径。改为"文档换了就重新注入"，两个钩子都能在
         //   demo 模块执行前就位。
         if (doc !== injectedDoc) {
-          injectedDoc = doc;
-          try { cssDone = injectHostCss(doc) && injectHostJs(doc); } catch (_) { cssDone = false; }
+          // ⚠ P0（2026-10-10 实测修复）：injectedDoc 必须**两个注入都成功之后**才提交。
+          //   旧写法 `injectedDoc = doc; cssDone = injectHostCss(doc) && injectHostJs(doc);`
+          //   有两个独立缺陷，实测让 33% 冷启动（CPU 4x 节流时 100%）掉进 9s 兜底：
+          //     ① 先提交、后验证 —— 任一注入失败时该文档已被标成"注入过"，
+          //        `doc !== injectedDoc` 从此恒假，这一份文档永不重试；
+          //     ② `&&` 短路 —— 首帧若 `doc.head` 还没就绪，injectHostCss 返 false 会
+          //        直接跳过 injectHostJs（它依赖 doc.body，此刻同样没就绪）。
+          //   两个注入函数本身都幂等（各自 getElementById 早退），所以"失败就下一帧
+          //   重试"近零成本：实测 head/body 在 t≈784ms 齐备，下一帧即注入成功。
+          try {
+            const cssOk = injectHostCss(doc);
+            const jsOk = injectHostJs(doc);
+            if (cssOk && jsOk) injectedDoc = doc;   // 只有都成功才锁定该文档
+            cssDone = cssOk && jsOk;
+          } catch (_) { cssDone = false; }
         }
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
         //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。

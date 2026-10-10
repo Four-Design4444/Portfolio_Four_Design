@@ -6248,8 +6248,8 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     if (instant || reducedRef.current || Math.abs(dest() - window.scrollY) < 2) {
       root.classList.remove('is-flipping');
       scrollingRef.current = false;
-      /* 直跳路径没有飞行窗口，但可能紧接在上一段被取消的动画之后 —— 那条路径
-         已经把 tailFlipping 置真了，这里必须清掉，否则尾屏会长期停在 30fps。 */
+      /* 直跳路径没有飞行窗口，但可能紧接在上一段被取消的动画之后，那条路径
+         已经把 tailFlipping 置真了，这里必须清掉，否则尾屏会一直停在冻结态。 */
       setTailFlipping(false);
       window.scrollTo(0, dest());
       return;
@@ -6259,8 +6259,14 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     let y = window.scrollY;
     root.classList.add('is-flipping');
     scrollingRef.current = true;
-    /* 飞行中把尾屏 iframe 压到 30fps（见 tailFlipping 的注释）。 */
+    /* 飞行中把尾屏 iframe 整个冻结（见 ContactStreet 的「翻页冻结档」注释）。
+       为什么是冻结而不是降频：demo 的单帧渲染耗时是固定的，间隔放宽到大于单帧
+       耗时也不会减少任何工作量；实测降频（33ms）在真机上无可感回报。 */
     setTailFlipping(true);
+    /* 同一窗口内把 SideRays 全屏柔光也降到 6.7fps（见 SideRays.jsx 的 flipping 注释）。
+       用一个独立时间戳，不用 __worksMorphUntil，后者会经 isLocked() 锁住翻页。
+       只置时间戳，不手动清零：过期即恢复，翻页被取消时最多多降频 250ms。 */
+    window.__raysFlipThrottleUntil = performance.now() + HOME_FLIP_MS + 250;
     const tick = (now) => {
       const p = Math.min(1, (now - start) / HOME_FLIP_MS);
       const ease = flipEase(p);
@@ -6289,7 +6295,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     if (flipRafRef.current) window.cancelAnimationFrame(flipRafRef.current);
     flipRafRef.current = 0;
     document.documentElement.classList.remove('is-flipping');
-    /* 同一处清翻页标记：转场中离开一级页 / 组件卸载时不能把 iframe 留在 30fps。 */
+    /* 同一处清翻页标记：转场中离开一级页 / 组件卸载时不能把尾屏留在冻结态。 */
     setTailFlipping(false);
   }, [paging]);
 
@@ -6563,13 +6569,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         <ContactStreet
           active={active && contactVisible}
           preload={active && contactPreload}
-          /* A1：翻页飞行中把尾屏压到 30fps（见 tailFlipping 的注释）。 */
+          /* 翻页飞行中把尾屏 iframe 整个冻结，落地恢复满帧。
+             见 ContactStreet 的「翻页冻结档」注释：降频（33ms）已证明无效，
+             因为 demo 单帧渲染耗时本身就大于该间隔。 */
           flipping={tailFlipping}
-          /* B1：用户已到作品屏或更后 ⇒ 尾屏已在一屏之内，把空转间隔从 2 分钟
-             收到 4s，让 WebGL 上下文与纹理保持热度（见 Street.jsx 的 PRIME_IDLE_MS）。
-             ⚠ 必须挂 paging 门控：进二级页时首页整叠被盖住、尾屏不在任何人的
-             视野里，那段停留不该继续咬主线程。 */
-          nearTail={paging && index >= 2}
           onTailReady={() => setTailReady(true)}
           onTailBurned={markTailBurned}
         />
