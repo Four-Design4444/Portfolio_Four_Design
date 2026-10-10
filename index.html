@@ -26,7 +26,7 @@
         display: grid;
         place-items: center;
         /* 底色与 demo 注入后的 main 背景同源（radial #161d1e → #111719）。iframe 还没
-           解析出 .rail 的那段等待期里（有时几十到几百 ms），遮罩不再是"一块纯黑"，
+           解析出 .copy 的那段等待期里（有时几十到几百 ms），遮罩不再是"一块纯黑"，
            而是与随后出现的 demo 同色同构 ⇒ 视觉无缝，不再被读成"先黑一下"。 */
         background: #111719;
         background: radial-gradient(ellipse at 50% 49%, #161d1e 0%, #111719 68%);
@@ -55,7 +55,7 @@
       .loader-static .loader { width: min(570px, 97vw); text-align: center; }
       .loader-static .scene { }
       .loader-static .art { display: block; width: calc(100% * .8); margin-inline: auto; height: auto; overflow: visible; }
-      .loader-static .copy { margin-top: 10px; }
+      .loader-static .copy { margin-top: -4px; }
       .loader-static .copy p { margin: 0; font: 11px/22px "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: 4px; color: #cbd4dc; }
       .loader-static .app-loader-progress {
         position: static;
@@ -63,9 +63,10 @@
         bottom: auto;
         transform: none;
         margin: 17px auto 0;
+        width: fit-content;
       }
-      /* 进度读数：宽度/字号/字距都抄 demo 的微观排版（rail 用 #8b9eaf、副文字
-         9px/1px 字距、#8291a0），所以它是"长在 demo 里"的，而不是外来控件。 */
+      /* 进度读数：宽度/字号/字距都抄 iframe 内统一排版（rail 用 #8b9eaf、副文字
+         10px/1px 字距、#8291a0），所以它是"长在 demo 里"的，而不是外来控件。 */
       .app-loader-progress {
         position: absolute;
         left: 50%;
@@ -79,8 +80,8 @@
       .app-loader-bar {
         position: relative;
         width: 140px;
-        height: 1px;
-        background: rgba(185, 203, 213, 0.14);
+        height: 2px;
+        background: rgba(185, 203, 213, 0.09);
         overflow: hidden;
       }
       .app-loader-bar > i {
@@ -93,8 +94,8 @@
         transition: width .28s ease;
       }
       .app-loader-num {
-        font: 9px/1 "Segoe UI", "Microsoft YaHei", sans-serif;
-        letter-spacing: 1.6px;
+        font: 10px/1 "Segoe UI", "Microsoft YaHei", sans-serif;
+        letter-spacing: 1px;
         color: #8291a0;
         font-variant-numeric: tabular-nums;
       }
@@ -108,7 +109,7 @@
     <link rel="preconnect" href="https://static.cloudflareinsights.com" crossorigin />
     <!-- 首屏 Loading 的 iframe 文档（/loading/loader.html，21.5KB 同域）在 head 阶段就
          preload。不加这一条时浏览器把 iframe 导航排在主 JS/CSS 之后（iframe 是低优先级
-         destination），无缓存实测要等 ~1.5s 才解析出 .rail，而这段等待里 iframe 恒
+         destination），无缓存实测要等 ~1.5s 才解析出 .copy，而这段等待里 iframe 恒
          opacity:0 ⇒ 遮罩只剩一块纯色，业主报的「进入 Loading 一瞬间短暂黑屏」就是它。
          preload 后该文档与首屏并行到达，注入落位的等待期压到网络往返量级。 -->
     <link rel="preload" as="document" href="/loading/loader.html?embed" />
@@ -368,23 +369,24 @@
         })();
         var fill = progress.fill;
         var num = progress.num;
-        // 进度条先挂到静态猫占位的 .copy 里（与 iframe 内 .rail 同位置），
-        // 空窗期就有进度；placeIntoDemo 会把它搬进 iframe 覆盖。
+        // 进度条先挂到静态猫占位的 .copy 里（与 iframe 内 .copy 同位置），
+        // 空窗期就有进度；placeIntoDemo 会把它搬进 iframe 的 .copy。
         staticCopy.appendChild(progress.root);
         el.appendChild(frame);
 
-        // demo 自带的 .rail 是一条 2.6s 无限往返的假动画条，跟真实加载量毫无关系。
-        // 这里整条摘掉，把真实进度条插到它原来的位置（动画正下方、居中）；排版
-        // 参数抄 demo（rail 底色 / 2px 高 / #8b9eaf / #8291a0 小字），看上去就是
-        // 长在里面的。进度条以运行时的同域替换实现，不改 demo 的原条子。
+        // 真实进度条最终要坐到 iframe 内 .copy 的末尾（标题文字下方、猫的正下方）。
+        // iframe 背景是实色径向渐变，进度条如果一直留在父页面的静态占位里，iframe
+        // 淡入后会被盖住；所以 iframe 就绪后把它挪进 .copy，位置与静态占位时完全一致。
+        // 排版参数统一定为 2px 高 / rgba(185,203,213,.09) 底色 / #8b9eaf 进度 /
+        // #8291a0 小字 10px/1px 字距，静态与 iframe 两端完全一致，避免切换跳变。
         var placed = false;
         var placeIntoDemo = function () {
           if (placed) return;
           var doc = null;
           try { doc = frame.contentDocument; } catch (_) { return; }
           if (!doc) return;
-          var rail = doc.querySelector('.rail');
-          if (!rail || !rail.parentNode) return;
+          var copy = doc.querySelector('.copy');
+          if (!copy || !copy.parentNode) return;
           var style = doc.createElement('style');
           // 2026-10-07: 加载页背景整体换成参考版 outputs/typing-cat-04-mini.html 的做法,
           // 两层:①底色 = 04 的 main 径向渐变(--bg #111719,中心是 3% --light 提亮出来的
@@ -462,10 +464,10 @@
             while (lightSvg.firstChild) frag.appendChild(lightSvg.firstChild);
             svg.insertBefore(frag, svg.firstChild);
           }
-          rail.parentNode.replaceChild(progress.root, rail);
+          copy.appendChild(progress.root);
           placed = true;
-          // 注入全部落位后才让 demo 可见：门控解除前用户看到的是纯色遮罩，
-          // 而不是未居中的猫 + 假进度条的注入前原貌（见 <style> 里的说明）。
+          // 注入全部落位后才让 iframe 可见：门控解除前用户看到的是静态猫占位，
+          // 而不是 iframe 注入前可能带有的旧样式/旧位置。
           frame.classList.add('is-in');
           window.clearTimeout(fallbackTimer);
         };
@@ -473,11 +475,11 @@
            新建 iframe 在 src 真正提交之前，contentDocument 已经是**一个
            readyState='complete' 的空白 about:blank 文档**（实测 kids=""、docBg 透明）。
            旧判据只认「complete 且没有 .rail」，于是 600ms 那道闸门把它当成
-           「文档加载完了、只是没有 rail」→ 直接 openWithOverlay()：纯色遮罩被开门，
+           「文档加载完了、只是没有 .copy」→ 直接 openWithOverlay()：纯色遮罩被开门，
            真实进度条被挂到**遮罩底部**（.app-loader-progress 的降级位 bottom:34px），
            等真文档到了再挪进 demo —— 业主看到的就是「黑屏一下 → 底部一条进度条 →
            又跳回猫下面」。修法：只有 iframe **真的导航过**（location 已不是 about:blank）
-           才允许走「complete 但没 rail」这条降级；没导航过就一律继续等。
+           才允许走「complete 但没 .copy」这条降级；没导航过就一律继续等。
            4s 那道「始终没导航」的兜底保证极端情况（iframe 被拦）也不会永远停在纯色遮罩上。 */
         var navigated = false;
         var markNavigated = function () {
@@ -494,31 +496,31 @@
         window.setTimeout(placeIntoDemo, 400);
         /* 降级（2026-10-10 重做，修「loading 瞬间闪出 demo 原貌」bug）：
            原版在固定 600ms 无条件开门（is-in）+ 退回遮罩底部进度条。慢网络下
-           600ms 时 demo 文档往往还在流式加载（readyState='loading'，.rail 未
+           600ms 时 demo 文档往往还在流式加载（readyState='loading'，.copy 未
            解析出来），而门已开 ⇒ 接下来 demo 文档一到，浏览器先画它的**注入前
            原貌**（旧蓝渐变 #151f2a + 未居中的猫 + 假进度条 .rail），直到 load
            事件里 placeIntoDemo 跑完才被替换 —— 业主看到的「loading 瞬间闪出
            以前的 demo 页面 + 进度条」就是这个窗口（手机实测，弱网更明显）。
            新逻辑分三档，失败方向永远是"多等"而不是"露原貌"：
-             ① 文档里有 .rail（demo 已解析完）→ 正常 placeIntoDemo；
-             ② 文档 readyState=complete 但没有 .rail（加载失败页/异常）→ 开门，
-                但同时强灌 #111719 深色底 + 藏 .rail，绝无原貌可露；
+             ① 文档里有 .copy（demo 已解析完）→ 正常 placeIntoDemo；
+             ② 文档 readyState=complete 但没有 .copy（加载失败页/异常）→ 开门，
+                但同时强灌 #111719 深色底，绝无原貌可露；
              ③ 文档还在加载（readyState='loading'）→ 继续每 150ms 重试，不开门。
-           最后再垫一层 8s 硬兜底：无论文档什么状态都强灌深色底 + 藏假条后开门，
+           最后再垫一层 8s 硬兜底：无论文档什么状态都强灌深色底后开门，
            保证极端情况下 loading 也不会永远停在纯色遮罩上。 */
-        var forceDarkNoRail = function () {
+        var forceDark = function () {
           try {
             var d = frame.contentDocument;
             if (d && d.head) {
               var s = d.createElement('style');
-              s.textContent = ':root,html,body{background:#111719!important}.rail{display:none!important}';
+              s.textContent = ':root,html,body{background:#111719!important}';
               d.head.appendChild(s);
             }
           } catch (_) { /* noop */ }
         };
         var openWithOverlay = function () {
           el.appendChild(progress.root);
-          forceDarkNoRail();
+          forceDark();
           frame.classList.add('is-in');
         };
         var gateStart = 0; // 首次进闸门时打点，用于「始终没导航」的 4s 兜底
@@ -528,8 +530,8 @@
           markNavigated();
           var doc = null;
           try { doc = frame.contentDocument; } catch (_) { doc = null; }
-          if (doc && doc.querySelector('.rail')) { placeIntoDemo(); return; }
-          // ★ 必须 navigated 才认「complete 但没 rail」；否则那是 iframe 的初始空白文档，
+          if (doc && doc.querySelector('.copy')) { placeIntoDemo(); return; }
+          // ★ 必须 navigated 才认「complete 但没 .copy」；否则那是 iframe 的初始空白文档，
           //   开门只会露出纯色遮罩 + 底部进度条（业主看到的「底部那个进度条」）。
           if (navigated && doc && doc.readyState === 'complete') { openWithOverlay(); return; }
           if (!navigated && performance.now() - gateStart > 4000) { openWithOverlay(); return; }
