@@ -1346,9 +1346,9 @@ function App() {
       setChromeHidden(false);
       setChromeIn(true);
       window.clearTimeout(chromeInTimerRef.current);
-      /* 入场最长的一条 = 标题(延迟 160ms + 320ms)= 480ms。演完就摘掉
-         is-chrome-in:留着它,下次去程挂 is-chrome-out 时两条规则会打架。 */
-      chromeInTimerRef.current = window.setTimeout(() => setChromeIn(false), 600);
+      /* 缩览图回程入场 = 延迟 180ms + 700ms，保留类名至动画完成。
+         再次进入二级页时 goWorks 会立即清理该类及计时器。 */
+      chromeInTimerRef.current = window.setTimeout(() => setChromeIn(false), 1000);
       window.location.hash = '';
       setRoute({ page: 'home', category: route.category, workId: '' });
       pendingHomeScrollRef.current =

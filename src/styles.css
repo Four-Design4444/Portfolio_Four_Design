@@ -2249,7 +2249,9 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
 
 html[data-device="mobile"] .motion-reveal-section.hm-played
   .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-thumbs {
-  transition-delay: calc(var(--hm-base) + 40ms);
+  /* 首次滑到作品屏时，缩览图等主卡与顶部信息稳定后再出现，
+     分屏模式下起跑点 = 520ms + 440ms = 960ms。 */
+  transition-delay: calc(var(--hm-base) + 440ms);
 }
 
 html[data-device="mobile"] .motion-reveal-section.hm-played

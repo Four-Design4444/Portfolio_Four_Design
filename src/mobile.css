@@ -1487,6 +1487,10 @@ html[data-device="mobile"] .mob-showcase.is-chrome-out .mob-thumbs {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes mob-thumb-image-in {
+  from { transform: translate3d(0, 18px, 0) scale(1.08); }
+  to { transform: none; }
+}
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter,
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots,
@@ -1497,8 +1501,22 @@ html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs {
 }
 /* 入场顺序 = 退场顺序的镜像:缩略图条 0ms → 圆点 80ms →
    计数器 120ms → 标题 160ms(「查看全部」已删)。与基础态的 transition-delay
-   同值,所以 animation 起跑与 transition 兜底两条路径读出来是同一节奏。 */
-html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs { animation-name: mob-chrome-in-thumbs; animation-delay: 0ms; }
+   同值,所以 animation 起跑与 transition 兜底两条路径读出来是同一节奏。
+   缩览图等二级背景开始退去后再淡入；图片轻升，滚动容器保持原位。 */
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumbs {
+  animation: mob-chrome-in-thumbs 700ms cubic-bezier(0.22, 1, 0.36, 1) 180ms backwards;
+}
+html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumb img {
+  animation: mob-thumb-image-in 700ms cubic-bezier(0.22, 1, 0.36, 1) 180ms backwards;
+}
+html[data-device="mobile"] .mob-showcase.is-chrome-in.is-chrome-out .mob-thumb img {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-thumb img {
+    animation: none;
+  }
+}
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-dots { animation-delay: 80ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-counter { animation-delay: 120ms; }
 html[data-device="mobile"] .mob-showcase.is-chrome-in .mob-heading { animation-delay: 160ms; }

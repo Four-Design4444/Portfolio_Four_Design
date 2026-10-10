@@ -609,6 +609,12 @@ html.street-enter-done .street-entry-group { animation: none; }
     animation: street-fade 300ms linear 820ms backwards;
   }
 }
+/* 移动端尾屏：取消文字与右下控件的共同入场，保持场景和其它动效不变。 */
+@media (max-width: 700px) {
+  html.street-enter:not(.street-enter-done) .street-entry-group {
+    animation: none !important;
+  }
+}
 `;
 
 // iframe 内部执行：劫持滚动 → 交还父页面；其余一概不碰。

@@ -5,6 +5,10 @@ node_modules/
 dist/
 dist-perf/
 dist-legacy/
+# vite.config.mjs 的 buildKeep 每次构建把旧产物改名留存，会攒出 dist.prev-*/
+dist.prev-*/
+# 临时验证构建目录（沙箱 safe-delete 常拦，改为忽略而非强删）
+.build-verify/
 
 # WorkBuddy internal / app files
 .workbuddy/
