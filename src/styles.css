@@ -1919,6 +1919,51 @@ h2 {
   font-weight: 700;
 }
 
+/* ★ 2026-10-10 业主（第 17 轮）：一级页除 hero 外**三屏统一**的【入场】动效。
+   效果 = 从下往上位移 + 淡入。本轮**只做入场，不做离场**。
+   ⚠ 每屏只播一次：`is-entered` 是 App 侧的一次性闩（屏号第一次成为当前屏时挂上，
+     之后永不移除）。所以「第 1 屏 → 第 2 屏」播一次；用户跑到第 4 屏再回到第 2 屏
+     时**不再重播** —— 这正是业主的意思。
+   ⚠ 与 is-visible 的分工：is-visible = 「这一屏是当前屏」，驱动屏**内**元素的
+     错峰揭示（每次到访都重播，保持原样不动）；is-entered = 「这一屏到过一次」，
+     只驱动屏**层**这条一次性入场。两者互不影响。
+   为什么挂在整屏 <section> 上：三屏的内容结构完全不同（PC 是 pf-*、移动端是
+   profile-* / mob-*），只有 section 这一层是三屏共有、且两平台同构的，
+   挂在它上面才谈得上「统一」。
+   ⚠ transform 不参与布局：分屏高度与 scroll-snap 吸附点都不动；
+     卡组几何（getBoundingClientRect）只在屏静止时被读，读数照旧。
+   ⚠ 三屏内没有任何 position:fixed 后代（导航 / 环境光 / 尾屏 iframe 全在
+     section 之外），所以这里新建立的包含块不会挪动任何浮层。
+   ⚠ 移动端的「作品展示」屏按业主要求排除在本轮之外（见 mobile.css）。 */
+.motion-reveal-section {
+  --screen-rise: 76px;
+  opacity: 0;
+  transform: translate3d(0, var(--screen-rise), 0);
+}
+
+.motion-reveal-section.is-entered {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  /* 90ms 起跑：翻页前 90ms 里内核几乎还没动，先让屏稳住再升起来，
+     观感上才是「到达这一屏 → 内容升上来」而不是「一按就整屏窜」。 */
+  transition:
+    opacity 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms,
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms;
+}
+
+/* 一级 ↔ 二级：不需要额外机制。
+   二级层本来就带 works-orbit-rise（from: translateY + opacity 0)，那就是同一套
+   入场；一级层的三屏入场由上面的 is-entered 兼任 —— 从二级回来时，若用户还没
+   到过那一屏，它自然会在第一次到达时升起来；到过的屏按业主的要求不重播。 */
+@media (prefers-reduced-motion: reduce) {
+  .motion-reveal-section,
+  .motion-reveal-section.is-entered {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 .motion-reveal-section .profile-bg,
 .motion-reveal-section .profile-label,
 .motion-reveal-section .profile-name-row,

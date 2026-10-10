@@ -1121,6 +1121,22 @@ html[data-device="mobile"] .contact-page {
   min-height: 100dvh;
 }
 
+/* ★ 2026-10-10 业主（第 17 轮）：移动端统一入场的位移收小一档
+   —— 屏幕窄，同样的 76px 看起来会过冲。 */
+html[data-device="mobile"] .motion-reveal-section {
+  --screen-rise: 56px;
+}
+
+/* ★ 业主：移动端「作品展示」屏**保持原样**，不参与本轮统一入场/离场
+   —— 该屏已单独优化过（标题隐藏、卡组用 mob-showcase 自己那套）。
+   这里把 section 这一层的中性化，屏内元素（卡组 / 其余元素）的动效一字不动。 */
+html[data-device="mobile"] .section.projects.motion-reveal-section,
+html[data-device="mobile"] .section.projects.motion-reveal-section.is-entered {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
 /* Standalone section title, set in the site's display face (Rany). */
 html[data-device="mobile"] .mob-heading {
   margin: 0;
