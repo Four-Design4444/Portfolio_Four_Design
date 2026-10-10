@@ -120,11 +120,11 @@ function SideRays({
       if (!containerRef.current) return;
 
       // 全平台限 30fps：背景光线是慢效果，30fps 视觉无差，却能砍掉约一半 GPU
-      // 预算；移动端 dpr 上限再从 2 降到 1.25（2026-10-13）：这是全屏片元着色，
-      // 像素量直接等于开销，而这道光是弥散的柔光 —— 1.25 与 1.5 肉眼分不出，
-      // 像素量再降约 30%。
+      // 预算；移动端 dpr 上限定为 1.2（2026-10-10）：这是全屏片元着色，像素量
+      // 直接等于开销，而这道光是弥散的柔光，1.2 与 1.25 肉眼分不出，
+      // 像素量再降约 8%。
       const isMobile = document.documentElement.dataset.device === 'mobile';
-      const maxDpr = isMobile ? 1.25 : 2;
+      const maxDpr = isMobile ? 1.2 : 2;
       const frameInterval = 33; // ms；30fps。iTime 用真实时间推进，动画速度不变
       /* 跨级转场（一级↔二级）期间的降频间隔（2026-10-13 业主诉求：把这 700~1000ms
          的 GPU/主线程预算让给卡面张开）。只降频、**不冻结** —— iTime 始终是真实
