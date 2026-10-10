@@ -600,13 +600,36 @@ const HOST_JS = `
     t = t < 0 ? 0 : t > 1 ? 1 : t;
     return t * t * t * (t * (t * 6 - 15) + 10);
   };
+  // 快路径缓存 + 计数（供 __streetZoomDebug 诊断）。
+  // 稳态下（转场已到终值）这个函数每帧都在重算同一个 fov，还每次都读
+  // window.innerWidth / 两个可手调全局量。缓存四个输入，全都逐位相同就直接返回。
+  // ⚠ 末项也校验 cam.fov：万一别处改过相机 fov，条件自然失效并照旧重写。
+  var zoomStats = { calls: 0, writes: 0, hits: 0 };
+  var zoomCacheValid = false, zoomCacheBlend = 0, zoomCacheKnob = 0, zoomCacheNarrow = false, zoomCacheFov = NaN;
+  /* 视口分档**不在帧里查**（2026-10-10 实测）：window.innerWidth 是原生 getter，
+     在尾屏这种"每帧都有样式改动、布局处于 dirty"的文档里，读一次就等于强制一次
+     同步 layout。剖析显示 applyOverviewZoom 自身耗时 45~61ms / 4s（约占主线程 1.4%），
+     而函数体里其余动作合起来每帧不到 0.5µs（微基准：innerWidth 之外的四项
+     各 0.2~2.1ms / 50000 次）—— 那 61ms 就是它。注意它在紧密循环里只有 ~0.4µs，
+     因为循环中布局是干净的：这正是"读一次 = 冲一次布局"的反证。
+     改为：只在 resize 与"模式切换那一帧"复核，稳态下用缓存值 ⇒ 帧里零视口查询。 */
+  var zoomNarrow = window.innerWidth <= 700;
+  var refreshZoomNarrow = function () { zoomNarrow = window.innerWidth <= 700; };
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', refreshZoomNarrow);
+  // 倍率旋钮（运行时可手写）：__streetMobileZoom ≤700px / __streetZoomPc 其余
+  var zoomKnob = function (narrow) {
+    return narrow
+      ? (typeof window.__streetMobileZoom === 'number' ? window.__streetMobileZoom : ZOOM_MOBILE)
+      : (typeof window.__streetZoomPc === 'number' ? window.__streetZoomPc : ZOOM_PC);
+  };
   var applyOverviewZoom = function (now) {
     var cam = carCamera;
     if (!cam) return;
-    var narrowViewport = window.innerWidth <= 700;
+    zoomStats.calls++;
     var mode = (window.__four && window.__four.mode) || 'overview';
     if (mode !== zoomLastMode) {
       zoomLastMode = mode;
+      refreshZoomNarrow();                  // 模式刚变（转场起点）：顺手复核一次分档
       zoomFrom = zoomBlend;
       zoomTo = mode === 'overview' ? 1 : 0;
       zoomT0 = now;
@@ -615,20 +638,35 @@ const HOST_JS = `
       var p = ZOOM_DUR > 0 ? Math.min(1, (now - zoomT0) / ZOOM_MS) : 1;
       zoomBlend = zoomFrom + (zoomTo - zoomFrom) * smoothstep(p);
     }
-    var knob = narrowViewport
-      ? (typeof window.__streetMobileZoom === 'number' ? window.__streetMobileZoom : ZOOM_MOBILE)
-      : (typeof window.__streetZoomPc === 'number' ? window.__streetZoomPc : ZOOM_PC);
-    var mag = 1 + (knob - 1) * zoomBlend;     // 实际放大倍率
-    if (mag <= 1.0005) {
-      if (cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); }
+    var narrowViewport = zoomNarrow;
+    var knob = zoomKnob(narrowViewport);
+    /* 快路径：转场量 / 倍率旋钮 / 视口分档 / 相机 fov 与上一帧完全一致
+       ⇒ 本帧结果不可能变，直接返回（省掉 tan/atan 与投影矩阵重建）。
+       ⚠ knob 必须参与比较：__streetMobileZoom / __streetZoomPc 是运行时可手写的，
+       只看 zoomBlend 会漏掉「原地改倍率」这一路。
+       比较用「上一帧实际用掉的 zoomBlend」而不是 zoomTo，避免浮点相等性假设。 */
+    if (zoomCacheValid && zoomBlend === zoomCacheBlend && knob === zoomCacheKnob
+      && narrowViewport === zoomCacheNarrow && cam.fov === zoomCacheFov) {
+      zoomStats.hits++;
       return;
     }
-    var half = BASE_FOV * Math.PI / 360;
-    var nextFov = 2 * Math.atan(Math.tan(half) / mag) * 180 / Math.PI;
-    if (cam.fov !== nextFov) {
-      cam.fov = nextFov;
-      cam.updateProjectionMatrix();
+    var mag = 1 + (knob - 1) * zoomBlend;     // 实际放大倍率
+    if (mag <= 1.0005) {
+      if (cam.fov !== BASE_FOV) { cam.fov = BASE_FOV; cam.updateProjectionMatrix(); zoomStats.writes++; }
+    } else {
+      var half = BASE_FOV * Math.PI / 360;
+      var nextFov = 2 * Math.atan(Math.tan(half) / mag) * 180 / Math.PI;
+      if (cam.fov !== nextFov) {
+        cam.fov = nextFov;
+        cam.updateProjectionMatrix();
+        zoomStats.writes++;
+      }
     }
+    zoomCacheValid = true;
+    zoomCacheBlend = zoomBlend;
+    zoomCacheKnob = knob;
+    zoomCacheNarrow = narrowViewport;
+    zoomCacheFov = cam.fov;
   };
   window.__streetZoomDebug = function () {
     return {
@@ -636,6 +674,11 @@ const HOST_JS = `
       fov: carCamera ? +carCamera.fov.toFixed(2) : null,
       mode: (window.__four && window.__four.mode) || null,
       wide: window.innerWidth > 700,
+      /* 诊断计数（单调递增）：calls=被调用次数、writes=写相机 fov 次数、
+         hits=命中快路径次数。稳态下 hits/calls 应趋近 1、writes 不再增长。 */
+      calls: zoomStats.calls,
+      writes: zoomStats.writes,
+      hits: zoomStats.hits,
       mag: +(1 / Math.tan(carCamera ? carCamera.fov * Math.PI / 360 : BASE_FOV * Math.PI / 360) * Math.tan(BASE_FOV * Math.PI / 360)).toFixed(3)
     };
   };
