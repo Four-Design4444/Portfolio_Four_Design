@@ -75,8 +75,29 @@ const IDLE_KEEPALIVE_MS = 1000;
    而 WebGL 上下文与已编译 shader 依旧被周期性触碰，不会凉。
    冷启动 + 烧录阶段仍然走 1s（那时候必须喂够帧，见上面 IDLE_KEEPALIVE_MS 注释）。 */
 const IDLE_BURNED_MS = 120000;
+/* 翻页飞行档（2026-10-10，业主反馈「滑进尾屏有卡顿感，PC 与移动端同样」）。
+   成因：一级页翻页动画由父页面**自己画**（main.jsx 的 goToPage，700ms、每帧
+   window.scrollTo），而尾屏是同源 iframe ⇒ 共享一条主线程。翻页一开始 active 就
+   翻真、尾屏当帧切满帧，于是「满帧 Three.js 渲染」与「自绘滚动」在同一条线程上
+   逐帧抢，父页面的每帧滚动被拖长 —— 这就是滑入尾屏那一段的卡顿。
+   做法：翻页飞行期间把 iframe 压到 30fps（33ms 间隔），落地立刻回满帧。
+   为什么不伤画面：受控档的时间戳恒取真实时钟（见下面 emit），33ms 落在 demo
+   自己的 50ms clamp 阈值内，所以场景时间按真实时间推进，降帧不降速（见文件上方
+   时间轴铁律）。快速滚动中 30fps 与 60fps 无可感差别；用户停在尾屏时仍是满帧。
+   ⚠ 作用域只有翻页那 700ms，且只写 iframe 内部这一个开关，父页面/其他页面的
+   动画一律不碰 —— 它腾出的正是别处要用的主线程。 */
+const FLIP_FRAME_MS = 33;
+/* 临近尾屏的预热档（B1，同日）。「已烧完」的长档是 120s 一帧（见 IDLE_BURNED_MS
+   的两条硬理由），代价是用户从作品屏滑进尾屏时，WebGL 上下文与纹理已经很久没被
+   触碰过 —— 满帧首帧的成本因此落在用户眼前。
+   所以进入「作品屏及之后」时把间隔收到 4s：上下文与已编译 shader 被周期性唤醒，
+   而主线程占用仍只有 1s 档的四分之一（1s 档的 85ms/秒曾被实测咬到 hero 视频）。
+   这是取舍不是等价替换：4s 仍会在每 4 秒咬一帧 85ms，只用于「用户已经在尾屏前
+   一屏」这段很短的窗口，用户在首屏与个人页时依旧走长档。
+   ⚠ 未烧完时不用这个值，那条路径必须走 IDLE_KEEPALIVE_MS（冷启动与烧录靠喂帧）。 */
+const PRIME_IDLE_MS = 4000;
 
-export default function ContactStreet({ active, preload, onTailReady, onTailBurned }) {
+export default function ContactStreet({ active, preload, flipping = false, nearTail = false, onTailReady, onTailBurned }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
   // WebGL 上下文创建与 shader 编译在翻页动画之前完成，避免"滑到尾屏一瞬间跳帧"。
   const [mounted, setMounted] = useState(false);
@@ -160,16 +181,24 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
       const burning = armed && !burnedRef.current;
       try {
-        win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
+        /* 满帧只在「用户真的在尾屏」且「没有正在翻页」时给。
+           翻页飞行档见 FLIP_FRAME_MS：700ms 内压到 30fps，落地立即回满帧。 */
+        win.__streetFrameMs = active
+          ? (flipping ? FLIP_FRAME_MS : 0)
+          : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
-        /* 空转间隔分两档：没烧完 = 1s（冷启动与烧录都靠喂帧推进，是功能性的），
-           烧完 = 2 分钟（纯粹保上下文，见 IDLE_BURNED_MS 的两条理由）。 */
-        win.__streetIdleMs = burnedRef.current ? IDLE_BURNED_MS : IDLE_KEEPALIVE_MS;
+        /* 空转间隔分三档：
+             没烧完      = 1s（冷启动与烧录都靠喂帧推进，是功能性的）；
+             烧完 + 临近 = 4s（预热档，只为让上下文别凉，见 PRIME_IDLE_MS）；
+             烧完 + 其余 = 2 分钟（纯粹保上下文，见 IDLE_BURNED_MS 的两条理由）。 */
+        win.__streetIdleMs = !burnedRef.current
+          ? IDLE_KEEPALIVE_MS
+          : (nearTail ? PRIME_IDLE_MS : IDLE_BURNED_MS);
       } catch (_) { /* 已销毁 / 跨域时静默 */ }
     };
     apply();
     return () => { stopped = true; if (timer) window.clearTimeout(timer); };
-  }, [mounted, active, armed, burned]);
+  }, [mounted, active, armed, burned, flipping, nearTail]);
 
 // ── 宿主侧叠加（全部在 demo 之外，绝不改动 V3.1.12 构建产物）──────────────────
 // ①隐藏 demo 顶部那一栏品牌 / 天气 / 时钟文字（.header）。

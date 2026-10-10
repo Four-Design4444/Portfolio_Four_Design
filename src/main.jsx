@@ -6150,6 +6150,15 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   const reducedRef = useRef(false);
   /* 自绘翻页动画的 rAF 句柄（0 = 没有飞行中的翻页）。见 goToPage 的注释。 */
   const flipRafRef = useRef(0);
+  /* 尾屏 iframe 的「翻页飞行中」标记（2026-10-10，A1）。
+     true ⇒ ContactStreet 把 iframe 压到 30fps（FLIP_FRAME_MS），落地立即回满帧。
+     为什么需要：翻页动画由本页自绘（每帧 window.scrollTo），而尾屏是同源 iframe、
+     与父页面共享主线程。翻页一开始 active 就翻真、尾屏当帧切满帧，两者逐帧抢主线程
+     ⇒ 滑入尾屏那 700ms 的卡顿感。降帧只在这 700ms 内生效，且不改变场景时间推进
+     （受控档恒报真实时钟，见 Street.jsx 的时间轴铁律），所以画面不会变慢或错位。
+     ⚠ 三条出口都必须清：动画最后一帧、instant 直跳、卸载/paging 关闭。残留会让
+     尾屏长期停在 30fps。 */
+  const [tailFlipping, setTailFlipping] = useState(false);
 
   indexRef.current = index;
 
@@ -6239,6 +6248,9 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     if (instant || reducedRef.current || Math.abs(dest() - window.scrollY) < 2) {
       root.classList.remove('is-flipping');
       scrollingRef.current = false;
+      /* 直跳路径没有飞行窗口，但可能紧接在上一段被取消的动画之后 —— 那条路径
+         已经把 tailFlipping 置真了，这里必须清掉，否则尾屏会长期停在 30fps。 */
+      setTailFlipping(false);
       window.scrollTo(0, dest());
       return;
     }
@@ -6247,6 +6259,8 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     let y = window.scrollY;
     root.classList.add('is-flipping');
     scrollingRef.current = true;
+    /* 飞行中把尾屏 iframe 压到 30fps（见 tailFlipping 的注释）。 */
+    setTailFlipping(true);
     const tick = (now) => {
       const p = Math.min(1, (now - start) / HOME_FLIP_MS);
       const ease = flipEase(p);
@@ -6263,6 +6277,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       flipRafRef.current = 0;
       root.classList.remove('is-flipping');
       scrollingRef.current = false;
+      setTailFlipping(false);
     };
     flipRafRef.current = window.requestAnimationFrame(tick);
   };
@@ -6274,6 +6289,8 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     if (flipRafRef.current) window.cancelAnimationFrame(flipRafRef.current);
     flipRafRef.current = 0;
     document.documentElement.classList.remove('is-flipping');
+    /* 同一处清翻页标记：转场中离开一级页 / 组件卸载时不能把 iframe 留在 30fps。 */
+    setTailFlipping(false);
   }, [paging]);
 
   const step = (direction) => {
@@ -6546,6 +6563,13 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         <ContactStreet
           active={active && contactVisible}
           preload={active && contactPreload}
+          /* A1：翻页飞行中把尾屏压到 30fps（见 tailFlipping 的注释）。 */
+          flipping={tailFlipping}
+          /* B1：用户已到作品屏或更后 ⇒ 尾屏已在一屏之内，把空转间隔从 2 分钟
+             收到 4s，让 WebGL 上下文与纹理保持热度（见 Street.jsx 的 PRIME_IDLE_MS）。
+             ⚠ 必须挂 paging 门控：进二级页时首页整叠被盖住、尾屏不在任何人的
+             视野里，那段停留不该继续咬主线程。 */
+          nearTail={paging && index >= 2}
           onTailReady={() => setTailReady(true)}
           onTailBurned={markTailBurned}
         />
