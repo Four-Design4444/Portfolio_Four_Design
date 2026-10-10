@@ -635,8 +635,8 @@
               if (entries.length || videoUses(href)) entry.started = true; // 请求发出过 / 播放器用到了
               if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
             } catch (_) { /* noop */ }
-            // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
-            return cap ? Math.min(cap, value) : value;
+            // cap：下载完 ≠ 能流畅播，视频类留最后一段；那段由「真能连续播」补，见 videoCapValue。
+            return cap ? videoCapValue(value) : value;
           }, gating);
           /* ★ 2026-10-13（线上实测踩到，必须记一笔）：__bootAssets 列的是**候选**资源，
              不是本次一定会请求的资源 —— 例如 hero-hevc.mp4 / hero-mask-hevc.mp4 只在
@@ -672,6 +672,20 @@
             pending: pending,
             detail: detail,
           };
+        };
+        /* ★ 2026-10-11：视频那 8% 以前是**死的** cap 0.92 —— 下载完就永远停在 92%，
+           于是两个 <video> × 两项(res+buffered) × weight 4 = 16 权重里永久缺 1.28，
+           读数天花板被钉在 ~97.7%，最后 2.3% 只能等 app:ready 一次性补满，
+           观感就是"卡在 96~97 干等"。
+           现在这 8% 由**真实的"能连续播"信号**补：React 侧那套严格判据（缓冲余量 /
+           追到片尾 / 填充速率）通过后置 window.__heroReady（main.jsx 的 HomePage），
+           这里读到它就给 1。视频没真能流畅播之前它仍然只有 0.92，
+           所以条子不会提前满 —— 补的是真信号，不是补满动画。
+           ⚠ 这两项仍保持 gating:false：heroVideoReady 由 React 自己的闸门判，
+           不在这里重复判（重复判会让 pending 里永久挂一项）。 */
+        var videoCapValue = function (value) {
+          if (window.__heroReady === true) return 1;
+          return Math.min(0.92, value);
         };
         var videoBuffered = function () {
           var list = document.querySelectorAll('video');
@@ -716,8 +730,8 @@
                 if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
               } catch (_) { /* noop */ }
               // 下载完只算到 92%：剩下的 8% 必须由「视频真的能连续播」来补
-              // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
-              return Math.min(0.92, Math.max(buffered, done));
+              // （window.__heroReady），否则条子会先跳到 100% 再干等，那就是假进度。
+              return videoCapValue(Math.max(buffered, done));
             }, false);
             markExpirable(bufferedEntry);
           }
@@ -739,8 +753,15 @@
           var done = 0;
           var total = 0;
           for (var i = 0; i < list.length; i++) {
+            /* ★ 2026-10-11：预载容器 #img-preload-store（fixed，left:-9999px）里的图
+               **不算视口内**。过去只判 bottom/top/width、**不判水平方向**，于是那 33 张
+               预载图既作为 img:<src> 任务计了一份，又在这里被**重复计一遍**，而且这一项
+               gating=true —— 最后一张慢图直接进 pending，把揭幕闸门拖住。
+               两道防线：显式跳过预载容器 + 补上水平方向判定（任何移出屏幕的容器都适用）。 */
+            if (list[i].closest && list[i].closest('#img-preload-store')) continue;
             var rect = list[i].getBoundingClientRect();
             if (rect.bottom < 0 || rect.top > window.innerHeight || !rect.width) continue;
+            if (rect.right < 0 || rect.left > window.innerWidth) continue;
             total++;
             if (list[i].complete) done++;
           }

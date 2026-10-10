@@ -6071,12 +6071,16 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // 预载全部挪到 loading 阶段：封面 + 尾屏 WebGL 都在首页可见前就绪，
   // 揭幕进入 hero 后不再有任何网络/编译负载 → 零卡顿（PC 与移动端一致）。
   //
-  // ⚠ 2026-10-13 冷缓存顺序（业主反馈「无缓存时进首页后视频还会卡一会」）：
-  //   过去这三批是 t=0 **同时**起跑的 —— hero 视频（1.66MB，靠连续 range 请求）
-  //   + 33 张封面（33 个并发请求把连接池占满）+ 尾屏 693KB。视频的 range 请求
-  //   排在 33 张图后面 → 闸门量到的"刚好 1.5s 缓冲"是硬挤出来的，揭幕瞬间
-  //   尾屏又开始编译抢主线程 → 视频就卡在开场那几秒。
-  //   现在串行化：**视频 > 封面（含显式 decode）> 尾屏**，都排在视频确认能连续播之后。
+  // ⚠ 2026-10-13 曾串行化（视频 > 封面 > 尾屏），起因是三批 t=0 同时起跑时
+  //   33 个并发请求把连接池占满，视频的 range 请求被排到队尾 → 首帧被拖慢，
+  //   揭幕瞬间尾屏又抢主线程编译 → 视频卡在开场那几秒。
+  // ★ 2026-10-11 改为 **P2 全并行 + 限并发 6 路**：
+  //   · 封面：并发窗口 6（见 runPool），带宽照样吃满但给视频 range 留位置；
+  //   · 尾屏冷启动/编译/烧录：挂载即起跑，与视频缓冲同时进行；
+  //   · 揭幕条件**完全不变**：视频不满足"能连续播"就不揭幕（见下面的 reveal）。
+  //   风险（业主已知，效果不好就退回 P1）：尾屏 WebGL 编译是整条链上最重的
+  //   主线程负载，与视频首帧解码重叠会把首帧推晚 —— 存在"抢了自己要等的那道
+  //   闸门"的反馈环，需实测确认净收益。
   // 进度条权重**先登记**（2026-10-13）：这些任务排在视频之后才启动，若等它们
   // 真开始才上报，条子会在视频下完后先冲到很高、等新任务进来再"停住"。
   // 这里在挂载当帧就把权重报一次 0 —— index.html 的任务表按 id 锁权重、
@@ -6103,16 +6107,19 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   }, [heroVideoReady]);
 
   const [warmStage, setWarmStage] = useState(0);
-  useEffect(() => {
-    if (heroVideoReady) { setWarmStage(1); return undefined; }
-    // 视频本身异常（自动播放被拒 / 解码失败）时不能把后面全卡死：2.5s 后无条件放行。
-    const t = window.setTimeout(() => setWarmStage(1), 2500);
-    return () => window.clearTimeout(t);
-  }, [heroVideoReady]);
+  /* ★ 2026-10-11 P2：挂载即起跑，不再等视频的任何信号（含 2.5s 兜底一并取消）。
+     ⚠⚠ 这里改的**只是"什么时候开始干"**，不是"什么时候揭幕" ——
+        下面 reveal 的四道闸门（heroVideoReady && coversPreloaded && tailReady
+        && tailBurned && bootTasksIdle）**一个字都没动**：视频没满足"能连续播"
+        （缓冲余量 / 追到片尾 / 填充速率）就绝不揭幕。
+        业主口径：所有内容都加载完、且视频能流畅播放，才结束 loading 让用户进 hero。
+     P2 与 P1 的区别：P1 把起跑门槛降到"首帧已上屏"，P2 直接挂载即起跑，
+     只靠**限并发 6 路**（见 runPool）给视频的 range 请求留带宽位置。 */
+  useEffect(() => { setWarmStage(1); }, []);
 
   const warmStartedRef = useRef(false);
   // 此 effect 在 HomePage 挂载时（即 loading 遮罩仍可见时）立即执行，
-  // 但真正开跑要等 warmStage —— 见上面的顺序说明。
+  // warmStage 在挂载当帧即为 1（P2），所以封面与尾屏从第一帧起就与视频并行。
   useEffect(() => {
     if (!warmStage || warmStartedRef.current) return undefined;
     warmStartedRef.current = true;
@@ -6196,14 +6203,29 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       img.src = src;
       try { store.appendChild(img); } catch (_) { /* noop */ }
     });
-    /* 并发跑，但**每完成一张就报一次**（进度条据此一张张爬）。
-       收尾判定用"全部 settle"而不是 Promise.all 的顺序 —— settle 不会被
-       单张的失败打断（onerror/超时都 resolve）。 */
-    const run = (list) => Promise.all(list.map((src) => preloadOne(src).then(() => {
-      done += 1;
-      announce(`img:${src}`, 1);
-      return null;
-    })));
+    /* ★ 2026-10-11 P2：并发跑，但**同时只有 6 张在飞**（每完成一张就补一张）。
+       为什么不是 33 条一起上（2026-10-13 实测踩过）：33 个并发请求会把连接池占满，
+       视频的 range 请求被排到队尾 → 视频首帧被自己人拖慢 → heroVideoReady 更晚 →
+       抢的正是自己要等的那道闸门。6 路在 HTTP/1.1 下已接近浏览器每域名上限，
+       带宽照样吃得满，同时给视频留出位置。
+       **每完成一张就报一次**（进度条据此一张张爬）；单张失败/超时照样 resolve，
+       所以收尾用"全部 settle"，不会被某一张打断。 */
+    const PRELOAD_CONCURRENCY = 6;
+    const run = async (list) => {
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < list.length) {
+          const src = list[cursor];
+          cursor += 1;
+          // eslint-disable-next-line no-await-in-loop
+          await preloadOne(src);
+          done += 1;
+          announce(`img:${src}`, 1);
+        }
+      };
+      const lanes = Math.max(1, Math.min(PRELOAD_CONCURRENCY, list.length));
+      await Promise.all(Array.from({ length: lanes }, () => worker()));
+    };
     /* 隐藏预载容器用完即撤：卡片们此时已经各自挂上 src（markImagePreloaded 的订阅
        在预载成功那一刻就把 src 派给了 DOM 里已存在的卡组/轨道），
        资源也已在内核缓存里，移除容器不再影响任何一张卡的显示，只把内存还回去。 */
@@ -6238,8 +6260,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     }
     // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
     // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
-    // ⚠ 它排在 hero 视频之后（本 effect 由 warmStage 驱动）—— 它的 WebGL 编译
-    //   是整条加载链上最重的一段主线程负载，绝不能与视频的首次缓冲同时发生。
+    // ⚠ 2026-10-11 P2：它现在与视频缓冲**同时**发生（warmStage 挂载即为 1）。
+    //   代价：WebGL 编译是整条链上最重的主线程负载，重叠会拖慢视频首帧。
+    //   兜底仍在：heroVideoReady 不满足就不揭幕，最坏情况只是 loading 变长，
+    //   不会让用户在视频卡顿的状态下进入 hero。
     setContactPreload(true);
     return () => { cancelled = true; };
   }, [warmStage]);
