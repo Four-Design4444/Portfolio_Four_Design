@@ -548,9 +548,15 @@ html.street-mail-failed #detail-content .mail-rescue a {
    由宿主在「这一屏第一次成为当前屏」（active 翻转）时给 demo 的 <html> 挂
    .street-enter（见 Street.jsx 里 keyed on active 的那个 effect）。
    demo 产物字节级不动，动画全在这里。
-   只动两个浮层**容器**：
+   只动三个浮层**容器**：
      · .intro        —— 左下文案块（eyebrow / h1 / 正文 / 落款）
      · .street-quick —— 右下快捷块（打个电话 / 发封邮件 / 提示行）
+     · .controls     —— 右下按钮行（雨 / 暂停 / 画质）。按钮行原本被漏掉了：
+       业主 2026-10-11 截图指出「这个元素是固定着的，没有跟随相邻元素入场」——
+       探针实测 .controls / #rain / #motion / #quality 在整段入场里 0 个变化帧，
+       而 .intro / .street-quick 都在动。
+     ⚠ .controls 的抬升走的是 `.hud { bottom: calc(35px + var(--sq-lift)) }`
+       （**布局值**，不是 transform），所以这里的 translateY 与它不冲突。
    为什么不逐个子元素做错峰：尾屏的排版校准（win.__streetAlignNow）会读
    .intro / .intro-foot / .sq-row / .sq-hint 的 getBoundingClientRect。给这些
    元素单独加位移，校准就会量到「动画中的几何」。整块容器一起平移是安全的：
@@ -583,10 +589,14 @@ html.street-enter .intro {
 html.street-enter .street-quick {
   animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
 }
+html.street-enter .controls {
+  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 1040ms backwards;
+}
 /* reduce 下保留淡入淡出，只去掉位移。 */
 @media (prefers-reduced-motion: reduce) {
   html.street-enter .intro,
-  html.street-enter .street-quick {
+  html.street-enter .street-quick,
+  html.street-enter .controls {
     animation: street-fade 300ms linear 820ms backwards;
   }
 }
