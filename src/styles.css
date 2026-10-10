@@ -1919,127 +1919,133 @@ h2 {
   font-weight: 700;
 }
 
-/* ★ 2026-10-10 业主（第 17 轮）：一级页除 hero 外**三屏统一**的【入场】动效。
-   效果 = 从下往上位移 + 淡入。本轮**只做入场，不做离场**。
-   ⚠ 每屏只播一次：`is-entered` 是 App 侧的一次性闩（屏号第一次成为当前屏时挂上，
-     之后永不移除）。所以「第 1 屏 → 第 2 屏」播一次；用户跑到第 4 屏再回到第 2 屏
-     时**不再重播** —— 这正是业主的意思。
-   ⚠ 与 is-visible 的分工：is-visible = 「这一屏是当前屏」，驱动屏**内**元素的
-     错峰揭示（每次到访都重播，保持原样不动）；is-entered = 「这一屏到过一次」，
-     只驱动屏**层**这条一次性入场。两者互不影响。
-   为什么挂在整屏 <section> 上：三屏的内容结构完全不同（PC 是 pf-*、移动端是
-   profile-* / mob-*），只有 section 这一层是三屏共有、且两平台同构的，
-   挂在它上面才谈得上「统一」。
-   ⚠ transform 不参与布局：分屏高度与 scroll-snap 吸附点都不动；
-     卡组几何（getBoundingClientRect）只在屏静止时被读，读数照旧。
-   ⚠ 三屏内没有任何 position:fixed 后代（导航 / 环境光 / 尾屏 iframe 全在
-     section 之外），所以这里新建立的包含块不会挪动任何浮层。
-   ⚠ 移动端的「作品展示」屏按业主要求排除在本轮之外（见 mobile.css）。 */
-.motion-reveal-section {
-  --screen-rise: 76px;
-  opacity: 0;
-  transform: translate3d(0, var(--screen-rise), 0);
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   [BEGIN] 一级页【文字】入场 / 离场动效（HOME MOTION · TEXT ONLY）
+   ───────────────────────────────────────────────────────────────────────────
+   让谁动：二屏（profile）的文字块、三屏（projects）的标题、尾屏（contact）不动。
+   谁不动（钉死在原位，本块一条规则都不给）：
+     · 二屏的人物形象照   pf-bg-img / mob-profile-bg
+     · 三屏的背景与卡组   .project-list（卡组自带 rail-slot 入场）
+     · 尾屏的 WebGL 场景  .street-contact-frame 整个 iframe
+     · hero 首屏          它有自己的单独设计
+   ⚠ 本块**不给 section 整层加任何位移或淡入淡出** —— 之前那一版给整屏加
+     76px 位移，底层（头像 / 背景 / 场景）跟着一起动，观感就是「整屏在窜」，
+     业主判定生硬。现在只让上面的文字动，底层全程静止。
 
-.motion-reveal-section.is-entered {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  /* 90ms 起跑：翻页前 90ms 里内核几乎还没动，先让屏稳住再升起来，
-     观感上才是「到达这一屏 → 内容升上来」而不是「一按就整屏窜」。 */
-  transition:
-    opacity 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms,
-    transform 620ms cubic-bezier(0.22, 1, 0.36, 1) 90ms;
-}
+   ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可。删掉后这些文字回到「没有入场
+     动画」的常态（内容始终可见），不会留下任何半透明或偏移的残留，也不需要
+     同步改 JS。
+   ★ 调参：--hm-text-rise（位移幅度）/ --hm-text-in（入场时长）/
+     --hm-text-out（离场时长）/ 各档的 animation-delay（错峰间隔）。
 
-/* 一级 ↔ 二级：不需要额外机制。
-   二级层本来就带 works-orbit-rise（from: translateY + opacity 0)，那就是同一套
-   入场；一级层的三屏入场由上面的 is-entered 兼任 —— 从二级回来时，若用户还没
-   到过那一屏，它自然会在第一次到达时升起来；到过的屏按业主的要求不重播。 */
-@media (prefers-reduced-motion: reduce) {
-  .motion-reveal-section,
-  .motion-reveal-section.is-entered {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
+   驱动 class（复用页面原有状态，未新增任何 JS）：
+     is-visible = 「这一屏是当前屏」（分屏模式 index 命中；非分屏模式由
+     IntersectionObserver 给）。挂上 → 文字入场；摘掉 → 文字离场。
+
+   为什么入场用 @keyframes 而不是「基础态 opacity:0 + transition」：
+     移动端个人信息区踩过这个坑 —— 基础态写 opacity:0 时，只要 is-visible 因
+     任何原因没到位（observer 未触发 / 跳转直接落在本页），整屏文字就是空白
+     且**不会自愈**。keyframes 只在 is-visible 存在时挂载，拿不到就干脆不动画，
+     内容永远可见（失败方向安全）。
+   ⚠ fill-mode 必须是 backwards，不能用 both：both 的 forwards 段在动画结束后
+     继续压住同元素的状态类（.mob-profile-stats.is-muted{opacity:.34} 会被盖住，
+     表现为经验卡永远不暗而技能条正常）。
+   ⚠ 离场用 transition 且**不带 delay**：animation 无法反向播放，transition 在
+     is-visible 摘掉时自动反向。屏内的 hover / dock 形变也走 transition，往这些
+     元素上挂 delay 会漏进交互动画（技能条 hover 收拢被拖慢）。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠ 位移量写死在 keyframes 里，**不要**改成 var(--xxx)：
+   @keyframes 中的自定义属性在动画创建那一刻解析，实测 Chromium 下取不到
+   元素上声明的值 → translate3d(0, <invalid>, 0) 整条 transform 失效，
+   只剩 opacity 在动（没有位移）。移动端要小一档就另起一条 keyframes。 */
+@keyframes hm-text-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
-.motion-reveal-section .profile-bg,
-.motion-reveal-section .profile-label,
-.motion-reveal-section .profile-name-row,
-.motion-reveal-section .profile-contact-line,
-.motion-reveal-section .profile-stats-row,
-.motion-reveal-section .profile-tools,
-.motion-reveal-section .profile-bottom-line {
-  opacity: 0;
-  transform: translate3d(0, 72px, 0);
+/* 移动端同款，位移收小一档（见 mobile.css 的 animation-name 覆盖）。 */
+@keyframes hm-text-rise-sm {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ---- 入场：四档错峰，PC 的 pf-* 与移动端的 mob-profile-* 同一套节奏 ---- */
+.motion-reveal-section.is-visible .pf-title,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title {
+  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 60ms backwards;
+}
+
+.motion-reveal-section.is-visible .pf-contact,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact {
+  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+}
+
+.motion-reveal-section.is-visible .pf-swap,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats {
+  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 220ms backwards;
+}
+
+.motion-reveal-section.is-visible .pf-skills-entrance,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
+  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 300ms backwards;
+}
+
+/* ---- 离场：只有 PC 的标题与联系方式会淡出 ----
+   .pf-title / .pf-contact 的基础态本来就是 opacity:0 + translateY(22px)，
+   给一条 transition 就能在 is-visible 摘掉时平滑回落（不带 delay）。
+   ⚠ .pf-swap / .pf-skills-entrance 的基础态是 opacity:1（2026-10-03 的既定
+     决策：离开这一屏时这两张卡**不消失**，否则下滑切页会看到它们凭空不见），
+     所以这里不把它们纳入离场。
+   ⚠ 移动端的 mob-profile-* 也不纳入：它们没有 opacity:0 基础态（见上面的
+     失败方向安全铁律），强行给基础态会让整屏文字有空白风险。 */
+.motion-reveal-section .pf-title,
+.motion-reveal-section .pf-contact {
+  --hm-text-out: 380ms;
   transition:
-    opacity 940ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 940ms cubic-bezier(0.22, 1, 0.36, 1),
-    clip-path 940ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--hm-text-out) var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1)),
+    transform var(--hm-text-out) var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
-.motion-reveal-section .profile-bg {
-  clip-path: inset(0 0 100% 0);
-}
+@media (prefers-reduced-motion: reduce) {
+  .motion-reveal-section.is-visible .pf-title,
+  .motion-reveal-section.is-visible .pf-contact,
+  .motion-reveal-section.is-visible .pf-swap,
+  .motion-reveal-section.is-visible .pf-skills-entrance,
+  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title,
+  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact,
+  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats,
+  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 
-.motion-reveal-section.is-visible .profile-bg,
-.motion-reveal-section.is-visible .profile-label,
-.motion-reveal-section.is-visible .profile-name-row,
-.motion-reveal-section.is-visible .profile-contact-line,
-.motion-reveal-section.is-visible .profile-stats-row,
-.motion-reveal-section.is-visible .profile-tools,
-.motion-reveal-section.is-visible .profile-bottom-line {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  clip-path: inset(0 0 0 0);
+  .motion-reveal-section .pf-title,
+  .motion-reveal-section .pf-contact {
+    transition: none !important;
+  }
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   [END] 一级页文字入场 / 离场动效（HOME MOTION · TEXT ONLY）— 整块删到这里
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-.profile-shot .profile-label {
-  transition-delay: 0ms;
-}
-
-.profile-shot .profile-name-row {
-  transition-delay: 90ms;
-}
-
-.profile-shot .profile-contact-line {
-  transition-delay: 160ms;
-}
-
-.profile-shot .profile-stats-row {
-  transition-delay: 230ms;
-}
-
-.profile-shot .profile-tools {
-  transition-delay: 300ms;
-}
-
-.profile-shot .profile-bottom-line {
-  transition-delay: 370ms;
-}
-
-.motion-reveal-section .profile-label,
-.motion-reveal-section .profile-name-row h2,
-.motion-reveal-section .profile-contact-line span,
-.motion-reveal-section .profile-stats-row div,
-.motion-reveal-section .profile-tools p,
-.motion-reveal-section .profile-tool-list span,
-.motion-reveal-section .projects-heading h2,
-.motion-reveal-section .projects-heading span {
-  opacity: 0;
-  transform: translate3d(0, 26px, 0);
-  transition:
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    clip-path 920ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.motion-reveal-section .profile-name-row .four-logo {
-  clip-path: inset(0 100% 0 0);
-  transform: translate3d(-18px, 0, 0) scaleX(0.92);
-  transform-origin: left center;
-}
+/* （已删除：旧版 .profile-* 入场死代码。DOM 中无 profile-label / profile-name-row /
+   profile-contact-line / profile-stats-row / profile-tools / profile-bottom-line /
+   profile-tool-list / profile-bg 这些类名，PC 实际用 pf-*、移动端用 mob-profile-*，
+   这一整批规则从未匹配到任何节点。） */
 
 /* ★ 2026-10-10 业主：作品展示屏标题下方的下降部（j / p / y 的尾巴）被切平了。
    原因：这一行 line-height 只有 0.86，字体上下各溢出盒约 12.8px（实测 h2 盒底
@@ -2052,14 +2058,6 @@ h2 {
   clip-path: inset(-0.2em 100% -0.2em 0);
   transform: translate3d(-18px, 0, 0) scaleX(0.92);
   transform-origin: left center;
-}
-
-.motion-reveal-section .profile-name-row .four-logo {
-  opacity: 0;
-  transition:
-    opacity 860ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 940ms cubic-bezier(0.22, 1, 0.36, 1),
-    clip-path 940ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .display-reveal-title,
@@ -2102,63 +2100,12 @@ h2 {
   clip-path: inset(0 0 0 0);
 }
 
-.motion-reveal-section.is-visible .profile-label,
-.motion-reveal-section.is-visible .profile-name-row h2,
-.motion-reveal-section.is-visible .profile-contact-line span,
-.motion-reveal-section.is-visible .profile-stats-row div,
-.motion-reveal-section.is-visible .profile-tools p,
-.motion-reveal-section.is-visible .profile-tool-list span,
-.motion-reveal-section.is-visible .projects-heading span,
-.motion-reveal-section.is-visible .profile-name-row .four-logo {
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scaleX(1);
-  clip-path: inset(0 0 0 0);
-}
-
 /* 标题单独一条：只有它的裁剪窗口要上下放开 0.2em。
    specificity (0,3,1) 高于初始态 (0,2,1)，才压得住。 */
 .motion-reveal-section.is-visible .projects-heading h2 {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
   clip-path: inset(-0.2em 0 -0.2em 0);
-}
-
-.profile-shot .profile-name-row .four-logo {
-  transition-delay: 70ms;
-}
-
-.profile-shot .profile-name-row h2,
-.projects .projects-heading span {
-  transition-delay: 120ms;
-}
-
-.profile-shot .profile-contact-line span:nth-child(1),
-.profile-shot .profile-stats-row div:nth-child(1) {
-  transition-delay: 210ms;
-}
-
-.profile-shot .profile-contact-line span:nth-child(2),
-.profile-shot .profile-stats-row div:nth-child(2),
-.profile-shot .profile-tool-list span:nth-child(1) {
-  transition-delay: 280ms;
-}
-
-.profile-shot .profile-contact-line span:nth-child(3),
-.profile-shot .profile-stats-row div:nth-child(3),
-.profile-shot .profile-tool-list span:nth-child(2) {
-  transition-delay: 350ms;
-}
-
-.profile-shot .profile-tool-list span:nth-child(3) {
-  transition-delay: 420ms;
-}
-
-.profile-shot .profile-tool-list span:nth-child(4) {
-  transition-delay: 490ms;
-}
-
-.profile-shot .profile-tool-list span:nth-child(5) {
-  transition-delay: 560ms;
 }
 
 .profile-shot {
@@ -2221,13 +2168,6 @@ h2 {
 .profile-shot.is-visible .profile-words-art {
   opacity: 1;
   filter: blur(0);
-}
-
-.profile-contact-line,
-.profile-stats-row,
-.profile-tools,
-.profile-bottom-line {
-  display: none;
 }
 
 .projects {
@@ -3826,21 +3766,11 @@ html[data-paging="on"] .contact-page {
   to { opacity: 1; transform: none; }
 }
 
-.profile-shot.is-visible .pf-title {
-  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 60ms backwards;
-}
-
-.profile-shot.is-visible .pf-contact {
-  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 150ms backwards;
-}
-
-.profile-shot.is-visible .pf-swap {
-  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 240ms backwards;
-}
-
-.profile-shot.is-visible .pf-skills-entrance {
-  animation: pf-profile-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 330ms backwards;
-}
+/* （这四条入场已移交 [HOME MOTION · TEXT ONLY] 块统一接管 —— 见本文件顶部
+   `[BEGIN] 一级页【文字】入场 / 离场动效`。参数保持一致（700ms /
+   60·140·220·300ms 错峰 / backwards），只是从 `.profile-shot.is-visible` 换成
+   `.motion-reveal-section.is-visible`，好让 PC 与移动端走同一套选择器。
+   原来的 @keyframes pf-profile-rise 保留在上方，删除新块后可原样恢复。） */
 
 /* 背景推近(PC 1.6s → 1.2s,与移动端入场一起加快) */
 @keyframes pf-profile-kenburns {

@@ -448,6 +448,11 @@ html[data-device="mobile"] .nav-works .morph-logo {
 html[data-device="mobile"] .works-nav-items {
   grid-column: 1 / -1;
   justify-self: center;
+  /* 2026-10-11(业主):几何居中但视觉偏左 —— 左侧 logo 轨道(~85px)比右侧
+     home 圆钮(~34px)宽,视觉重心落在中线右侧。用独立的 translate 属性整体
+     右移 10px:它不参与 transform 的过渡/状态(行淡出是 transform:translateY,
+     指示器、共享胶囊都量实时 rect,自动跟随),任何动效零影响。 */
+  translate: 10px 0;
   width: auto;
   pointer-events: none;
 }
@@ -1121,20 +1126,13 @@ html[data-device="mobile"] .contact-page {
   min-height: 100dvh;
 }
 
-/* ★ 2026-10-10 业主（第 17 轮）：移动端统一入场的位移收小一档
-   —— 屏幕窄，同样的 76px 看起来会过冲。 */
-html[data-device="mobile"] .motion-reveal-section {
-  --screen-rise: 56px;
-}
-
-/* ★ 业主：移动端「作品展示」屏**保持原样**，不参与本轮统一入场/离场
-   —— 该屏已单独优化过（标题隐藏、卡组用 mob-showcase 自己那套）。
-   这里把 section 这一层的中性化，屏内元素（卡组 / 其余元素）的动效一字不动。 */
-html[data-device="mobile"] .section.projects.motion-reveal-section,
-html[data-device="mobile"] .section.projects.motion-reveal-section.is-entered {
-  opacity: 1;
-  transform: none;
-  transition: none;
+/* ★ 移动端文字入场的位移收小一档 —— 屏幕窄，26px 在小屏上会显得过冲。
+   属于 styles.css 里的 [HOME MOTION · TEXT ONLY] 块，删块时这里一并删掉。 */
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats,
+html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
+  animation-name: hm-text-rise-sm;
 }
 
 /* Standalone section title, set in the site's display face (Rany). */
@@ -2446,21 +2444,10 @@ html[data-device="mobile"] .mob-profile-title-cn {
   to { opacity: 1; transform: none; }
 }
 
-html[data-device="mobile"] .profile-shot.is-visible .mob-profile-title {
-  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 60ms backwards;
-}
-
-html[data-device="mobile"] .profile-shot.is-visible .mob-profile-contact {
-  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 140ms backwards;
-}
-
-html[data-device="mobile"] .profile-shot.is-visible .mob-profile-stats {
-  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 210ms backwards;
-}
-
-html[data-device="mobile"] .profile-shot.is-visible .mob-profile-skills {
-  animation: mob-profile-rise 700ms cubic-bezier(0.34, 1.2, 0.44, 1) 280ms backwards;
-}
+/* （这四条入场已移交 styles.css 的 [HOME MOTION · TEXT ONLY] 块统一接管。
+   原参数 700ms cubic-bezier(.34,1.2,.44,1) / 60·140·210·280ms，新块统一成
+   cubic-bezier(.22,1,.36,1) / 60·140·220·300ms，好让 PC 与移动端同节奏。
+   上面的 @keyframes mob-profile-rise 保留，删除新块后可原样恢复。） */
 
 /* 背景照缓慢推近(2026-10-03 从 2s 收到 1.2s:整屏入场从 1.82s 压到 ~0.98s,
    用户反馈「移动端个人信息入场有点慢」)。keyframe 而非 transition,理由同上:

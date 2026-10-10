@@ -6283,20 +6283,10 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // reveal when their one-screen gesture arrives.
   const [hasEnteredPage, setHasEnteredPage] = useState(() => startIndexRef.current > 0);
 
-  /* ★ 2026-10-10 业主（第 17 轮）：三屏入场动效的**一次性闩**。
-     is-entered = 「这一屏到过一次」，只增不减；挂上时 CSS 播一次
-     「从下往上位移 + 淡入」，之后再回到这一屏**不重播**（业主明确要求：
-     到第 4 屏再回第 2 屏时不要重新入场）。
-     落地那一屏先视为已到过 —— 首帧/回程刷新时不该再演一遍入场
-     （那几帧正被加载遮罩或二级页收拢盖着，演了也是白演，还会和滚动恢复打架）。 */
-  const [enteredScreens, setEnteredScreens] = useState(
-    () => new Set([0, startIndexRef.current])
-  );
-
-  useEffect(() => {
-    setEnteredScreens((prev) => (prev.has(index) ? prev : new Set(prev).add(index)));
-  }, [index]);
-
+  /* 三屏的入场 / 离场由 CSS 的 [HOME MOTION] 块（styles.css）直接读 section 上的
+     `is-visible` 驱动，这里不再需要任何一次性闩。
+     （旧版的 `is-entered` 闩只增不减，做不出离场，已连同 CSS 一起移除。
+       要恢复「每屏只播一次」需要重新引入闩并改回 CSS 驱动条件。） */
   const indexRef = useRef(index);
   const lockedUntilRef = useRef(0);
   const scrollingRef = useRef(false);
@@ -6674,7 +6664,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     <>
       <HeroSection active={active} onVideoReady={markHeroVideoReady} />
 
-      <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}${enteredScreens.has(1) ? ' is-entered' : ''}`} id="profile">
+      <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
         {isMobile ? <ProfileContent /> : <ProfileContentPC />}
       </section>
 
@@ -6683,7 +6673,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
           restarting at the top of each screen, so turning a page never reveals a
           fresh bright corner sliding in. */}
       <div className="home-ground">
-      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}${enteredScreens.has(2) ? ' is-entered' : ''}`} id="projects">
+      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}`} id="projects">
         <div className="container">
           <div className="projects-heading">
             <h2 className="display-reveal-title rany-display-heading">Project Display</h2>
@@ -6698,7 +6688,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         </div>
       </section>
 
-      <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}${enteredScreens.has(3) ? ' is-entered' : ''}`} id="contact">
+      <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
         {/* preload：提前挂载 iframe，让 Three.js 的 WebGL 上下文创建、shader 编译、
             logo 纹理加载与【2.7 秒灯光渐入】全部在用户到达尾屏之前完成。
             为什么闸门只有 heroVideoReady 一道（2026-10-04 第二轮修复）：
