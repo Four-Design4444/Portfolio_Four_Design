@@ -753,22 +753,16 @@ body.nav-on-light .shared-active-pill-detail {
   will-change: left, top, width, height;
 }
 
-/* 2026-10-05: 飞行中的胶囊文字淡入 —— 160ms 延迟让胶囊先起飞,再 360ms 淡入,
-   520ms 落定、赶在 680ms 飞行结束之前。动画随胶囊挂载只播一次:works→detail
-   换 mode 类不换 animation-name(不会重启动画),返程与三级页下拉换分类复用
-   同一节点,文字保持可见、不闪不重播。源槽位文字在飞行期间由
-   has-shared-works-pill 的 color:transparent 关闭,与前 160ms 的空档互补。 */
+/* 2026-10-11 业主：进三级时胶囊文字「消失再重新出现」= bug。
+   根因：首页→二级时 sharedPill 被置 null（改用行内指示器），所以从二级点卡
+   进三级时这份浮层是**新挂载**的 —— 挂载即重播下面的淡入动画（前 160ms 隐形），
+   而源槽位文字 70ms 就淡出了，净观感就是文字消失 ~450ms 再淡回来。
+   （从三级返回二级后再进三级之所以正常，是因为浮层一直在场、没有重挂载。）
+   修法：文字不再有自己的入场动画 —— 浮层新挂载的场景只有两种：
+   ① works→detail 飞行起点，浮层正好叠在同款源胶囊上，文字本就该可见；
+   ② 深链直载，页面本身在加载，瞬时出现无碍。两种都不需要淡入。 */
 .shared-active-pill > span:first-child {
-  animation: sharedPillTextIn 360ms ease 160ms both;
-}
-
-@keyframes sharedPillTextIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  opacity: 1;
 }
 
 .shared-active-pill-detail {
@@ -1955,7 +1949,7 @@ h2 {
 
    ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可，外加四处配套：
        ① main.jsx 的 playedRef / enteringRef 与 hm-played / hm-entering 类名输出；
-       ② main.jsx 里 ShowcaseDeck 的 --enter-x / --hm-d 内联变量，以及
+       ② main.jsx 里 ShowcaseDeck 的 --enter-x 内联变量，以及
           MobileShowcaseDeck 的 deckEntering 入场斜坡（搜 HM_DECK_WINDOW_MS）；
        ③ mobile.css 里「移动端位移收小一档」那两条（搜 hm-text-rise-sm）；
        ④ styles.css 后面 `@media (prefers-reduced-motion: reduce)` 里那条
@@ -1964,7 +1958,7 @@ h2 {
      （--enter-x 默认 0%，transform 里那一项自动失效）。
 
    ★ 调参：--hm-in（时长）/ --hm-lift（文字位移幅度）/ --hm-base（起跑点）/
-     --hm-step（文字档位错峰）/ --hm-deck-step（卡组每往外一档的错峰）。
+     --hm-step（文字档位错峰）。
 
    ⚠ 四条铁律（都踩过坑）：
      ① keyframes 里不能用 var() 写位移量。Chromium 在动画创建那一刻取不到元素上
@@ -1986,12 +1980,21 @@ h2 {
   --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --hm-lift: 44px;        /* 位移幅度 ⚠ 与下面 keyframes 里写死的值保持一致 */
   --hm-step: 110ms;       /* 文字档位之间的错峰 */
-  --hm-deck-step: 72ms;   /* 三屏卡组：每往外一档多等的错峰 */
-  --hm-base: 320ms;       /* 第 1 档的起跑延迟（非分屏时用） */
+  --hm-base: 320ms;       /* 第 1 档（文字 / 卡组）的起跑延迟（非分屏时用） */
+  --hm-head: 100ms;       /* 三屏大英文标题的起跑点（业主要它比卡片更前） */
+  /* 业主 2026-10-11：「大英文标题入场时间拉长一点，慢一点入场」。
+     900 → 1400ms。这条动画只在一级翻页**首次到达**时播一次（hm-played 闩保证
+     二级返回不重播），所以用常量、不做 data-paging 变量切档 —— 声明任何形式的
+     「按分屏状态变形」都有在进出二级页时重建动画（= 重播）的理论风险，不值得。 */
+  --hm-head-in: 1400ms;
 }
 
 html[data-paging="on"] .motion-reveal-section {
-  --hm-base: 620ms;
+  /* 2026-10-11 业主：「大概用户滑到这屏 75% 左右就直接触发动效，不要等滑完整屏」。
+     is-visible 是 goToPage 的 setIndex 一开头就挂的（延迟从翻页起点计时），
+     翻页时长 HOME_FLIP_MS=700ms，75% ≈ 520ms。原 700ms 是「等滑完整屏」，已废。 */
+  --hm-base: 520ms;
+  --hm-head: 260ms;       /* 标题比卡组早 ~260ms 起跑，读作「标题先立住、卡片再散开」 */
 }
 
 @keyframes hm-text-rise {
@@ -2092,7 +2095,10 @@ html[data-paging="on"] .motion-reveal-section:not(.hm-played) .projects-heading 
   opacity: 1;
   transform: none;
   transition: none;
-  animation: hm-text-rise var(--hm-in) var(--hm-ease) var(--hm-base) backwards;
+  /* 2026-10-11 业主：大英文标题要比卡片更早入场 —— 用独立的 --hm-head 起跑点
+     （非分屏 100ms / 分屏 260ms），卡片仍走 --hm-base（320/520ms）。
+     时长走 --hm-head-in（非分屏 900ms / 分屏 1400ms，业主要首次到达时慢一点）。 */
+  animation: hm-text-rise var(--hm-head-in) var(--hm-ease) var(--hm-head) backwards;
 }
 
 /* h2 自身不再承担任何揭示（历史：clip-path 横向擦开 + scaleX）。 */
@@ -2114,7 +2120,9 @@ html[data-paging="on"] .motion-reveal-section:not(.hm-played) .projects-heading 
    ⚠ 收拢量 = main.jsx 逐张写进内联的 --enter-x，单位是**卡片自身宽度的百分比**：
      translateX 的百分比参照元素自身的 border box，而卡宽就是 --deck-w，所以只要把
      「卡组中线 − 卡中心（%宽）」按 卡宽/卡组宽 换算一次，就不需要量容器宽度。
-   ⚠ 逐张错峰按「离中线的档数」--hm-d（内联）：中间那张最先动、越往外越晚。
+   ⚠ 错峰：**已被去掉**（2026-10-11，见下面「入场窗口」那段注释）。原设计按「离中线的
+     档数」--hm-d 逐张错峰，但业主比对后认为二级返回那套（无错峰、一起散开）更好，
+     --hm-d 内联变量已从 main.jsx 一并删除。
    ⚠⚠ delay / 缓动**只在 hm-entering 窗口内**生效（窗口由 main.jsx 与 hm-played
      同一提交挂上、~2.4s 后摘掉）。hm-played 是只加不减的闩：把 delay 直接挂在它
      上面会永久残留，实测入场结束后卡片的 computed transition-delay 还是
@@ -2151,20 +2159,20 @@ html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase
   transition-delay: 0ms;
 }
 
-/* 入场窗口（~2.4s）：逐张错峰 + 更柔更长的曲线。倒影比它对应的卡晚 120ms，
-   读作「卡片先滑过去、倒影再压上来」。 */
-html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-card {
-  transition:
-    opacity 760ms var(--hm-ease),
-    transform 1080ms var(--hm-ease);
-  transition-delay: calc(var(--hm-base) + var(--hm-d, 0) * var(--hm-deck-step));
-}
-
+/* 入场窗口（~2.4s）。
+   ★ 2026-10-11 业主：「从二级页面返回时的卡片动效比一级下滑触发的好，以更好的那个
+     为标准。」两条路径用 probe-deck-two-paths.mjs 逐帧实测：
+       · 二级返回 —— 卡片**一直可见**（op1），从卡组中线出发，走 .showcase-deck-card /
+         .showcase-deck-reflection **自带的 transition**（opacity 820ms / transform
+         900ms + 倒影 900/900ms）一次性散开，无错峰、无额外延迟。干净利落。
+       · 一级下滑 —— 自带 transition 被这里覆写成 760/1080ms，外加逐张 72ms 错峰与
+         620ms 起跑（最外一档要等到 980ms 才动），落屏后还要再等 200ms 才起步。
+     现在把下滑对齐成返回那一套：**不再覆写 transition**（照用自带的那条），只补一个
+     「压过翻页飞行」的 delay；逐张错峰与倒影 +120ms 一并去掉。
+     唯一保留的差别是 opacity 从 0 起 —— 下滑是卡片首次出现，返回时卡片本来就可见。 */
+html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-card,
 html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-reflection {
-  transition:
-    opacity 900ms var(--hm-ease),
-    transform 1080ms var(--hm-ease);
-  transition-delay: calc(var(--hm-base) + 120ms + var(--hm-d, 0) * var(--hm-deck-step));
+  transition-delay: var(--hm-base);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -2259,7 +2267,7 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
   html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-stats,
   html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-skills,
   .motion-reveal-section.hm-played .projects-heading {
-    animation: hm-text-fade 300ms linear var(--hm-base, 0ms) backwards !important;
+    animation: hm-text-fade 300ms linear var(--hm-head, 0ms) backwards !important;
   }
 
   /* 基础态只留 opacity（位移归零），「到达过」的终态保持不变。 */
@@ -2292,7 +2300,7 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
     --enter-x: 0% !important;
     transition-duration: 300ms !important;
     transition-timing-function: linear !important;
-    transition-delay: calc(var(--hm-base, 0ms) + var(--hm-d, 0) * 24ms) !important;
+    transition-delay: var(--hm-base, 0ms) !important;
   }
 
   /* 移动端顶部三件套同理：只淡入。 */

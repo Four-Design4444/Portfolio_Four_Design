@@ -2624,9 +2624,36 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
   );
 }
 
-function ShowcaseDeck({ items, openWorks }) {
+function ShowcaseDeck({ items, openWorks, deckEntering = false }) {
   const [stageRef, visible] = useRevealOnView({ threshold: 0.16, rootMargin: '0px 0px -6% 0px' });
   const [hovered, setHovered] = useState(-1);
+
+  /* [HOME MOTION] 入场窗口内的指针屏蔽（业主 2026-10-11：「如果鼠标刚好悬停在
+     卡片的位置，还会有卡片被我命中……待入场效果执行完毕后再判断用户鼠标的位置」）。
+     · deckEntering 为真（hm-entering 窗口内）：pointerenter/focus 一律不置 hover，
+       并把已有 hover 清掉 —— 卡片正从中心飞向落位，此时命中是错的。
+     · 窗口关闭的瞬间：指针可能一动不动地悬在落位上（卡片滑到指针底下不会触发
+       新的 pointerenter），所以用最近一次记录的指针坐标 elementFromPoint 补判一次，
+       命中卡片就补上 hover。坐标始终在 window 上被动记录（passive、无重渲染）。 */
+  const pointerPosRef = useRef(null);
+  useEffect(() => {
+    const onMove = (e) => { pointerPosRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+  useEffect(() => {
+    if (deckEntering) { setHovered(-1); return; }
+    const pos = pointerPosRef.current;
+    if (!pos) return undefined;
+    const raf = window.requestAnimationFrame(() => {
+      const el = document.elementFromPoint(pos.x, pos.y);
+      const card = el && el.closest && el.closest('.showcase-deck-card');
+      if (!card) return;
+      const idx = Number(card.getAttribute('data-deck-index'));
+      if (!Number.isNaN(idx)) setHovered(idx);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [deckEntering]);
 
   // Hovering a card lifts it to the front and pushes the others sideways: the
   // cards to its left travel further left, the ones to its right travel further
@@ -2654,12 +2681,11 @@ function ShowcaseDeck({ items, openWorks }) {
      卡组中线在 50%（宽度的百分比），本卡中心 = deck.left + 卡宽/2；两者之差换成
      「卡片自身宽度的百分比」后写进 --enter-x 内联变量 —— translateX 的百分比参照
      元素自己的 border box，而卡宽就是 --deck-w = DECK_CARD_W%，所以不需要量容器。
-     --hm-d = 离中线的档数，用来逐张错峰（中间那张最先动、越往外越晚）。
-     值只在入场时被读到（到达后 CSS 用 !important 把它压成 0%），不影响 hover。 */
-  const centerIdx = (items.length - 1) / 2;
+     值只在入场时被读到（到达后 CSS 用 !important 把它压成 0%），不影响 hover。
+     ⚠ 2026-10-11：原来还写一个 --hm-d（离中线的档数）做逐张错峰，业主比对了
+     「二级返回」那套之后要的是**无错峰、一起散开**，CSS 已不再引用 --hm-d。 */
   const enterVars = (index, left) => ({
-    '--enter-x': `${(((50 - (left + DECK_CARD_W / 2)) / DECK_CARD_W) * 100).toFixed(3)}%`,
-    '--hm-d': Math.abs(index - centerIdx)
+    '--enter-x': `${(((50 - (left + DECK_CARD_W / 2)) / DECK_CARD_W) * 100).toFixed(3)}%`
   });
 
   return (
@@ -2708,8 +2734,9 @@ function ShowcaseDeck({ items, openWorks }) {
             key={project.id}
             className={`showcase-deck-card${active ? ' is-active' : ''}`}
             style={deckVars}
-            onPointerEnter={() => setHovered(index)}
-            onFocus={() => setHovered(index)}
+            data-deck-index={index}
+            onPointerEnter={() => { if (!deckEntering) setHovered(index); }}
+            onFocus={() => { if (!deckEntering) setHovered(index); }}
             onBlur={(event) => {
               // Only drop the card when focus truly leaves it, not on the
               // card -> button hand-off inside the same card.
@@ -3102,7 +3129,20 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
     }
     function tickCarousel() {
       // 首页不可见(在二级/三级页)时不推进:见 activeRef 注释。
-      if (activeRef.current && !stateRef.current.isDrag) goToRef.current(stateRef.current.active + 1);
+      // [HOME MOTION] 2026-10-11 业主：「下滑到这个页面的时候，主卡这个时候不应该
+      // 旋转（自动轮播）。待入场动效结束后再恢复轮播」—— 拦截三道闸，被拦的
+      // tick 照常重排 3.4s 之后的下一轮（轮播不会因此停摆）：
+      //   ① entPhaseRef 未到 'done'：首次到达作品屏的入场窗口（斜坡 scheduled/
+      //      running）——主卡必须钉在正中让副卡从背后展开；
+      //   ② html.is-flipping：goToPage 翻页飞行全程持有的类，再次下滑回来时
+      //      斜坡早已 done，靠这道闸拦住飞行途中的自动翻卡；
+      //   ③ activeRef：不在首页（二级/三级页）。
+      // 斜坡收尾（下方 phase 置 'done' 处）会主动重排一次冷却，轮播从入场结束
+      // 那一刻重新计时，而不是干等上一轮的残钟。
+      if (!activeRef.current || stateRef.current.isDrag) { scheduleCarousel(); return; }
+      if (entPhaseRef.current !== 'done') { scheduleCarousel(); return; }
+      if (document.documentElement.classList.contains('is-flipping')) { scheduleCarousel(); return; }
+      goToRef.current(stateRef.current.active + 1);
       scheduleCarousel();
     }
     scheduleCarouselRef.current = scheduleCarousel;
@@ -3151,6 +3191,8 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
       entDoneRef.current = true;
       entPhaseRef.current = 'done';
       renderRef.current();
+      // reduce 无入场可言，闸 ① 立即放行；重排一次冷却对齐正常路径。
+      if (scheduleCarouselRef.current) scheduleCarouselRef.current();
       return undefined;
     }
     entPhaseRef.current = 'scheduled';
@@ -3172,6 +3214,8 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
           entDoneRef.current = true;
           entPhaseRef.current = 'done';
           renderRef.current();
+          // 入场结束：轮播冷却从这里重新计时（tickCarousel 的闸 ① 在此放行）。
+          if (scheduleCarouselRef.current) scheduleCarouselRef.current();
         });
       };
       entRafRef.current = requestAnimationFrame(step);
@@ -5990,10 +6034,10 @@ const HOME_TOUCH_END_DELAY_MS = 120;
    现在自己画，用同一条曲线、同一个时长，观感不变（见 goToPage 的注释）。 */
 const HOME_FLIP_MS = 700;
 
-/* [HOME MOTION] 入场窗口 .hm-entering 的长度：起跑点(--hm-base=620ms) + 最长一档
-   的错峰(中间那张走到最外圈 = 5 档 × --hm-deck-step 72ms ≈ 360ms) + 动画时长
-   (1080ms) + 余量。窗口内 PC 卡组才带逐张错峰的 transition-delay；窗口一关就摘掉，
-   免得那条 delay 永久残留、把 hover 张开也拖住（实测 probe-deck-hover-delay.mjs）。
+/* [HOME MOTION] 入场窗口 .hm-entering 的长度：起跑点(--hm-base=700ms = HOME_FLIP_MS)
+   + 卡组过渡(900ms) + 余量。窗口内 PC 卡组才带那条「压过翻页飞行」的 transition-delay；
+   窗口一关就摘掉，免得那条 delay 永久残留、把 hover 张开也拖住
+   （实测 probe-deck-hover-delay.mjs）。
    移动端副卡展开斜坡（620 + 780ms）也在这个窗口里，取同一根时间线。 */
 const HM_DECK_WINDOW_MS = 2600;
 
@@ -6276,7 +6320,14 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
          参与计分也参与揭幕；
        · cross    = 另一套比例（换设备/跨断点才用到）→ **不进 loading**，揭幕后静默预热。 */
     const inventory = worksImageInventory(isMobile);
-    const all = [...inventory.covers, ...inventory.tiles];
+    /* ★ 2026-10-11 tile 优先：all 的顺序 = **下载起跑顺序**（并发窗口按序补位）。
+       33 张里最大的一批就是这 11 张 tile-001（72~167KB），covers 只有 10~123KB。
+       原来 tiles 排尾 → 最后开跑的恰好是最大的图，末尾长尾全压在它身上
+       （slow4g 实测最后 1s 在等一张 tile）。tile 放前排进第一波窗口，
+       最后开跑的变成 10~20KB 的小封面，长尾显著缩短。
+       注意只动这一处的拼接顺序，inventory 本身的结构（covers/cross/tiles）
+       与 cross 的揭幕后预热路径都不变。 */
+    const all = [...inventory.tiles, ...inventory.covers];
     const total = all.length;
     let done = 0;
     /* 每张图 = **一个独立的 loading 任务**（id 带文件名），不再是"整组一个 covers"。
@@ -6910,7 +6961,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
           {isMobile ? (
             <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} chromeIn={chromeIn} deckVeiled={deckVeiled} deckEntering={entering.has(2)} deckPlayed={played.has(2)} />
           ) : (
-            <ShowcaseDeck items={worksItems} openWorks={openWorks} />
+            <ShowcaseDeck items={worksItems} openWorks={openWorks} deckEntering={entering.has(2)} />
           )}
         </div>
       </section>

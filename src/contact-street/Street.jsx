@@ -137,18 +137,26 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (stopped) return;
       const win = readWin();
       const frames = (win && win.__streetBurnFrames) || 0;
-      // 进度条如实反映烧录推进：0.75 → 1.0（单调，不会像按 n 那样来回跳）。
-      try {
-        window.dispatchEvent(new CustomEvent('loading:progress', {
-          detail: { id: 'tail', weight: 50, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
-        }));
-      } catch (_) {}
       // 能读到 demo 的脉冲值就以它为准（已经最亮就直接放行，不必凑满帧数）。
       let n = -1;
       try {
         const st = win && win.__streetState;
         if (st && st.charging) n = Number(st.charging.phase);
       } catch (_) { n = -1; }
+      // 进度条如实反映烧录推进：0.75 → 1.0。
+      // ⚠ 2026-10-11 修复「卡在 99%」主因：分母必须与收工判据**同源**。原来写的是
+      //   frames/BURN_FRAMES，但收工判据在有脉冲读数时是 n≥BURN_LIT —— 实测本机
+      //   frames 到 60 时 n 才 0.64，进度条提前 ~600ms 报「完成」，条子停在 99/100%
+      //   干等烧录真烧完（GPU 越慢偏差越大）。改成 n/BURN_LIT：进度到 1 的瞬间 =
+      //   真正收工的瞬间；读不到 n 才退化用帧数（那时收工判据同样是帧数，自洽）。
+      const frac = n >= 0
+        ? Math.min(1, n / BURN_LIT)
+        : Math.min(1, frames / BURN_FRAMES);
+      try {
+        window.dispatchEvent(new CustomEvent('loading:progress', {
+          detail: { id: 'tail', weight: 50, progress: 0.75 + 0.25 * frac },
+        }));
+      } catch (_) {}
       const wall = performance.now() - startedAt;
       // 有脉冲读数 → 烧到真的亮（n≥0.95）为止；没有读数 → 退化为帧预算（正好到波峰）。
       const done = n >= 0
@@ -555,7 +563,7 @@ html.street-mail-failed #detail-content .mail-rescue a {
        业主 2026-10-11 截图指出「这个元素是固定着的，没有跟随相邻元素入场」——
        探针实测 .controls / #rain / #motion / #quality 在整段入场里 0 个变化帧，
        而 .intro / .street-quick 都在动。
-     ⚠ .controls 的抬升走的是 `.hud { bottom: calc(35px + var(--sq-lift)) }`
+     ⚠ .controls 的抬升走的是 .hud 的 bottom: calc(35px + var(--sq-lift))
        （**布局值**，不是 transform），所以这里的 translateY 与它不冲突。
    为什么不逐个子元素做错峰：尾屏的排版校准（win.__streetAlignNow）会读
    .intro / .intro-foot / .sq-row / .sq-hint 的 getBoundingClientRect。给这些
@@ -589,8 +597,11 @@ html.street-enter .intro {
 html.street-enter .street-quick {
   animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
 }
+/* 2026-10-11 业主：「点击/拖动 探索场景 和 quality 元素要视为同一个元素入场」。
+   .sq-hint 在 .street-quick 里（930ms 起跑），.controls 与它**同 delay 同时长**
+   —— 两块一起升，不再 1040ms 错开。 */
 html.street-enter .controls {
-  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 1040ms backwards;
+  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
 }
 /* reduce 下保留淡入淡出，只去掉位移。 */
 @media (prefers-reduced-motion: reduce) {
