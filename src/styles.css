@@ -5858,19 +5858,21 @@ html[data-paging="on"] .profile-shot.is-visible .pf-bg-img {
   animation: works-orbit-scene-out 360ms cubic-bezier(0.4, 0, 1, 1) 140ms forwards;
 }
 
-/* 主卡 + rail 标签 + 底部两行：入场最早 ⇒ 离场最晚（延迟 = 列表最后一个的延迟） */
+/* 主卡 + 底部两行：保留原有离场时序。 */
 .works-index-page--orbit.orbit-fall .works-orbit-focus,
-.works-index-page--orbit.orbit-fall .works-orbit-rail-label,
 .works-index-page--orbit.orbit-fall .works-orbit-stage-meta,
 .works-index-page--orbit.orbit-fall .works-orbit-footer {
   animation: works-orbit-rise 340ms cubic-bezier(0.55, 0, 0.85, 0.3)
     calc((var(--orbit-n, 4) - 1) * 40ms) reverse both;
 }
 
-/* 列表：反向错峰 —— 入场时最后一张先走 ⇒ 离场时最后一张先坠 */
-.works-index-page--orbit.orbit-fall .works-orbit-rail-slot {
-  animation: works-orbit-rise 340ms cubic-bezier(0.55, 0, 0.85, 0.3)
-    calc((var(--orbit-n, 4) - 1 - var(--i, 0)) * 40ms) reverse both;
+/* PC 列表离场：标题、卡片与倒影同帧隐藏，不播放下坠或淡出。 */
+html[data-device="desktop"] .works-index-page--orbit.orbit-fall .works-orbit-rail {
+  visibility: hidden;
+}
+html[data-device="desktop"] .works-index-page--orbit.orbit-fall .works-orbit-rail-label,
+html[data-device="desktop"] .works-index-page--orbit.orbit-fall .works-orbit-rail-slot {
+  animation: none;
 }
 
 /* 离场期间把共用环境光抬到二级层之上：保住「光打在二级页上」的原始层序
