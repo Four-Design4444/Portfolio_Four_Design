@@ -2357,7 +2357,22 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
       });
     };
     const onResize = () => { measureBoxes(); moveTo(targetIndexRef.current, true); };
-    const onScrollEnd = () => { lockIndexRef.current = -1; moveTo(itemIndexFromScroll(), false); };
+    /* ★ 2026-10-10 业主：PC 右上角导航横线切换时有停顿感。
+       根因（逐帧探针 .workbuddy/tools/probe-nav-underline-frames.mjs）：
+       首页翻页是**自己画的逐帧 `window.scrollTo(0, y)`**（见 goToPage 注释），
+       而内核把每一次滚动都当成一次独立的滚动序列，于是飞行途中 scrollend 被
+       反复触发（实测点一次 About 触发 47 次、点 Contact 触发 8 次）。每一次都跑
+       到这里：① 把点击锁清成 -1，② 按**当前还没跨过的那一屏**校正下划线。
+       结果点击 Contact 时 y 还在第一屏 ⇒ 刚起步的线被拽回 Home，来回拉锯，
+       最后落在 Portfolio 上而不是 Contact，观感就是「滑一下、停一下、跳一下」。
+       ⇒ 翻页飞行中（html.is-flipping 由 goToPage 全程持有）收到的 scrollend
+       一律当作内核误报，直接忽略。飞行结束那一帧才摘掉这个 class，之后的
+       scrollend 才是真滚动结束，照常校正。 */
+    const onScrollEnd = () => {
+      if (document.documentElement.classList.contains('is-flipping')) return;
+      lockIndexRef.current = -1;
+      moveTo(itemIndexFromScroll(), false);
+    };
     window.addEventListener('resize', onResize);
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('scrollend', onScrollEnd);
