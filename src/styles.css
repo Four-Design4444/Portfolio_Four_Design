@@ -1920,225 +1920,167 @@ h2 {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   [BEGIN] 一级页【文字】入场 / 离场动效（HOME MOTION · TEXT ONLY）
+/* ═══════════════════════════════════════════════════════════════════════════
+   [BEGIN] 一级页【屏内元素】入场动效（HOME MOTION · ONE-SHOT）
    ───────────────────────────────────────────────────────────────────────────
-   让谁动：二屏（profile）的文字块、三屏（projects）的标题、尾屏（contact）不动。
-   谁不动（钉死在原位，本块一条规则都不给）：
-     · 二屏的人物形象照   pf-bg-img / mob-profile-bg
-     · 三屏的背景与卡组   .project-list（卡组自带 rail-slot 入场）
-     · 尾屏的 WebGL 场景  .street-contact-frame 整个 iframe
-     · hero 首屏          它有自己的单独设计
-   ⚠ 本块**不给 section 整层加任何位移或淡入淡出** —— 之前那一版给整屏加
-     76px 位移，底层（头像 / 背景 / 场景）跟着一起动，观感就是「整屏在窜」，
-     业主判定生硬。现在只让上面的文字动，底层全程静止。
+   只在一级页生效；只让「内容」动，底层钉死。
 
-   ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可。删掉后这些文字回到「没有入场
-     动画」的常态（内容始终可见），不会留下任何半透明或偏移的残留，也不需要
-     同步改 JS。
-   ★ 调参：--hm-text-rise（位移幅度）/ --hm-text-in（入场时长）/
-     --hm-text-out（离场时长）/ 各档的 animation-delay（错峰间隔）。
+   【动的】
+     · 二屏 profile   PC   .pf-title / .pf-contact / .pf-swap / .pf-skills-entrance
+                      移动  .mob-profile-title / -contact / -stats / -skills
+     · 三屏 projects  标题  .projects-heading（PC 与移动端同构）
+                      PC 卡组 .showcase-deck 的每一张卡 —— 逐张错峰
+                      移动卡台 .mob-stage，以及顶部三件套
+                      .mob-heading / .mob-counter / .mob-dots / .mob-thumbs
+     · 尾屏 contact   iframe 内的浮层文字（.intro / .street-quick）。
+                      宿主侧：Street.jsx 在「一级页第一次翻到尾屏」时给 demo 的
+                      <html> 挂 .street-enter；动画定义在 Street.jsx 的 HOST_CSS 里
+                      （demo 产物字节级不动，只走宿主叠加层）。本文件不参与。
+   【不动的】hero 首屏（单独设计）、pf-bg-img / mob-profile-bg（人物形象照）、
+             三屏地面与背景、尾屏 WebGL 场景本身。
 
-   驱动 class（复用页面原有状态，未新增任何 JS）：
-     is-visible = 「这一屏是当前屏」（分屏模式 index 命中；非分屏模式由
-     IntersectionObserver 给）。挂上 → 文字入场；摘掉 → 文字离场。
+   ★ 播放规则（业主 2026-10-11）：「动效只在首次出现，不要重复出现。」
+     驱动 = .hm-played，一个**只加不减**的闩（main.jsx 的 playedRef，屏号第一次
+     成为当前屏时挂上，之后永不摘除）：
+       · 闩挂上之前   → 元素停在「下方 + 透明」的初始态
+       · 闩挂上那一刻 → 跑一次入场（delay 压在翻页飞行之后）
+       · 之后         → 动画规则一直挂着，浏览器不会重播；本块**不写离场回落**，
+                        元素恒定停在终态（离开这一屏时整屏滑走，不需要逐元素淡出）。
+     所以「从二级页回来」「翻走再翻回来」都不会重演。
 
-   为什么入场用 @keyframes 而不是「基础态 opacity:0 + transition」：
-     移动端个人信息区踩过这个坑 —— 基础态写 opacity:0 时，只要 is-visible 因
-     任何原因没到位（observer 未触发 / 跳转直接落在本页），整屏文字就是空白
-     且**不会自愈**。keyframes 只在 is-visible 存在时挂载，拿不到就干脆不动画，
-     内容永远可见（失败方向安全）。
-   ⚠ fill-mode 必须是 backwards，不能用 both：both 的 forwards 段在动画结束后
-     继续压住同元素的状态类（.mob-profile-stats.is-muted{opacity:.34} 会被盖住，
-     表现为经验卡永远不暗而技能条正常）。
-   ⚠ 离场用 transition 且**不带 delay**：animation 无法反向播放，transition 在
-     is-visible 摘掉时自动反向。屏内的 hover / dock 形变也走 transition，往这些
-     元素上挂 delay 会漏进交互动画（技能条 hover 收拢被拖慢）。
+   ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可，外加三处配套：
+       ① main.jsx 的 playedRef 与三处 `hm-played` 类名输出；
+       ② mobile.css 里「移动端位移收小一档」那两条（搜 hm-text-rise-sm）；
+       ③ styles.css 后面 `@media (prefers-reduced-motion: reduce)` 里那条
+          `.motion-reveal-section *` 的排除名单（把这几个元素从 :not() 里去掉，
+          或整条还原成 `*`）。
+     删掉后元素回到「没有入场动画」的常态，不会留下半透明或偏移残留。
+
+   ★ 调参：--hm-in（时长）/ --hm-lift（位移幅度）/ --hm-base（起跑点）/
+     --hm-step（文字档位错峰）/ --hm-deck-step（卡组逐张错峰）。
+
+   ⚠ 三条铁律（都踩过坑）：
+     ① keyframes 里不能用 var() 写位移量。Chromium 在动画创建那一刻取不到元素上
+        声明的自定义属性 ⇒ translate3d(0, <invalid>, 0) 整条失效，只剩 opacity 在动。
+        位移量写死；要分档就另起一条 keyframes（本项目有 hm-text-rise / -sm 两条）。
+     ② fill-mode 用 backwards，不用 both。both 的 forwards 段会在动画结束后继续
+        压住同元素的状态类（.mob-profile-stats.is-muted{opacity:.34} 会被盖住）。
+     ③ 起跑点必须压过翻页飞行（HOME_FLIP_MS = 700ms）。hm-played 是 goToPage
+        **一开头**挂的；delay 一写小，整段入场就在「屏还在飞」的时候播完，
+        落到屏上只剩静止画面 —— 业主实测读作「完全没有动效」。
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ---- 参数（只改这里就能调力度 / 节奏） ---- */
 .motion-reveal-section {
-  --hm-in: 900ms;        /* 入场时长 */
-  --hm-out: 380ms;       /* 离场时长（比入场快一档，旧屏迅速让位） */
+  --hm-in: 900ms;         /* 入场时长 */
   --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --hm-lift: 44px;       /* 位移幅度 ⚠ 与下面两条 keyframes 里写死的值保持一致 */
-  --hm-step: 90ms;       /* 相邻档位的错峰间隔 */
-  --hm-base: 300ms;      /* 第 1 档的起跑延迟 */
+  --hm-lift: 44px;        /* 位移幅度 ⚠ 与下面 keyframes 里写死的值保持一致 */
+  --hm-step: 110ms;       /* 文字档位之间的错峰 */
+  --hm-deck-step: 42ms;   /* 三屏卡组每张卡的错峰 */
+  --hm-base: 320ms;       /* 第 1 档的起跑延迟（非分屏时用） */
 }
 
-/* ⚠⚠ 起跑点必须压在**翻页飞行尾段之后**（HOME_FLIP_MS = 700ms）。
-   这一版之前把 delay 写成 60/140/220/300ms，从 is-visible 挂上的那一刻起算，
-   而 is-visible 是 goToPage 一开头就挂的 ⇒ 整段入场都在「视口还在飞」的时候
-   播完了。落到屏上只剩静止画面，业主实测「只有标题在动」—— 标题是唯一还在动的
-   那个，因为它旧的那条 transition 是 900ms + 120ms delay，比动画长。 */
 html[data-paging="on"] .motion-reveal-section {
-  --hm-base: 560ms;
+  --hm-base: 620ms;
 }
 
-/* ⚠ 位移量写死在 keyframes 里，**不要**改成 var(--xxx)：
-   @keyframes 中的自定义属性在动画创建那一刻解析，实测 Chromium 下取不到
-   元素上声明的值 → translate3d(0, <invalid>, 0) 整条 transform 失效，
-   只剩 opacity 在动（没有位移）。移动端要小一档就另起一条 keyframes。 */
 @keyframes hm-text-rise {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 44px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+  from { opacity: 0; transform: translate3d(0, 44px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-/* 移动端同款，位移收小一档（见 mobile.css 的 animation-name 覆盖）。 */
+/* 移动端同款，位移收小一档（mobile.css 里把 animation-name 换成这一条）。 */
 @keyframes hm-text-rise-sm {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 26px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+  from { opacity: 0; transform: translate3d(0, 26px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-/* ---- 入场：四档错峰，PC 的 pf-* 与移动端的 mob-profile-* 同一套节奏 ----
-   delay 用 calc(base + step × 档位) 算，动画结束后（backwards，不带 forwards）
-   样式交回普通声明 —— is-visible 在的时候下面「离场」一节已经把终态写好了。 */
-.motion-reveal-section.is-visible .pf-title,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title {
-  --hm-i: 0;
-  animation: hm-text-rise var(--hm-in) var(--hm-ease)
-    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
-}
+/* ─────────────────────────────────────────────────────────────────────────
+   ① 二屏（profile）文字：四档错峰
+   ───────────────────────────────────────────────────────────────────────── */
 
-.motion-reveal-section.is-visible .pf-contact,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact {
-  --hm-i: 1;
-  animation: hm-text-rise var(--hm-in) var(--hm-ease)
-    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
-}
-
-.motion-reveal-section.is-visible .pf-swap,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats {
-  --hm-i: 2;
-  animation: hm-text-rise var(--hm-in) var(--hm-ease)
-    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
-}
-
-.motion-reveal-section.is-visible .pf-skills-entrance,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
-  --hm-i: 3;
-  animation: hm-text-rise var(--hm-in) var(--hm-ease)
-    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
-}
-
-/* ---- 离场：四档**全部**纳入（业主：入场 / 离场要成对） ----
-   做法 = 「基础态就是离场态」：opacity 0 + 位移，摘掉 is-visible 时用一条
-   不带 delay 的 transition 平滑回落。
-   ⚠ 基础态只在 `html[data-paging="on"]` 下给。分屏模式下 is-visible = (index 命中)
-     是确定性的，不存在「observer 没触发 → 文字永久空白」的失败方向；非分屏
-     （data-paging:off）时这里一条都不生效，文字常驻可见（失败安全）。
-   ⚠ transition **绝不带 delay**：.pf-skills-entrance 上的任何 transition-delay
-     都会漏进 hover 收拢动画（技能条会先等 420ms 才上移，见下方注释）。
-   ⚠ 这里的 specificity 必须高过文件后段那两套旧规则
-     （`.pf-title{opacity:0;translateY(22px)}` 与
-      `.profile-shot.is-visible .pf-title{opacity:1;transform:none;transition-delay:120ms}`）
-     —— `html[data-paging]` 那一段就是为了这个，删掉它会立刻退回旧行为。 */
-html[data-paging="on"] .motion-reveal-section .pf-title,
-html[data-paging="on"] .motion-reveal-section .pf-contact,
-html[data-paging="on"] .motion-reveal-section .pf-swap,
-html[data-paging="on"] .motion-reveal-section .pf-skills-entrance {
+/* 未到达：先藏起来 + 下移。
+   ⚠ 基础态只在分屏模式（data-paging=on）下给 —— 分屏里「这一屏是不是当前屏」
+     是 index 决定的、确定性的，不存在「observer 没触发 ⇒ 文字永久空白」的
+     失败方向。非分屏时这里一条都不生效，文字常驻可见（失败方向安全）。 */
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-title,
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-contact,
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-swap,
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-skills-entrance {
   opacity: 0;
   transform: translate3d(0, var(--hm-lift), 0);
-  transition:
-    opacity var(--hm-out) var(--hm-ease),
-    transform var(--hm-out) var(--hm-ease);
+  transition: none;
 }
 
-/* 入场态（终态）：起身交给上面的 animation，这里只落到终值并交出 transition
-   控制权 —— 同时驱动同一属性会「先跳一下再补」，看起来像动效出错。 */
-html[data-paging="on"] .motion-reveal-section.is-visible .pf-title,
-html[data-paging="on"] .motion-reveal-section.is-visible .pf-contact,
-html[data-paging="on"] .motion-reveal-section.is-visible .pf-swap,
-html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
+/* 到达过：恒定终态。
+   ⚠ specificity 必须压过本文件后段那两套旧规则
+     （`.pf-title{opacity:0;translateY(22px)}` 与
+      `.profile-shot.is-visible .pf-title{opacity:1;transform:none;transition-delay:120ms}`
+      + `@starting-style`），否则每次翻回这一屏都会按 is-visible 重播一次入场/离场 ——
+      业主本轮否掉的正是这个「重复出现」。
+   ⚠ `.pf-contact` 要排除 `.is-hidden`：那是 JS 的功能态（临时收起联系方式），
+     不能被这里的恒定 opacity:1 压掉。
+   ⚠ `transition: none`：这些元素的位移/淡入全部交给 animation，同属性再挂一条
+     transition 会「先跳一下再补」（旧版就是这么坏的）。 */
+html[data-paging="on"] .motion-reveal-section.hm-played .pf-title,
+html[data-paging="on"] .motion-reveal-section.hm-played .pf-contact:not(.is-hidden),
+html[data-paging="on"] .motion-reveal-section.hm-played .pf-swap,
+html[data-paging="on"] .motion-reveal-section.hm-played .pf-skills-entrance {
   opacity: 1;
   transform: none;
   transition: none;
 }
 
-/* ⚠ 移动端的 mob-profile-* 故意**不进上面这份基础态名单**：
-   移动端个人信息区（mobile.css 2026-09-19 起）历来不给 opacity:0 基础态，
-   理由是失败方向 —— 只要 is-visible 因任何原因没到位就是整屏空白且不自愈。
-   移动端继续沿用「keyframes 只在 is-visible 时挂载，拿不到就不动画」的安全形态：
-   入场照播、滚动离屏（那时元素已在视口外）不做淡出，视觉上无损失。 */
-
-/* ★ reduce 下**保留淡入淡出，只去掉位移**。
-   之前这里是 animation:none + opacity:1，等于整个动效被抹平 —— 系统开了
-   「减少动态效果」（Windows：辅助功能 → 视觉效果 → 动画效果）或在一些内嵌
-   预览面板里，用户看到的就是「完全没生效」。改成纯 opacity：既符合 reduce
-   的语义（无位移、无缩放、时长缩短），业主要求的淡入淡出也还在。 */
-@media (prefers-reduced-motion: reduce) {
-  @keyframes hm-text-fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  /* 只动 opacity —— hm-text-fade 本身不含 transform，所以不必（也不该）在这里
-     写 transform: none：那会连移动端技能/经验卡的 dock 形变一起压掉。
-     PC 的「无位移」由上面基础态的 transform: none !important 保证。 */
-  html[data-paging="on"] .motion-reveal-section.is-visible .pf-title,
-  html[data-paging="on"] .motion-reveal-section.is-visible .pf-contact,
-  html[data-paging="on"] .motion-reveal-section.is-visible .pf-swap,
-  html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance,
-  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-title,
-  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-contact,
-  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-stats,
-  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-skills {
-    animation: hm-text-fade 300ms linear backwards !important;
-  }
-
-  /* 基础态同样只留 opacity（位移归零），离场仍是一条短 transition。 */
-  html[data-paging="on"] .motion-reveal-section .pf-title,
-  html[data-paging="on"] .motion-reveal-section .pf-contact,
-  html[data-paging="on"] .motion-reveal-section .pf-swap,
-  html[data-paging="on"] .motion-reveal-section .pf-skills-entrance {
-    transform: none !important;
-    transition: opacity 200ms linear !important;
-  }
-}
-/* ═══════════════════════════════════════════════════════════════════════════
-   [END] 一级页文字入场 / 离场动效（HOME MOTION · TEXT ONLY）— 整块删到这里
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-/* （已删除：旧版 .profile-* 入场死代码。DOM 中无 profile-label / profile-name-row /
-   profile-contact-line / profile-stats-row / profile-tools / profile-bottom-line /
-   profile-tool-list / profile-bg 这些类名，PC 实际用 pf-*、移动端用 mob-profile-*，
-   这一整批规则从未匹配到任何节点。） */
-
-/* ★ 2026-10-10 业主：作品展示屏标题下方的下降部（j / p / y 的尾巴）被切平了。
-   原因：这一行 line-height 只有 0.86，字体上下各溢出盒约 12.8px（实测 h2 盒底
-   320.2px，字形底线 333.0px），而入场揭示用 clip-path 收尾在 inset(0 0 0 0)，
-   等于把可见区锁死在 border box 里，溢出的下降部一并被裁。
-   修法：裁剪窗口上下各放开 0.2em（em 跟着 clamp 的字号走，各视口通用），左右
-   揭示照旧，所以入场动效的观感不变。
-   ⚠ 不能收尾成 clip-path: none。none 与 inset 之间不可补间，入场会退化成硬切。 */
-.motion-reveal-section .projects-heading h2 {
-  clip-path: inset(-0.2em 100% -0.2em 0);
-  transform: translate3d(-18px, 0, 0) scaleX(0.92);
-  transform-origin: left center;
+/* 入场：PC 的 pf-* 与移动端的 mob-profile-* 同一套节奏（移动端位移小一档）。 */
+.motion-reveal-section.hm-played .pf-title,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-title {
+  --hm-i: 0;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
 }
 
-.display-reveal-title,
-.display-reveal-subtitle {
+.motion-reveal-section.hm-played .pf-contact,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-contact {
+  --hm-i: 1;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
+}
+
+.motion-reveal-section.hm-played .pf-swap,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-stats {
+  --hm-i: 2;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
+}
+
+.motion-reveal-section.hm-played .pf-skills-entrance,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-skills {
+  --hm-i: 3;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ② 三屏（projects）标题：从下方升起 + 水平方向擦开（clip-path 揭示）
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* 初始态（同时是「未到达」的初始态：.hm-played 挂上后由下面的终态规则接管）。 */
+.projects-heading {
   opacity: 0;
-  /* 2026-10-09:标题改居中后，reveal 的原点也从左改中（该类只有首页作品标题在用）。 */
-  transform-origin: center center;
-  will-change: opacity, transform, clip-path;
+  transform: translate3d(0, 34px, 0);
+  transition:
+    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .display-reveal-title {
+  opacity: 0;
+  transform-origin: center center;
+  will-change: opacity, transform, clip-path;
   transform: translate3d(-64px, 52px, 0) scaleX(1.16);
-  /* 上下放开 0.2em，见上方 .motion-reveal-section .projects-heading h2 的注释。 */
+  /* 上下放开 0.2em：这一行 line-height 只有 0.86，字体上下各溢出盒约 12.8px，
+     收尾停在 inset(0 0 0 0) 会把 j/p/y 的下降部切平。
+     ⚠ 也不能收尾成 clip-path:none —— none 与 inset 之间不可补间，会退化成硬切。 */
   clip-path: inset(-0.2em 100% -0.2em 0);
   transition:
     opacity 1160ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -2146,41 +2088,201 @@ html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
     clip-path 1160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.display-reveal-subtitle {
-  transform: translate3d(0, 28px, 0);
-  clip-path: none;
-  transition:
-    opacity 820ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 820ms cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: 180ms;
+/* h2 自己的横向擦开（specificity 比上面高，才压得住 .display-reveal-title）。 */
+.motion-reveal-section .projects-heading h2 {
+  clip-path: inset(-0.2em 100% -0.2em 0);
+  transform: translate3d(-18px, 0, 0) scaleX(0.92);
+  transform-origin: left center;
 }
 
-/* 标题的收尾裁剪窗口同样上下放开 0.2em（specificity 与下面那组并列规则一致）。
-   ⚠ transition-delay 与 [HOME MOTION] 的 --hm-base 共用同一个起跑点：
-     三屏标题此前 delay 为 0，整段揭示都在翻页飞行途中播完，落到屏上已经静止
-     （与二屏文字同一类问题）。delay 只写在 is-visible 这条上 —— 摘掉 is-visible
-     的离场不带延迟，旧屏立刻让位。 */
-.motion-reveal-section.is-visible .display-reveal-title {
+/* 终态：只演一次（挂在 hm-played 上，翻回来不重播），起跑点与二屏文字同一根
+   时间线（--hm-base）。 */
+.projects.hm-played .projects-heading {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition-delay: var(--hm-base, 0ms);
+}
+
+.motion-reveal-section.hm-played .display-reveal-title {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
   clip-path: inset(-0.2em 0 -0.2em 0);
   transition-delay: var(--hm-base, 0ms);
 }
 
-.motion-reveal-section.is-visible .display-reveal-subtitle {
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scaleX(1);
-  clip-path: inset(0 0 0 0);
-  transition-delay: calc(var(--hm-base, 0ms) + 120ms);
-}
-
-/* 标题单独一条：只有它的裁剪窗口要上下放开 0.2em。
-   specificity (0,3,1) 高于初始态 (0,2,1)，才压得住。 */
-.motion-reveal-section.is-visible .projects-heading h2 {
+.motion-reveal-section.hm-played .projects-heading h2 {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
   clip-path: inset(-0.2em 0 -0.2em 0);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ③ 三屏（projects）PC 卡组：逐张错峰升起 + 淡入
+   ⚠ 卡组原本自带一套入场（.showcase-deck 自己的 IntersectionObserver 写
+     `.showcase-deck.is-visible`，卡片读 --enter 46px + opacity）。IO 在**翻页
+     飞行途中**就命中 ⇒ 那一整段入场全在「屏幕还在动」的时候播完，落到三屏时
+     已经静止 —— 业主实测读作「这些卡片没有动效 / 入场太生硬」。
+     现在改由 section 的一次性闩驱动，起跑点与其它元素同一条时间线。
+   ⚠ 位移挂在**每张卡自己**身上（逐张错峰），不是整排一起平移：整排齐动读起来
+     是一块硬板在抬。错峰量 --hm-deck-step。
+   ⚠ 不碰卡片的 transform 声明本身：卡片的 transform 由 --push/--y/--rot/--scale
+     组合而成、还承载 hover 张开，覆盖它会让人场期间 hover 失灵 —— 这里只改
+     入场用的那个 --enter 分量与 opacity（原机制就是这么做的）。
+   ⚠ 倒影（.showcase-deck-reflection）只做淡入：它的 transform 与卡片独立
+     （悬浮缝就是靠这个错位读出来的），位移会让两边对不上。 */
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card {
+  opacity: 0;
+  --enter: 46px;
+  transition-delay: 0ms;
+}
+
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-reflection {
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
+/* 到达过：逐张就位。specificity 压过 `.showcase-deck.is-visible` /
+   `.showcase-deck:not(.is-visible)` 那两条自带规则（它们只管 IO，不再参与）。 */
+html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-card {
+  opacity: 1;
+  --enter: 0px;
+  transition-delay: calc(var(--hm-base) + var(--i, 0) * var(--hm-deck-step));
+}
+
+html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-reflection {
+  opacity: 1;
+  /* 倒影没有 --i，统一比首卡晚半拍，读作「卡片先立起来、倒影再浮上来」。 */
+  transition-delay: calc(var(--hm-base) + 240ms);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ④ 三屏（projects）移动端：卡台 + 顶部三件套
+   ⚠ 顶部四件（.mob-heading / .mob-counter / .mob-dots / .mob-thumbs）另有自己
+     一套跨级动画（.mob-showcase.is-chrome-out / .is-chrome-in，由 App 的
+     chromeHidden/chromeIn 驱动，用于一级 ↔ 二级）。这里的入场必须**让位**给它：
+     选择器带 :not(.is-chrome-in):not(.is-chrome-out) —— 跨级时本条不匹配，
+     交回那套；平时才由本条提供「翻页到达」的入场。
+     用 transition 而不是 animation：animation 的 animation-name 一旦在两个
+     规则之间来回切（本条的 hm-* ↔ 跨级的 mob-chrome-in），浏览器会当成新动画
+     **重播一次** —— 从二级回来会看到标题再升一遍。
+   ⚠ .mob-thumbs 是 overflow-x 滚动容器，给 transform 会开合成层、影响原生横向
+     滚动，所以它只淡入不位移。
+   ⚠ .mob-stage 只做位移淡入（animation）。它是卡组的量测基准（跨级交接时
+     poseOf 读卡片的 getBoundingClientRect），所以动画结束必须回到 transform:none ——
+     backwards 填充正好保证这一点。 */
+html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-stage {
+  opacity: 0;
+  transform: translate3d(0, 26px, 0);
+}
+
+.motion-reveal-section.hm-played .mob-stage {
+  animation: hm-text-rise-sm var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * 4) backwards;
+}
+
+html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-heading,
+html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-counter,
+html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-dots {
+  opacity: 0;
+  transform: translate3d(0, 26px, 0);
+}
+
+html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-thumbs {
+  opacity: 0;
+}
+
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-thumbs,
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-dots,
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-counter,
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-heading {
+  transition:
+    opacity var(--hm-in) var(--hm-ease),
+    transform var(--hm-in) var(--hm-ease);
+}
+
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-thumbs {
+  transition-delay: calc(var(--hm-base) + 40ms);
+}
+
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-dots {
+  transition-delay: calc(var(--hm-base) + 130ms);
+}
+
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-counter {
+  transition-delay: calc(var(--hm-base) + 190ms);
+}
+
+html[data-device="mobile"] .motion-reveal-section.hm-played
+  .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-heading {
+  transition-delay: calc(var(--hm-base) + 250ms);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ⑤ 无障碍兜底：reduce 下保留淡入淡出，只去掉位移
+   ⚠ 之前这里是 animation:none + opacity:1，等于整个动效被抹平 —— 系统开了
+     「减少动态效果」（Windows：辅助功能 → 视觉效果 → 动画效果）或在一些内嵌
+     预览面板里，用户看到的就是「完全没生效」。
+   ⚠ 本块之外还有一条 `.motion-reveal-section * {opacity:1 !important; ...}`
+     （本文件后段的 reduce 兜底），CSS 级联里 !important 高过 animation ——
+     那条的 :not() 名单里必须排除本块的元素，否则这里写了也白写。
+   ───────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes hm-text-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  html[data-paging="on"] .motion-reveal-section.hm-played .pf-title,
+  html[data-paging="on"] .motion-reveal-section.hm-played .pf-contact,
+  html[data-paging="on"] .motion-reveal-section.hm-played .pf-swap,
+  html[data-paging="on"] .motion-reveal-section.hm-played .pf-skills-entrance,
+  html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-title,
+  html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-contact,
+  html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-stats,
+  html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-skills,
+  html[data-paging="on"] .motion-reveal-section.hm-played .mob-stage {
+    animation: hm-text-fade 300ms linear backwards !important;
+  }
+
+  /* 基础态只留 opacity（位移归零），「到达过」的终态保持不变。 */
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-title,
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-contact,
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-swap,
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .pf-skills-entrance {
+    transform: none !important;
+  }
+
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .mob-stage,
+  html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-heading,
+  html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-counter,
+  html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-dots {
+    transform: none !important;
+  }
+
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card {
+    --enter: 0px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [END] 一级页【屏内元素】入场动效（HOME MOTION · ONE-SHOT）— 整块删到这里
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* （已删除：旧版 .profile-* 入场死代码。DOM 中无 profile-label / profile-name-row /
+   profile-contact-line / profile-stats-row / profile-tools / profile-bottom-line /
+   profile-tool-list / profile-bg 这些类名，PC 实际用 pf-*、移动端用 mob-profile-*，
+   这一整批规则从未匹配到任何节点。） */
+
+/* （三屏标题的初始态 / 终态已移入文件顶部 [HOME MOTION] 块 ②，这里删干净。
+   一并迁走的还有 .display-reveal-title / .display-reveal-subtitle 的初始态 ——
+   后者是早期版本遗留，DOM 里已无该类名。） */
 
 .profile-shot {
   position: relative;
@@ -2250,14 +2352,10 @@ html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
 
 .projects-heading {
   display: grid;
-  /* 2026-10-09:「作品展示」徽章已删，标题改为 Works Display 并水平居中。 */
+  /* 2026-10-09:「作品展示」徽章已删，标题改为 Works Display 并水平居中。
+     入场用的 opacity / transform / transition 在文件顶部 [HOME MOTION] 块 ②。 */
   justify-items: center;
   gap: 16px;
-  opacity: 0;
-  transform: translate3d(0, 34px, 0);
-  transition:
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .projects-heading h2 {
@@ -2587,15 +2685,8 @@ html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
   color: rgba(255, 255, 255, 0.56);
 }
 
-.projects.is-visible .projects-heading {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  filter: blur(0);
-  clip-path: none;
-  /* 与 [HOME MOTION] 同一个起跑点：压在翻页飞行之后（见 styles.css 顶部
-     [HOME MOTION] 块里 --hm-base 的注释）。 */
-  transition-delay: var(--hm-base, 0ms);
-}
+/* （.projects-heading 的入场终态移入 [HOME MOTION] 块 ②，且改挂在
+   hm-played 一次性闩上 —— is-visible 版会在每次翻回三屏时重播。） */
 
 .contact-page {
   min-height: 100vh;
@@ -2716,7 +2807,8 @@ html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
      ⚠ 若整块删掉 [HOME MOTION]，这里的 :not() 也应一并还原成 `*` 的写法。 */
   .motion-reveal-section *:not(
       .pf-title, .pf-contact, .pf-swap, .pf-skills-entrance,
-      .mob-profile-title, .mob-profile-contact, .mob-profile-stats, .mob-profile-skills
+      .mob-profile-title, .mob-profile-contact, .mob-profile-stats, .mob-profile-skills,
+      .mob-stage, .mob-heading, .mob-counter, .mob-dots, .mob-thumbs
     ),
   .projects-heading,
   .showcase-deck-card,
@@ -3817,18 +3909,8 @@ html[data-paging="on"] .contact-page {
    strip gets its OWN entrance wrapper: the 420ms stagger delay must never
    live on .pf-skills itself, or it leaks into the hover leave animation
    (strip waits 420ms before undocking = visible stall). */
-/* 标题保留进场淡入,离场随整屏滑走;经验卡与技能条改为常驻:默认 opacity:1,
-   进场首次用 @starting-style 淡入,离场(.is-visible 移除)不回到 0 —— 因此下滑
-   切页时这两张卡不再"消失"。不支持 starting-style 的旧浏览器直接常驻,同样
-   不消失。此前它们与标题共用 opacity:0 默认态,离场被 is-visible 移除触发淡出。 */
-.pf-title {
-  opacity: 0;
-  transform: translateY(22px);
-  transition:
-    opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
+/* 经验卡与技能条常驻：默认 opacity:1（离场不回到 0，避免下滑切页时两张卡凭空
+   消失）。入场不再由这里负责 —— 见文件顶部 [HOME MOTION] 块 ①。 */
 .pf-swap,
 .pf-skills-entrance {
   opacity: 1;
@@ -3838,27 +3920,21 @@ html[data-paging="on"] .contact-page {
     transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* ---- PC 个人信息:整段入场(2026-10-03 新增) ----
-   此前 PC 只有 .pf-title 靠「opacity:0 + is-visible」淡入,而 .pf-swap /
-   .pf-skills-entrance 用的是 @starting-style —— 它只在元素**首次样式计算**
-   时生效,滑到第 2 屏才加 .is-visible 时元素早已挂载,所以这两个块完全没有
-   入场(用户反馈「PC 端个人信息完全没有入场动画」)。
-   改为与移动端同一套做法:@keyframes + .profile-shot.is-visible 挂载,
-   fill-mode **backwards**(动画结束把控制权交回规则)。
-   ⚠ 必须用 keyframes 而不是给这两个块加 transition-delay:
-   .pf-skills-entrance 上的任何 transition-delay 都会漏进 hover 收拢动画
-   (见下方 .pf-skills-entrance 注释:技能条会先等 420ms 才上移)。
-   keyframes 的 delay 只影响动画本身,不会污染 transition。 */
+/* ---- PC 个人信息:整段入场 ----
+   历史实现（`.pf-title` 基础态 opacity:0 + `.profile-shot.is-visible` 挂动画 /
+   @starting-style）已在 2026-10-11 全部删除：那套驱动的是「每次翻回二屏都重播
+   一次入场」，业主明确否掉。
+   现在统一由文件顶部 [HOME MOTION] 块 ① 接管：初始态 + 四档错峰入场，全部挂在
+   section 的 hm-played 一次性闩上（只在首次到达这一屏时播一次）。
+   ⚠ 入场必须用 keyframes 的 delay，**不能**给 .pf-skills-entrance 加
+     transition-delay —— 那会漏进 hover 收拢动画（技能条先等一截才上移）。 */
 @keyframes pf-profile-rise {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: none; }
 }
 
-/* （这四条入场已移交 [HOME MOTION · TEXT ONLY] 块统一接管 —— 见本文件顶部
-   `[BEGIN] 一级页【文字】入场 / 离场动效`。参数保持一致（700ms /
-   60·140·220·300ms 错峰 / backwards），只是从 `.profile-shot.is-visible` 换成
-   `.motion-reveal-section.is-visible`，好让 PC 与移动端走同一套选择器。
-   原来的 @keyframes pf-profile-rise 保留在上方，删除新块后可原样恢复。） */
+/* （@keyframes pf-profile-rise 已无人引用，保留只为对照/回滚 —— 若要把
+   [HOME MOTION] 块整块删掉，历史上恢复入场就是重新引用它。） */
 
 /* 背景推近(PC 1.6s → 1.2s,与移动端入场一起加快) */
 @keyframes pf-profile-kenburns {
@@ -3888,17 +3964,9 @@ html[data-paging="on"] .profile-shot.is-visible .pf-bg-img {
   animation: none;
 }
 
-.profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
-.profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
-.profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }
-
-@starting-style {
-  .profile-shot.is-visible .pf-swap,
-  .profile-shot.is-visible .pf-skills-entrance {
-    opacity: 0;
-    transform: translateY(22px);
-  }
-}
+/* （这三条 is-visible 驱动的入场 + @starting-style 已删：它们会在每次翻回二屏时
+   重播一次入场，正是业主本轮否掉的「重复出现」。现由 [HOME MOTION] 块的
+   hm-played 一次性闩统一接管。） */
 
 /* 技能条外层**不做任何过渡**。此前这里 margin-top 480ms 会被
    `.profile-shot.is-visible .pf-skills-entrance { transition-delay: 420ms }`

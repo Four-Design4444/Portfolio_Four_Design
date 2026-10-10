@@ -806,17 +806,39 @@
           if (value < shown) return;
           shown = value;
           var percent = Math.round(shown * 100);
-          fill.style.width = percent + '%';
+          /* ⚠ 宽度用**带小数的**百分比，数字才取整（2026-10-11）：
+             过去两者都取整，于是爬行器每 tick 那 0.3% 的增量被 Math.round 吞掉，
+             条子实际是"每 400ms 跳一格"（宽度过渡 0.28s + 停 0.12s），有肉眼可见的顿挫。
+             宽度改成两位小数后每个 tick 都在推进，配合那条 0.28s 过渡就是连续移动。 */
+          var widthPct = (shown * 100).toFixed(2);
+          fill.style.width = widthPct + '%';
           num.textContent = percent + '%';
           // 影子条同步：淡入交接的 0.4s 里百分比也可能涨，两边必须一致。
           if (staticBar) {
             var sbFill = staticBar.querySelector('.app-loader-bar > i');
             var sbNum = staticBar.querySelector('.app-loader-num');
-            if (sbFill) sbFill.style.width = percent + '%';
+            if (sbFill) sbFill.style.width = widthPct + '%';
             if (sbNum) sbNum.textContent = percent + '%';
           }
         };
         var lastGainAt = Date.now(); // 上次"进度真的涨了"的时刻（看门狗用）
+        /* ★ 2026-10-11「00% → 100% 全程在爬」：保底爬行器 —— 只喂**显示值**，不喂任何判据。
+           真实进度是阶梯状的（资源一个个到位），台阶之间条子必然静止；末段灯光烧录
+           1.5~2s 里真实值只涨约 2%（尾屏权重 8 / 总权重 ~58），观感就是"钉住不动"。
+           这里给显示值一条**速率下限**：每个 tick 至少往前挪 CRAWL_RATE × dt，
+           于是任何停滞段都在爬。三重约束保证它不会退化成假进度：
+             ① CRAWL_CEILING=0.99 —— 最后 1% 只能由真实完成（app:ready）补，
+                爬行器永远到不了 100%，绝不出现"显示 100% 其实还在等"；
+             ② CRAWL_LEAD=0.08 —— 最多领先真实值 8%。真卡死时条子停在"真实值+8%"，
+                而不是一路冲到 99% 干等，所以慢网下不会演变成假进度；
+             ③ **不碰 lastGainAt、不碰 __bootTasks().pending** —— 看门狗与揭幕闸门
+                都只看真实值。这条是硬约束：爬行器一旦喂饱 lastGainAt，
+                "15s + 连续 5s 没涨就认输"的看门狗就永远不触发，真卡死会永久扣住。 */
+        var CRAWL_RATE = 0.025; // 每秒至少爬 2.5%
+        var CRAWL_LEAD = 0.08; // 最多领先真实进度 8%
+        var CRAWL_CEILING = 0.99; // 爬行天花板：最后 1% 留给真实完成
+        var crawlFloor = 0;
+        var crawlAt = Date.now();
         var tick = function () {
           /* 先把"本次根本用不到的候选资源"清出去（见 addEntryTask 的注释）：
              它们不在分母里，进度与加载时间才是真的跟本次内容挂钩。 */
@@ -835,14 +857,27 @@
           for (var i = 0; i < tasks.length; i++) sum += tasks[i].weight * tasks[i].read();
           var target = Math.min(1, sum / total);
           if (target > eased + 0.002) lastGainAt = Date.now();
-          eased += (target - eased) * 0.3;
+          /* 追赶系数 0.3 → 0.45（2026-10-11）：0.3 的时间常数约 400ms，对 3.5s 的加载
+             总时长来说滞后太明显 —— 实测 662ms 时真实已 49.2%，条子才 33.2%，
+             观感就是"条子总比实际慢半拍、末段又突然追上来"。0.45 的时间常数约 230ms。 */
+          eased += (target - eased) * 0.45;
           if (target - eased < 0.004) eased = target; // 收尾别拖着不到 100
-          paint(eased);
+          // 保底爬行（见 CRAWL_* 的注释）：地板 = 至少按 CRAWL_RATE 匀速爬，
+          // 但不落后于真实值（真实在涨时地板自动跟着走），也最多领先 CRAWL_LEAD。
+          var nowTick = Date.now();
+          var dt = Math.min(0.5, Math.max(0, (nowTick - crawlAt) / 1000));
+          crawlAt = nowTick;
+          crawlFloor = Math.min(
+            CRAWL_CEILING,
+            Math.max(eased, crawlFloor + CRAWL_RATE * dt),
+            eased + CRAWL_LEAD
+          );
+          paint(Math.max(eased, crawlFloor));
         };
         // 自查用：控制台敲 __bootProgress() 就能看到"条子读到多少 / 还差哪些任务"。
         window.__bootProgress = function () {
           var s = window.__bootTasks();
-          return { shown: shown, eased: Math.round(eased * 1000) / 1000, ratio: Math.round(s.ratio * 1000) / 1000, pending: s.pending, count: s.count, totalWeight: s.totalWeight, detail: s.detail };
+          return { shown: shown, eased: Math.round(eased * 1000) / 1000, crawl: Math.round(crawlFloor * 1000) / 1000, ratio: Math.round(s.ratio * 1000) / 1000, pending: s.pending, count: s.count, totalWeight: s.totalWeight, detail: s.detail };
         };
 
         var MIN_SHOW = 600;

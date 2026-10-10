@@ -6695,11 +6695,26 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   const projectsVisible = revealProjects || (paging ? hasEnteredPage && index === 2 : projectsSeen);
   const contactVisible = paging ? hasEnteredPage && index === 3 : contactSeen;
 
+  /* ★ 2026-10-11 业主（第 18 轮）：「动效**只在首次出现**，不要重复出现。」
+     之前驱动入场的是 is-visible（= 这一屏是当前屏，可进可出）⇒ 每次翻回来都重播。
+     换成 hm-played —— 一个**只加不减**的闩：屏号第一次成为当前屏时挂上，之后永不
+     移除。CSS 里入场 animation 挂在它身上；动画规则不被摘掉，浏览器就不会重播，
+     于是整个会话里每屏只演一次。is-visible 仍然照旧（离场回落 / 屏内既有揭示）。
+     ⚠ 在渲染期直接维护而不是 useEffect + setState：慢一帧会让 is-visible 先挂上、
+       闩还没挂上，那一帧文字正停在离场态（opacity 0）—— 观感上就是一次闪烁。
+       这里只是往 Set 里加数字，幂等，StrictMode 下重复渲染也无副作用。 */
+  const playedRef = useRef(null);
+  if (playedRef.current === null) playedRef.current = new Set();
+  if (profileVisible) playedRef.current.add(1);
+  if (projectsVisible) playedRef.current.add(2);
+  if (contactVisible) playedRef.current.add(3);
+  const played = playedRef.current;
+
   return (
     <>
       <HeroSection active={active} onVideoReady={markHeroVideoReady} />
 
-      <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}`} id="profile">
+      <section ref={profileRef} className={`profile profile-shot motion-reveal-section${profileVisible ? ' is-visible' : ''}${played.has(1) ? ' hm-played' : ''}`} id="profile">
         {isMobile ? <ProfileContent /> : <ProfileContentPC />}
       </section>
 
@@ -6708,7 +6723,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
           restarting at the top of each screen, so turning a page never reveals a
           fresh bright corner sliding in. */}
       <div className="home-ground">
-      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}`} id="projects">
+      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}${played.has(2) ? ' hm-played' : ''}`} id="projects">
         <div className="container">
           <div className="projects-heading">
             <h2 className="display-reveal-title rany-display-heading">Project Display</h2>
@@ -6723,7 +6738,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         </div>
       </section>
 
-      <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}`} id="contact">
+      <section ref={contactRef} className={`contact-page street-contact motion-reveal-section${contactVisible ? ' is-visible' : ''}${played.has(3) ? ' hm-played' : ''}`} id="contact">
         {/* preload：提前挂载 iframe，让 Three.js 的 WebGL 上下文创建、shader 编译、
             logo 纹理加载与【2.7 秒灯光渐入】全部在用户到达尾屏之前完成。
             为什么闸门只有 heroVideoReady 一道（2026-10-04 第二轮修复）：

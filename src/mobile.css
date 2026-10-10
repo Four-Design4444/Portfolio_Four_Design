@@ -1126,12 +1126,16 @@ html[data-device="mobile"] .contact-page {
   min-height: 100dvh;
 }
 
-/* ★ 移动端文字入场的位移收小一档 —— 屏幕窄，26px 在小屏上会显得过冲。
-   属于 styles.css 里的 [HOME MOTION · TEXT ONLY] 块，删块时这里一并删掉。 */
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats,
-html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
+/* ★ 移动端文字入场的位移收小一档 —— 屏幕窄，44px 在小屏上会显得过冲。
+   只换 animation-name（时长 / 错峰 / fill 全部沿用 styles.css 的 [HOME MOTION]
+   块），所以位移量只在 keyframes 里写死一次。
+   属于 styles.css 的 [HOME MOTION] 块，删块时这里一并删掉。
+   ⚠ 驱动类必须是 hm-played（一次性闩），不能是 is-visible：
+     后者每次翻回这一屏都会重新挂上，animation-name 一变浏览器就重播一次。 */
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-title,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-contact,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-stats,
+html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-skills {
   animation-name: hm-text-rise-sm;
 }
 
