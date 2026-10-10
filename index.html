@@ -121,6 +121,19 @@
          opacity:0 ⇒ 遮罩只剩一块纯色，业主报的「进入 Loading 一瞬间短暂黑屏」就是它。
          preload 后该文档与首屏并行到达，注入落位的等待期压到网络往返量级。 -->
     <link rel="preload" as="document" href="/loading/loader.html?embed" />
+    <!-- ★ C1（2026-10-11）：尾屏 iframe 的 707KB 入口 JS 在 head 阶段就预下载。
+         不加这条时它的请求要等 React 挂载（实测 639ms）才发出，这之前网络是空转的；
+         加之后浏览器在下载主站 bundle 的同时就把它取回放进 HTTP 缓存，iframe 一建即可用。
+         省的是"请求什么时候发出"这段等待（慢网 300~800ms），不是下载本身。
+         fetchpriority=low：明确排在主站 bundle 与 hero 视频之后，不抢它们的位置。
+         crossorigin：必须与 demo 里 `<script type="module" crossorigin>` 的模式一致，
+         否则会以另一种凭证模式再下一次，预载等于白做（缓存条目对不上）。
+         ⚠ 只提前**下载**：iframe 创建与 WebGL 编译时机完全不变（仍等 React 挂载之后），
+           以免编译抢 hero 视频的首帧 —— 见 main.jsx 的 warmStage / ContactStreet 的 mounted。
+         ⚠ 文件名带构建 hash：尾屏 demo 重新构建后必须同步这里，否则白下一个 404
+           （控制台会出现 "resource was preloaded but not used" 警告）。 -->
+    <link rel="preload" as="script" crossorigin fetchpriority="low"
+          href="/contact-street/assets/index-tyan_SI7.js" />
     <title>UI / Visual / AI Designer Portfolio</title>
     <script>
       (function () {

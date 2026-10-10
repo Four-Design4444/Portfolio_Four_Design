@@ -110,12 +110,6 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
   const burnedRef = useRef(false);
   const tailReportedRef = useRef(false);
   const tailZeroRef = useRef(false);
-  // ★ 尾屏浮层文字的入场闩（见 HOST_CSS ⑪）。「这一屏第一次成为当前屏」置真，
-  //   只加不减：之后无论翻走 / 从二级页回来，都不会重播一次入场。
-  //   注入在下面的揭幕协调器里做（它每帧都能拿到当前 iframe 文档，文档被导航
-  //   替换后会自动补挂；本 ref 一旦为真就一直是真）。
-  const streetEnterRef = useRef(false);
-  if (active) streetEnterRef.current = true;
 
   useEffect(() => {
     if (active || preload) setMounted(true);
@@ -136,7 +130,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (stopped || burnedRef.current) return;
       burnedRef.current = true;
       setBurned(true);
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 1 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 50, progress: 1 } })); } catch (_) {}
       try { if (onTailBurned) onTailBurned(); } catch (_) { /* noop */ }
     };
     const check = () => {
@@ -146,7 +140,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       // 进度条如实反映烧录推进：0.75 → 1.0（单调，不会像按 n 那样来回跳）。
       try {
         window.dispatchEvent(new CustomEvent('loading:progress', {
-          detail: { id: 'tail', weight: 22, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
+          detail: { id: 'tail', weight: 50, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
         }));
       } catch (_) {}
       // 能读到 demo 的脉冲值就以它为准（已经最亮就直接放行，不必凑满帧数）。
@@ -551,8 +545,9 @@ html.street-mail-failed #detail-content .mail-rescue a {
 }
 
 /* ── ⑪ 尾屏浮层文字的入场（一级页**第一次**翻到尾屏时演一次）───────────────
-   由宿主在「这一屏第一次成为当前屏」时给 demo 的 <html> 挂 .street-enter
-   （见 Street.jsx 的 streetEnterRef）。demo 产物字节级不动，动画全在这里。
+   由宿主在「这一屏第一次成为当前屏」（active 翻转）时给 demo 的 <html> 挂
+   .street-enter（见 Street.jsx 里 keyed on active 的那个 effect）。
+   demo 产物字节级不动，动画全在这里。
    只动两个浮层**容器**：
      · .intro        —— 左下文案块（eyebrow / h1 / 正文 / 落款）
      · .street-quick —— 右下快捷块（打个电话 / 发封邮件 / 提示行）
@@ -572,18 +567,21 @@ html.street-mail-failed #detail-content .mail-rescue a {
    ⚠ 延迟里含翻页时长（宿主是在 goToPage 一开头挂的类）：不补上这一段，整段入场
      会在「屏还在飞」的时候播完，落到屏上只剩静止画面。 */
 @keyframes street-rise {
-  from { opacity: 0; transform: translate3d(0, 34px, 0); }
+  from { opacity: 0; transform: translate3d(0, 44px, 0); }
   to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes street-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+/* 2026-10-11 业主：「这些内容的入场动效跟个人信息那里的入场动效做成一样就行了。」
+   于是位移从 34px 提到与二屏文字同一个 --hm-lift=44px，关键帧曲线/时长/错峰
+   （900ms / cubic-bezier(.22,1,.36,1) / 110ms 档距）与 [HOME MOTION] 块 ① 对齐。 */
 html.street-enter .intro {
   animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 820ms backwards;
 }
 html.street-enter .street-quick {
-  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 960ms backwards;
+  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
 }
 /* reduce 下保留淡入淡出，只去掉位移。 */
 @media (prefers-reduced-motion: reduce) {
@@ -1915,14 +1913,14 @@ function useStreetWheelBridge(enabled) {
     const reportTailReady = () => {
       if (tailReportedRef.current) return;
       tailReportedRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 0.75 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 50, progress: 0.75 } })); } catch (_) {}
       try { if (onTailReady) onTailReady(); } catch (_) {}
       // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
       try { setArmed(true); } catch (_) {}
     };
     if (!tailZeroRef.current) {
       tailZeroRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 0 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 50, progress: 0 } })); } catch (_) {}
     }
 
     const attempt = () => {
@@ -1961,16 +1959,12 @@ function useStreetWheelBridge(enabled) {
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
         //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。
         try { injectStreetQuick(doc); injectIntroCopy(doc); injectDetailCopy(doc); injectMailCta(doc); } catch (_) { /* onLoad 兜底 */ }
-        // ★ 尾屏浮层文字的入场闩（HOST_CSS ⑪）。只在这一屏**第一次**成为当前屏
-        //   之后挂；class 挂在 demo 的 <html> 上，动画由 CSS 那边接管。
-        //   放在这个「每帧都跑」的循环里而不是一次性 effect 里：iframe 会先从
-        //   about:blank 导航到真文档，挂到旧文档上的类会随导航丢掉 —— 这里能自己补上。
-        if (streetEnterRef.current) {
-          try {
-            const de = doc.documentElement;
-            if (de && !de.classList.contains('street-enter')) de.classList.add('street-enter');
-          } catch (_) { /* noop */ }
-        }
+        // ⚠ 尾屏浮层文字的入场闩（HOST_CSS ⑪）**不再挂在这里**：
+        //   本循环在揭幕条件成立时 `return`（见下方 `if (cssDone && readyDone && burned)`），
+        //   而那条件在 loading 阶段就已满足 —— 等用户翻到尾屏时循环早停了，
+        //   类永远挂不上，动画一次都不会播（2026-10-11 实测：iframe 的 <html>
+        //   全程 className === ''，业主反馈的「尾屏文字没有入场效果」就是这个）。
+        //   改由下面 keyed on `active` 的独立 effect 负责。
 if (!readyDone) {
           // 双信号就绪判定（任一成立即可）：
           //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
@@ -2015,6 +2009,36 @@ elapsed += 1;
     raf = window.requestAnimationFrame(attempt);
     return () => { stopped = true; window.cancelAnimationFrame(raf); };
   }, [mounted, burned]);
+
+  /* ★ 尾屏浮层文字的入场闩（HOST_CSS ⑪）。
+     为什么必须是独立 effect：真正干注入的那个协调器循环在「揭幕条件成立」时
+     就 return 了，而揭幕在 loading 阶段（用户还没到尾屏）就已经发生 —— 把挂类的
+     代码放在那里，运行时刻永远早于「这一屏第一次成为当前屏」。
+     这里 keyed on `active`：active 是 `active && contactVisible`，在 goToPage 开头
+     （setIndex）就翻转，正好与 CSS 里 820/930ms 的延迟配对（HOME_FLIP_MS=700），
+     于是整段入场落在「屏已经停稳」之后，而不是在飞行途中播完。
+     ⚠ 自己带 rAF 重试而不是一次性写：iframe 会先从 about:blank 导航到真文档，
+     `active` 翻转那一刻 contentDocument 可能还是旧文档（或跨源读不到），
+     挂到旧文档上的类会随导航丢掉。挂上就停，之后不再占帧。
+     ⚠ 只加不删：翻走再回来类还在，动画不重播（业主口径：只在第一次演）。 */
+  useEffect(() => {
+    if (!mounted || !active) return undefined;
+    let raf = 0;
+    const tick = () => {
+      let done = false;
+      try {
+        const de = frameRef.current && frameRef.current.contentDocument
+          && frameRef.current.contentDocument.documentElement;
+        if (de) {
+          if (!de.classList.contains('street-enter')) de.classList.add('street-enter');
+          done = true;
+        }
+      } catch (_) { /* 跨源或未就绪：下一帧再试 */ }
+      if (!done) raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => { window.cancelAnimationFrame(raf); };
+  }, [mounted, active]);
 
   const handleLoad = useCallback(() => {
     // 文档已就位：补一次注入（幂等）。真正的揭幕由上面的协调器负责。

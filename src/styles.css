@@ -1920,7 +1920,6 @@ h2 {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-/* ═══════════════════════════════════════════════════════════════════════════
    [BEGIN] 一级页【屏内元素】入场动效（HOME MOTION · ONE-SHOT）
    ───────────────────────────────────────────────────────────────────────────
    只在一级页生效；只让「内容」动，底层钉死。
@@ -1928,10 +1927,11 @@ h2 {
    【动的】
      · 二屏 profile   PC   .pf-title / .pf-contact / .pf-swap / .pf-skills-entrance
                       移动  .mob-profile-title / -contact / -stats / -skills
-     · 三屏 projects  标题  .projects-heading（PC 与移动端同构）
-                      PC 卡组 .showcase-deck 的每一张卡 —— 逐张错峰
-                      移动卡台 .mob-stage，以及顶部三件套
-                      .mob-heading / .mob-counter / .mob-dots / .mob-thumbs
+     · 三屏 projects  标题  .projects-heading（PC 与移动端同构，由下往上位移淡入）
+                      PC 卡组 .showcase-deck 的每一张卡 —— 以卡组中线为起点向左右散开
+                      移动顶栏 .mob-heading / .mob-counter / .mob-dots / .mob-thumbs
+                      移动卡组的**副卡**（从中线旋转展开，见 main.jsx 的 deckEntering
+                      斜坡）—— 卡台 (.mob-stage) 本身不动，主卡落到屏上就已在位。
      · 尾屏 contact   iframe 内的浮层文字（.intro / .street-quick）。
                       宿主侧：Street.jsx 在「一级页第一次翻到尾屏」时给 demo 的
                       <html> 挂 .street-enter；动画定义在 Street.jsx 的 HOST_CSS 里
@@ -1940,26 +1940,33 @@ h2 {
              三屏地面与背景、尾屏 WebGL 场景本身。
 
    ★ 播放规则（业主 2026-10-11）：「动效只在首次出现，不要重复出现。」
-     驱动 = .hm-played，一个**只加不减**的闩（main.jsx 的 playedRef，屏号第一次
-     成为当前屏时挂上，之后永不摘除）：
-       · 闩挂上之前   → 元素停在「下方 + 透明」的初始态
-       · 闩挂上那一刻 → 跑一次入场（delay 压在翻页飞行之后）
-       · 之后         → 动画规则一直挂着，浏览器不会重播；本块**不写离场回落**，
-                        元素恒定停在终态（离开这一屏时整屏滑走，不需要逐元素淡出）。
-     所以「从二级页回来」「翻走再翻回来」都不会重演。
+     驱动有两个类，都由 main.jsx 在**渲染期**维护：
+       · .hm-played  一次性闩（playedRef，只加不减）。屏号第一次成为当前屏时挂上，
+                     之后永不摘除。入场动画挂在它身上：规则不摘掉，浏览器不会重播。
+       · .hm-entering 入场**窗口**（enteringRef，~2.4s 后自动摘掉）。只给卡组提供
+                     逐张错峰的 transition-delay 与更长的缓动。为什么不直接挂在
+                     hm-played 上：那条 delay 会永久残留，把 hover 张开（同一条
+                     transform 过渡）也拖住 0.6~1s（实测 probe-deck-hover-delay.mjs）。
+     · 闩挂上之前   → 元素停在初始态（文字：下方 + 透明；卡组：收拢在卡组中线 + 透明）
+     · 闩挂上那一刻 → 跑一次入场（delay 压在翻页飞行之后）
+     · 之后         → 恒定停在终态。本块**不写任何离场回落**：离开这一屏时整屏滑走，
+                      不需要逐元素淡出 —— 业主明说「翻页的时候不应执行离场」。
+     所以「上滑下滑翻页」「从二级页回来」都不会重演，也不会看见元素回落。
 
-   ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可，外加三处配套：
-       ① main.jsx 的 playedRef 与三处 `hm-played` 类名输出；
-       ② mobile.css 里「移动端位移收小一档」那两条（搜 hm-text-rise-sm）；
-       ③ styles.css 后面 `@media (prefers-reduced-motion: reduce)` 里那条
-          `.motion-reveal-section *` 的排除名单（把这几个元素从 :not() 里去掉，
-          或整条还原成 `*`）。
-     删掉后元素回到「没有入场动画」的常态，不会留下半透明或偏移残留。
+   ★ 怎么删：把 [BEGIN] ~ [END] 整段删掉即可，外加四处配套：
+       ① main.jsx 的 playedRef / enteringRef 与 hm-played / hm-entering 类名输出；
+       ② main.jsx 里 ShowcaseDeck 的 --enter-x / --hm-d 内联变量，以及
+          MobileShowcaseDeck 的 deckEntering 入场斜坡（搜 HM_DECK_WINDOW_MS）；
+       ③ mobile.css 里「移动端位移收小一档」那两条（搜 hm-text-rise-sm）；
+       ④ styles.css 后面 `@media (prefers-reduced-motion: reduce)` 里那条
+          `.motion-reveal-section *` 的排除名单。
+     删掉后元素回到「没有入场动画」的常态，不会留下半透明或偏移残留
+     （--enter-x 默认 0%，transform 里那一项自动失效）。
 
-   ★ 调参：--hm-in（时长）/ --hm-lift（位移幅度）/ --hm-base（起跑点）/
-     --hm-step（文字档位错峰）/ --hm-deck-step（卡组逐张错峰）。
+   ★ 调参：--hm-in（时长）/ --hm-lift（文字位移幅度）/ --hm-base（起跑点）/
+     --hm-step（文字档位错峰）/ --hm-deck-step（卡组每往外一档的错峰）。
 
-   ⚠ 三条铁律（都踩过坑）：
+   ⚠ 四条铁律（都踩过坑）：
      ① keyframes 里不能用 var() 写位移量。Chromium 在动画创建那一刻取不到元素上
         声明的自定义属性 ⇒ translate3d(0, <invalid>, 0) 整条失效，只剩 opacity 在动。
         位移量写死；要分档就另起一条 keyframes（本项目有 hm-text-rise / -sm 两条）。
@@ -1968,6 +1975,9 @@ h2 {
      ③ 起跑点必须压过翻页飞行（HOME_FLIP_MS = 700ms）。hm-played 是 goToPage
         **一开头**挂的；delay 一写小，整段入场就在「屏还在飞」的时候播完，
         落到屏上只剩静止画面 —— 业主实测读作「完全没有动效」。
+     ④ 动画声明**不要**带 html[data-paging="on"] 前缀。进二级页时 data-paging 会翻成
+        off：带上前缀等于让 animation 声明在切页瞬间消失又重建（cancel + create =
+        重播一次）。基础态可以带（它只在「还没到达」时有意义，那时一定在分屏里）。
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ---- 参数（只改这里就能调力度 / 节奏） ---- */
@@ -1976,7 +1986,7 @@ h2 {
   --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --hm-lift: 44px;        /* 位移幅度 ⚠ 与下面 keyframes 里写死的值保持一致 */
   --hm-step: 110ms;       /* 文字档位之间的错峰 */
-  --hm-deck-step: 42ms;   /* 三屏卡组每张卡的错峰 */
+  --hm-deck-step: 72ms;   /* 三屏卡组：每往外一档多等的错峰 */
   --hm-base: 320ms;       /* 第 1 档的起跑延迟（非分屏时用） */
 }
 
@@ -2061,78 +2071,62 @@ html[data-device="mobile"] .motion-reveal-section.hm-played .mob-profile-skills 
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   ② 三屏（projects）标题：从下方升起 + 水平方向擦开（clip-path 揭示）
-   ───────────────────────────────────────────────────────────────────────── */
-
-/* 初始态（同时是「未到达」的初始态：.hm-played 挂上后由下面的终态规则接管）。 */
-.projects-heading {
+   ② 三屏（projects）标题：由下往上的位移淡入（与二屏文字同一套节奏）
+   ⚠ 业主 2026-10-11 定稿：「顶部标题英文的动效改成由下往上的位移淡入」。
+     原来那版是 clip-path 横向擦开 + scaleX（连 h2 自己还有一层擦开），整组删掉；
+     顺带不再需要 `inset(-0.2em …)` 那个「上下放开 0.2em」的字形保护 —— 没有裁剪
+     就没有下降部被切平的风险（那一行 line-height 只有 .86，字形上下各溢出盒约 12.8px）。
+   ⚠ 基础态挂在 `:not(.hm-played)` 上、且与「到达过」互斥：hm-played 是只加不减的
+     闩，挂上后这一屏恒定停在终态 —— 翻页离开/翻回来都不回落（业主：「翻页的时候
+     不应执行离场」）。
+   ⚠ 入场那条**不带** html[data-paging="on"] 前缀：进二级页时 data-paging 会翻成 off，
+     带上前缀会让 animation 声明在切页瞬间消失又重建 —— 动画被 cancel 再 create 就是
+     一次重播。基础态可以带前缀（它只在「还没到达」时有用，那时一定在分屏里）。 */
+html[data-paging="on"] .motion-reveal-section:not(.hm-played) .projects-heading {
   opacity: 0;
-  transform: translate3d(0, 34px, 0);
-  transition:
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translate3d(0, var(--hm-lift), 0);
+  transition: none;
 }
 
-.display-reveal-title {
-  opacity: 0;
+.motion-reveal-section.hm-played .projects-heading {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease) var(--hm-base) backwards;
+}
+
+/* h2 自身不再承担任何揭示（历史：clip-path 横向擦开 + scaleX）。 */
+.motion-reveal-section .projects-heading h2,
+.motion-reveal-section .display-reveal-title {
+  opacity: 1;
+  clip-path: none;
+  transform: none;
   transform-origin: center center;
-  will-change: opacity, transform, clip-path;
-  transform: translate3d(-64px, 52px, 0) scaleX(1.16);
-  /* 上下放开 0.2em：这一行 line-height 只有 0.86，字体上下各溢出盒约 12.8px，
-     收尾停在 inset(0 0 0 0) 会把 j/p/y 的下降部切平。
-     ⚠ 也不能收尾成 clip-path:none —— none 与 inset 之间不可补间，会退化成硬切。 */
-  clip-path: inset(-0.2em 100% -0.2em 0);
-  transition:
-    opacity 1160ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 1160ms cubic-bezier(0.22, 1, 0.36, 1),
-    clip-path 1160ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* h2 自己的横向擦开（specificity 比上面高，才压得住 .display-reveal-title）。 */
-.motion-reveal-section .projects-heading h2 {
-  clip-path: inset(-0.2em 100% -0.2em 0);
-  transform: translate3d(-18px, 0, 0) scaleX(0.92);
-  transform-origin: left center;
-}
-
-/* 终态：只演一次（挂在 hm-played 上，翻回来不重播），起跑点与二屏文字同一根
-   时间线（--hm-base）。 */
-.projects.hm-played .projects-heading {
-  opacity: 1;
-  transform: translate3d(0, 0, 0);
-  transition-delay: var(--hm-base, 0ms);
-}
-
-.motion-reveal-section.hm-played .display-reveal-title {
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scaleX(1);
-  clip-path: inset(-0.2em 0 -0.2em 0);
-  transition-delay: var(--hm-base, 0ms);
-}
-
-.motion-reveal-section.hm-played .projects-heading h2 {
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scaleX(1);
-  clip-path: inset(-0.2em 0 -0.2em 0);
+  will-change: auto;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   ③ 三屏（projects）PC 卡组：逐张错峰升起 + 淡入
-   ⚠ 卡组原本自带一套入场（.showcase-deck 自己的 IntersectionObserver 写
-     `.showcase-deck.is-visible`，卡片读 --enter 46px + opacity）。IO 在**翻页
-     飞行途中**就命中 ⇒ 那一整段入场全在「屏幕还在动」的时候播完，落到三屏时
-     已经静止 —— 业主实测读作「这些卡片没有动效 / 入场太生硬」。
-     现在改由 section 的一次性闩驱动，起跑点与其它元素同一条时间线。
-   ⚠ 位移挂在**每张卡自己**身上（逐张错峰），不是整排一起平移：整排齐动读起来
-     是一块硬板在抬。错峰量 --hm-deck-step。
-   ⚠ 不碰卡片的 transform 声明本身：卡片的 transform 由 --push/--y/--rot/--scale
-     组合而成、还承载 hover 张开，覆盖它会让人场期间 hover 失灵 —— 这里只改
-     入场用的那个 --enter 分量与 opacity（原机制就是这么做的）。
-   ⚠ 倒影（.showcase-deck-reflection）只做淡入：它的 transform 与卡片独立
-     （悬浮缝就是靠这个错位读出来的），位移会让两边对不上。 */
+   ③ 三屏（projects）PC 卡组：**以卡组中心为起点，向左右散开**
+   ⚠ 业主 2026-10-11 定稿：「卡片以中心为起点，左右散开」（此前是每张 46px 从下
+     往上 + 42ms 错峰，被读作「入场太生硬」）。现在的形态：
+       起点 = 每张卡沿水平方向收拢到卡组中线（中间那张原地不动），
+       终点 = 各自的落位（--x）。越靠外的卡要走越远，天然形成「摊开」的节奏。
+   ⚠ 收拢量 = main.jsx 逐张写进内联的 --enter-x，单位是**卡片自身宽度的百分比**：
+     translateX 的百分比参照元素自身的 border box，而卡宽就是 --deck-w，所以只要把
+     「卡组中线 − 卡中心（%宽）」按 卡宽/卡组宽 换算一次，就不需要量容器宽度。
+   ⚠ 逐张错峰按「离中线的档数」--hm-d（内联）：中间那张最先动、越往外越晚。
+   ⚠⚠ delay / 缓动**只在 hm-entering 窗口内**生效（窗口由 main.jsx 与 hm-played
+     同一提交挂上、~2.4s 后摘掉）。hm-played 是只加不减的闩：把 delay 直接挂在它
+     上面会永久残留，实测入场结束后卡片的 computed transition-delay 还是
+     0.62~1.04s —— hover 张开（--push/--rot/--scale 变化走 transform 过渡）要先
+     干等 1 秒才动。窗口一关，卡片就回到自带 transition，hover 立刻响应。
+   ⚠ 卡片的 transform 声明本身承载 --push/--rot/--scale（hover 张开与拖拽靠它们），
+     这里只在 translateX 里多一项 --enter-x（默认 0%），不动其余分量。
+   ⚠ 倒影（.showcase-deck-reflection）读同一个 --enter-x，只做「横向跟随 + 淡入」：
+     它的 transform 与卡片是两套（悬浮缝靠这个错位读出来），给纵向位移会让两边对不上。 */
 html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card {
   opacity: 0;
-  --enter: 46px;
+  --enter: 0px;
   transition-delay: 0ms;
 }
 
@@ -2141,18 +2135,36 @@ html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .sh
   transition-delay: 0ms;
 }
 
-/* 到达过：逐张就位。specificity 压过 `.showcase-deck.is-visible` /
-   `.showcase-deck:not(.is-visible)` 那两条自带规则（它们只管 IO，不再参与）。 */
+/* 到达过：散开就位。--enter-x 归零（内联值只能用 !important 压住）。
+   specificity 也压过 `.showcase-deck.is-visible` / `:not(.is-visible)` 那两条
+   自带的 IO 规则（它们不再参与入场），并保证 transition-delay 回到 0。 */
 html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-card {
   opacity: 1;
   --enter: 0px;
-  transition-delay: calc(var(--hm-base) + var(--i, 0) * var(--hm-deck-step));
+  --enter-x: 0% !important;
+  transition-delay: 0ms;
 }
 
 html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-reflection {
   opacity: 1;
-  /* 倒影没有 --i，统一比首卡晚半拍，读作「卡片先立起来、倒影再浮上来」。 */
-  transition-delay: calc(var(--hm-base) + 240ms);
+  --enter-x: 0% !important;
+  transition-delay: 0ms;
+}
+
+/* 入场窗口（~2.4s）：逐张错峰 + 更柔更长的曲线。倒影比它对应的卡晚 120ms，
+   读作「卡片先滑过去、倒影再压上来」。 */
+html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-card {
+  transition:
+    opacity 760ms var(--hm-ease),
+    transform 1080ms var(--hm-ease);
+  transition-delay: calc(var(--hm-base) + var(--hm-d, 0) * var(--hm-deck-step));
+}
+
+html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-reflection {
+  transition:
+    opacity 900ms var(--hm-ease),
+    transform 1080ms var(--hm-ease);
+  transition-delay: calc(var(--hm-base) + 120ms + var(--hm-d, 0) * var(--hm-deck-step));
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -2170,16 +2182,15 @@ html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase
    ⚠ .mob-stage 只做位移淡入（animation）。它是卡组的量测基准（跨级交接时
      poseOf 读卡片的 getBoundingClientRect），所以动画结束必须回到 transform:none ——
      backwards 填充正好保证这一点。 */
-html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-stage {
-  opacity: 0;
-  transform: translate3d(0, 26px, 0);
-}
-
-.motion-reveal-section.hm-played .mob-stage {
-  animation: hm-text-rise-sm var(--hm-in) var(--hm-ease)
-    calc(var(--hm-base) + var(--hm-step) * 4) backwards;
-}
-
+/* ⚠ .mob-stage（卡台）**不参与这段 CSS 入场**，这是业主 2026-10-11 明确的口径：
+     「用户滑下来的时候就应该看到中间的主卡是显示着的，随后副卡从主卡背后通过旋转
+      展开。」所以卡台整体不做淡入/上移 —— 落到这一屏时主卡必须已经在那儿。
+   卡组自己的入场（副卡从中线旋转展开）由 MobileShowcaseDeck 的入场斜坡驱动
+   （ent 0→1，见 main.jsx 里 prop `deckEntering`）：副卡的 x/rot/scale 都乘这个
+   系数，起点正好是「与主卡同尺寸、同角度、完全被主卡挡住」，再旋出来。
+   为什么放在 JS 而不是这里：卡片的 transform 是 JS 逐帧写的（拖拽/轮播/分页都靠
+   它），CSS 动画要覆盖它就得把整套姿态硬编码一遍（SIDE_OFFSET/缩放/角度），
+   一处改动两处维护。 */
 html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-heading,
 html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-counter,
 html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-dots {
@@ -2247,8 +2258,8 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
   html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-contact,
   html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-stats,
   html[data-paging="on"] .motion-reveal-section.hm-played .mob-profile-skills,
-  html[data-paging="on"] .motion-reveal-section.hm-played .mob-stage {
-    animation: hm-text-fade 300ms linear backwards !important;
+  .motion-reveal-section.hm-played .projects-heading {
+    animation: hm-text-fade 300ms linear var(--hm-base, 0ms) backwards !important;
   }
 
   /* 基础态只留 opacity（位移归零），「到达过」的终态保持不变。 */
@@ -2259,38 +2270,29 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
     transform: none !important;
   }
 
-  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .mob-stage,
   html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-heading,
   html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-counter,
   html[data-device="mobile"] .motion-reveal-section:not(.hm-played) .mob-dots {
     transform: none !important;
   }
 
-  /* 三屏标题：reduce 下只留淡入（去掉位移与 clip-path 揭示）。 */
+  /* 三屏标题：reduce 下位移归零（上一条已把它换成 hm-text-fade 纯淡入）。 */
   .motion-reveal-section:not(.hm-played) .projects-heading,
-  .motion-reveal-section:not(.hm-played) .display-reveal-title,
-  .motion-reveal-section:not(.hm-played) .projects-heading h2 {
+  .motion-reveal-section .display-reveal-title,
+  .motion-reveal-section .projects-heading h2 {
     transform: none !important;
     clip-path: none !important;
   }
 
-  .motion-reveal-section.hm-played .projects-heading,
-  .motion-reveal-section.hm-played .display-reveal-title {
-    transition-duration: 300ms !important;
-    transition-timing-function: linear !important;
-    transition-delay: var(--hm-base, 0ms) !important;
-  }
-
-  /* 三屏卡组：位移归零，卡片与倒影只淡入。 */
-  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card {
-    --enter: 0px;
-  }
-
+  /* 三屏卡组：位移归零（--enter-x 清零 = 不再从中心散开），卡片与倒影只淡入。 */
+  html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card,
   html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-card,
   html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-reflection {
+    --enter: 0px;
+    --enter-x: 0% !important;
     transition-duration: 300ms !important;
     transition-timing-function: linear !important;
-    transition-delay: calc(var(--hm-base, 0ms) + var(--i, 0) * 24ms) !important;
+    transition-delay: calc(var(--hm-base, 0ms) + var(--hm-d, 0) * 24ms) !important;
   }
 
   /* 移动端顶部三件套同理：只淡入。 */
@@ -2493,7 +2495,7 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
     opacity 820ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
   transform: translate3d(
-      calc(var(--push) * 1px),
+      calc(var(--push) * 1px + var(--enter-x, 0%)),
       calc(-50% + var(--y) * 1px + var(--enter)),
       0
     )
@@ -2548,7 +2550,9 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
   clip-path: inset(0 round 12px);
   pointer-events: none;
   opacity: 0;
-  transform: translateX(var(--mirror-push)) translateY(calc(var(--y) * -1px)) rotate(calc(var(--rot) * 1deg));
+  /* --enter-x：与卡片同一份「向卡组中线收拢」的偏移（见 [HOME MOTION] 块 ③）。
+     --mirror-push 是 px，--enter-x 是 %（卡宽），calc 里可以混用。 */
+  transform: translateX(calc(var(--mirror-push) + var(--enter-x, 0%))) translateY(calc(var(--y) * -1px)) rotate(calc(var(--rot) * 1deg));
   transform-origin: 50% 0;
   transition:
     opacity 900ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -2839,11 +2843,15 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
      系统开了「减少动态效果」或内嵌预览面板里就会表现为「动效完全没生效」。
      这些元素在 reduce 下改由 [HOME MOTION] 块里的 hm-text-fade 接管：
      纯 opacity、无位移、300ms，仍然符合 reduce 的语义。
+     ⚠ .mob-deck / .mob-card 也必须排除：移动卡组的 transform 是 JS 逐帧写在内联
+       样式上的，而 `transform: none !important` 会把它整片压平（reduce 环境下
+       三张卡会全部叠到左上角）。排除后它们保持 JS 给的姿态，只是不再有入场位移。
      ⚠ 若整块删掉 [HOME MOTION]，这里的 :not() 也应一并还原成 `*` 的写法。 */
   .motion-reveal-section *:not(
       .pf-title, .pf-contact, .pf-swap, .pf-skills-entrance,
       .mob-profile-title, .mob-profile-contact, .mob-profile-stats, .mob-profile-skills,
-      .mob-stage, .mob-heading, .mob-counter, .mob-dots, .mob-thumbs
+      .mob-heading, .mob-counter, .mob-dots, .mob-thumbs,
+      .mob-deck, .mob-card
     ),
   .projects-heading,
   .showcase-deck-card,

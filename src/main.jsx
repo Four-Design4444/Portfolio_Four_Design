@@ -2650,6 +2650,18 @@ function ShowcaseDeck({ items, openWorks }) {
     return { active, push };
   };
 
+  /* [HOME MOTION] 一级页入场的「向卡组中线收拢」量（见 styles.css 的块 ③）。
+     卡组中线在 50%（宽度的百分比），本卡中心 = deck.left + 卡宽/2；两者之差换成
+     「卡片自身宽度的百分比」后写进 --enter-x 内联变量 —— translateX 的百分比参照
+     元素自己的 border box，而卡宽就是 --deck-w = DECK_CARD_W%，所以不需要量容器。
+     --hm-d = 离中线的档数，用来逐张错峰（中间那张最先动、越往外越晚）。
+     值只在入场时被读到（到达后 CSS 用 !important 把它压成 0%），不影响 hover。 */
+  const centerIdx = (items.length - 1) / 2;
+  const enterVars = (index, left) => ({
+    '--enter-x': `${(((50 - (left + DECK_CARD_W / 2)) / DECK_CARD_W) * 100).toFixed(3)}%`,
+    '--hm-d': Math.abs(index - centerIdx)
+  });
+
   return (
     <div
       ref={stageRef}
@@ -2668,7 +2680,8 @@ function ShowcaseDeck({ items, openWorks }) {
                 '--rot': active ? 0 : project.deck.rot,
                 '--y': active ? LIFT : project.deck.restY,
                 '--mirror-push': `${push}px`,
-                '--z': active ? 60 : project.deck.z
+                '--z': active ? 60 : project.deck.z,
+                ...enterVars(index, project.deck.left)
               }}
             >
               <LazyImage src={cover} alt="" aria-hidden="true" />
@@ -2686,7 +2699,8 @@ function ShowcaseDeck({ items, openWorks }) {
           '--push': push,
           '--scale': active ? 1.06 : 1,
           '--z': active ? 60 : project.deck.z,
-          '--i': index
+          '--i': index,
+          ...enterVars(index, project.deck.left)
         };
 
         return (
@@ -2740,7 +2754,7 @@ function ShowcaseDeck({ items, openWorks }) {
    - Tapping a side card switches to it; tapping the front card opens works.
    - Auto-plays every 2.4s; pauses while dragging.
    The PC ShowcaseDeck (hover fan) is untouched. */
-function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chromeHidden = false, chromeIn = false, deckVeiled = false }) {
+function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chromeHidden = false, chromeIn = false, deckVeiled = false, deckEntering = false, deckPlayed = false }) {
   const deckRef = useRef(null);
   const cardRefs = useRef([]);
   const dimRefs = useRef([]);
@@ -2750,6 +2764,31 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
   const stripRef = useRef(null);
   const ctxRef = useRef({ items, openWorks });
   ctxRef.current = { items, openWorks };
+
+  /* [HOME MOTION] 一级页入场：**副卡从主卡背后旋转展开**（主卡始终在位）。
+     业主 2026-10-11 口径：「用户滑下来的时候就应该看到中间的主卡是显示着的，
+     随后副卡从主卡背后通过旋转展开。」
+     做法 = 一个 0→1 的斜坡 `ent`，render 里把非主卡的 x / rot / scale 一起乘它：
+        ent=0 → 与主卡同尺寸、同角度、正压在主卡阴影里（完全被主卡盖住，看不见）
+        ent=1 → 各自的静止姿态（±SIDE_OFFSET / ∓8° / .86 倍）
+     斜坡期间把卡片的 transition 写成 none（否则每帧都会被 .58s 的过渡拖住），
+     跑完再单独用一帧把过渡交回 —— 终值不变，所以不会补间。
+     触发 = prop deckEntering（HomePage 的 .hm-entering 窗口）：起跑点要压在翻页
+     飞行之后（HOME_FLIP_MS = 700ms），否则整段展开在「屏还在飞」的时候就演完了。
+     reduce 环境直接跳过（只留静止姿态）。 */
+  const HM_DECK_RAMP_MS = 780;
+  const HM_DECK_RAMP_DELAY = 620;
+  /* ⚠ 初值必须是 0，不能是 1（业主 2026-10-11 二次反馈：「用户滑下来的时候就应该
+     看到中间的主卡是显示着的，随后副卡从主卡背后通过旋转展开」）。
+     初值 1 时副卡在首页就是摊开的 —— 用户下滑到作品页的那 700ms 飞行途中，
+     整组卡已经全在屏上，看到的就不是「只有主卡」。初值 0 时副卡与主卡完全重叠，
+     再靠 render 里的 z 钳位压在主卡之下 ⇒ 飞行途中真的只看得到主卡。
+     兜底见下方 [active] 那个 effect 里的看门狗：万一斜坡没被触发，
+     到点强制落到静止姿态，绝不让卡组永久停在「只剩主卡」。 */
+  const entRef = useRef(0);            // 0→1；0 = 副卡全部收在主卡背后
+  const entDoneRef = useRef(true);     // true 时 render 才把 transition 交回卡片
+  const entPhaseRef = useRef('idle');
+  const entRafRef = useRef(0);
   // 自动轮播只在首页可见时推进:此前它在隐藏层里照样每 3.4s 翻一张,
   // 用户从二级页返回时看到的已经不是离开时那张卡 —— 回程的「卡片缩回首页
   // 卡组」覆盖层会因为落点卡被换掉而错位(业主 2026-10-07 反馈的跳帧)。
@@ -2845,6 +2884,8 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
       //   补一个缩小,业主看到的就是一次跳帧。改为意图驱动后,点按(不拖)
       //   全程停在静止态,覆盖层 rect 与用户看到的那一帧完全一致。
       const isMain = s.isDrag && s.moved && Math.abs(r) < 0.5;
+      // [HOME MOTION] 副卡展开进度（见本组件顶部的 entRef 注释）：1 = 静止姿态。
+      const ent = entRef.current;
       let transform, z, dim, op, front = false;
       if (isMain) {
         transform =
@@ -2856,15 +2897,26 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
         const eff = CL(r + s.p, -2.05, 2.05);
         const pose = poseAt(eff);
         const par = s.isDrag ? 0.16 : 0;
+        /* ent 把位置 / 角度 / 缩放一起收向主卡：ent=0 时与主卡同尺寸、同角度、
+           完全重合（被 z-index 更高的主卡盖住 ⇒ 看不见），随后旋转着摊到两侧。 */
         transform =
-          `translate(-50%, -50%) translateX(${pose.x + s.curDX * par}px) translateY(${s.curDY * par}px)` +
-          ` rotate(${pose.r}deg) scale(${pose.s})`;
+          `translate(-50%, -50%) translateX(${pose.x * ent + s.curDX * par}px) translateY(${s.curDY * par}px)` +
+          ` rotate(${pose.r * ent}deg) scale(${1 + (pose.s - 1) * ent})`;
         z = zFor(eff); dim = pose.dim; op = pose.o;
+        /* 展开期间（ent < 1）副卡为什么看不见 —— 不需要额外钳 z：
+           ent=0 时它们的 transform 与主卡**逐字节相同**（x/rot/scale 都乘了 0），
+           而 zFor 只给 eff ∈ [-.5, .5] 的卡 z=3，那一档在静止态**只有主卡**
+           （r=0, p=0 ⇒ eff=0）独占；副卡 eff=±1 起，z 恒为 2/1/0。
+           所以主卡天然盖在最上面，副卡完整藏在它背后，展开时也是
+           「从主卡背后转出来」。别再给主卡也钳一刀 —— 那会把主卡压到 z=2，
+           同 z 下由 DOM 顺序决定谁在上，颜色不同的邻卡会直接露出来。 */
         front = !s.isDrag && z === 3;
       }
       // 内联 transition 覆盖卡面 CSS；保留位移、透明度与投影声明，
       // 两级卡片圆角统一为 20px，不再列入动画属性。
-      el.style.transition = s.isDrag ? 'none' :
+      // ⚠ 入场斜坡期间必须置 none：否则每帧写下的 transform 都会被 .58s 的过渡
+      //   重新计时、卡片被拖成一坨。斜坡跑完单独用一帧把过渡交回（见 entDoneRef）。
+      el.style.transition = (s.isDrag || !entDoneRef.current) ? 'none' :
         'transform .58s cubic-bezier(.26,1.24,.44,1), opacity .38s ease,' +
         ' box-shadow .52s cubic-bezier(.22,1,.36,1)';
       el.style.transform = transform;
@@ -3085,6 +3137,74 @@ function MobileShowcaseDeck({ items, openWorks, active = true, focusId = '', chr
     if (active && scheduleCarouselRef.current) scheduleCarouselRef.current();
     return undefined;
   }, [active]);
+
+  /* [HOME MOTION] 副卡展开斜坡的驱动器（见本组件顶部 entRef 注释）。
+     ⚠ phase 在 cleanup 里要退回 'idle'：StrictMode 会 mount→unmount→mount，
+       第一遍排下的计时器会被第一遍的 cleanup 清掉，若不退回，第二遍就再也不排了。
+     ⚠ reduce 环境直接标记 done（只留静止姿态，不做任何位移）。 */
+  useEffect(() => {
+    if (!deckEntering || entPhaseRef.current !== 'idle') return undefined;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // ⚠ entRef 初值是 0（副卡收在主卡背后），reduce 下必须**显式落到静止姿态**，
+      //   否则副卡会永久停在被主卡盖住的位置 —— 卡组只剩一张卡。
+      entRef.current = 1;
+      entDoneRef.current = true;
+      entPhaseRef.current = 'done';
+      renderRef.current();
+      return undefined;
+    }
+    entPhaseRef.current = 'scheduled';
+    const timer = window.setTimeout(() => {
+      entPhaseRef.current = 'running';
+      entRef.current = 0;
+      entDoneRef.current = false;
+      renderRef.current();
+      const t0 = performance.now();
+      const step = () => {
+        const p = Math.min(1, (performance.now() - t0) / HM_DECK_RAMP_MS);
+        entRef.current = 1 - Math.pow(1 - p, 3);      // easeOutCubic
+        renderRef.current();
+        if (p < 1) { entRafRef.current = requestAnimationFrame(step); return; }
+        // 终态仍以「无过渡」写入，下一帧再把过渡交回卡片 —— 终值不变，不会补间。
+        entRef.current = 1;
+        renderRef.current();
+        entRafRef.current = requestAnimationFrame(() => {
+          entDoneRef.current = true;
+          entPhaseRef.current = 'done';
+          renderRef.current();
+        });
+      };
+      entRafRef.current = requestAnimationFrame(step);
+    }, HM_DECK_RAMP_DELAY);
+    return () => {
+      window.clearTimeout(timer);
+      if (entPhaseRef.current === 'scheduled') entPhaseRef.current = 'idle';
+    };
+  }, [deckEntering]);
+
+  useEffect(() => () => {
+    if (entRafRef.current) window.cancelAnimationFrame(entRafRef.current);
+  }, []);
+
+  /* [HOME MOTION] 副卡展开的看门狗。
+     entRef 初值 0 意味着「斜坡没跑到 = 副卡永久藏在主卡背后」，这是不可接受的
+     失败方向（卡组只剩一张卡）。兜底必须挂在 **deckPlayed**（= 作品屏已经到达过
+     的闩，只加不减）而不是 active：active 在首页恒为真，挂 active 会在挂载后 4s
+     无条件把 ent 推到 1，等于把入场整个取消掉（2026-10-11 实测踩到）。
+     deckPlayed 为真而 entPhaseRef 仍是 idle = 斜坡宣告过但一次都没跑 → 才落位。 */
+  const HM_DECK_WATCHDOG_MS = 1500;
+  useEffect(() => {
+    if (!deckPlayed) return undefined;
+    if (entPhaseRef.current !== 'idle' || entRef.current === 1) return undefined;
+    const timer = window.setTimeout(() => {
+      if (entPhaseRef.current !== 'idle' || entRef.current === 1) return;
+      entPhaseRef.current = 'done';
+      entRef.current = 1;
+      entDoneRef.current = true;
+      renderRef.current();
+    }, HM_DECK_WATCHDOG_MS);
+    return () => window.clearTimeout(timer);
+  }, [deckPlayed]);
 
   /* 外部指定焦点(2026-10-07,二级页返回一级)。
      回程时二级轨道要把主卡收回「首页卡组里的那张卡」,落点必须真的是用户
@@ -4293,17 +4413,20 @@ function ProfileContentPC() {
 //   1.5s 在冷缓存 + 4G 上只有零点几秒余量，揭幕那一下尾屏/封面刚好收尾，
 //   网络稍有抖动就吃光 → 视频当场 rebuffer。2.5s 是"能连续播"而不是"能播"。
 const HERO_SMOOTH_AHEAD_SEC = 2.5;
-/* 尾屏在进度条里的权重（2026-10-11 由 2 → 8 → 22）。
+/* 尾屏在进度条里的权重（2026-10-11 由 2 → 8 → 22 → 50）。
    只影响读数在总分里占多少，**不影响揭幕时机**（揭幕看值到没到 1，不看权重）。
    ⚠ 改这个值必须同步 Street.jsx 里所有 weight 上报，两处不一致会以先登记的那个为准，
    后到的被忽略（注册表按 id 锁权重），改错一边不会报错、只会静默失效。
-   ⚠ 22 的由来（业主口径「末段不要卡住」）：实测 8 的时候，尾屏烧录那 1.15s 里
-   真实读数只涨 2.4%（tail 权重 8 只占总权重约 58 的 14%，烧录段又只占它的 25%），
-   条子从 95% 到 100% 要 1.1s，观感是"最后 5% 特别慢"。提到 22（总权重约 74）后，
-   烧录段读数涨幅 3.4% → 7.4%，前段被同步压低（不再"一下冲到 95%"），整条曲线
-   从"前快后龟"变成接近匀速。副作用是前段条子会明显慢于图片实际下载速度，
-   这是刻意的平衡，不是 bug。 */
-const TAIL_PROGRESS_WEIGHT = 22;
+   ⚠ 一路提上来的由来（业主口径「结尾慢、数字不要停」）：
+     · 权重 8：尾屏烧录那 1.15s 里真实读数只涨 2.4%，条子从 95% 到 100% 要 1.2s，
+       观感"最后 5% 特别慢"；
+     · 提到 22（总权重约 74，尾屏占 28.6%）：烧录段涨幅 7.4%，末段变缓坡；
+     · 50（总权重约 105，尾屏占 47.6%）：烧录段涨幅约 16.7%，末段每一步读数都明显，
+       代价是前段被压得更低（图片 33 张只占 31% 的分母，1000ms 时读数约 20%）。
+   这是刻意的平衡：全程接近匀速、末段不静止，换来的是前段条子明显慢于真实下载。
+   ⚠ 权重要与"业主希望末段占多少戏份"挂钩，不是越大越好：50 时尾屏单独一项就吃掉
+   近一半分母，再加就会让前段几乎不动。 */
+const TAIL_PROGRESS_WEIGHT = 50;
 /* 尾屏在 index.html 进度注册表里的任务 id。
    ⚠ 两个 id 不一样，别混：**上报时**用的是 Street.jsx 里的裸 id 'tail'
    （announce('tail', TAIL_PROGRESS_WEIGHT)，注册表统一加 'ext:' 前缀），
@@ -5867,6 +5990,13 @@ const HOME_TOUCH_END_DELAY_MS = 120;
    现在自己画，用同一条曲线、同一个时长，观感不变（见 goToPage 的注释）。 */
 const HOME_FLIP_MS = 700;
 
+/* [HOME MOTION] 入场窗口 .hm-entering 的长度：起跑点(--hm-base=620ms) + 最长一档
+   的错峰(中间那张走到最外圈 = 5 档 × --hm-deck-step 72ms ≈ 360ms) + 动画时长
+   (1080ms) + 余量。窗口内 PC 卡组才带逐张错峰的 transition-delay；窗口一关就摘掉，
+   免得那条 delay 永久残留、把 hover 张开也拖住（实测 probe-deck-hover-delay.mjs）。
+   移动端副卡展开斜坡（620 + 780ms）也在这个窗口里，取同一根时间线。 */
+const HM_DECK_WINDOW_MS = 2600;
+
 /* cubic-bezier(0.42, 0, 0.58, 1) —— 与 CSS 的 ease-in-out 同值，也是内核原生
    平滑滚动用的那条曲线；换掉原生实现后「翻页的手感」必须一模一样。
    标准 Newton 求 t(x) 再取 y，6 次迭代足够（误差 << 1px）。 */
@@ -6085,9 +6215,9 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // ⚠ 2026-10-13 曾串行化（视频 > 封面 > 尾屏），起因是三批 t=0 同时起跑时
   //   33 个并发请求把连接池占满，视频的 range 请求被排到队尾 → 首帧被拖慢，
   //   揭幕瞬间尾屏又抢主线程编译 → 视频卡在开场那几秒。
-  // ★ 2026-10-11 改为 **P2 全并行 + 限并发 6 路**：
-  //   · 封面：并发窗口 6（见 runPool），带宽照样吃满但给视频 range 留位置；
-  //   · 尾屏冷启动/编译/烧录：挂载即起跑，与视频缓冲同时进行；
+  // ★ 2026-10-11 改为 **P2 全并行 + C3 先窄后宽的并发窗口**：
+  //   · 封面：窗口冷态 6 路（见 run），hero:ready 之后自动放宽到 12 路；
+  //   · 尾屏冷启动/编译/烧录：挂载即起跑，与视频缓冲同时进行（C1 还把它的下载提前到 t=0）；
   //   · 揭幕条件**完全不变**：视频不满足"能连续播"就不揭幕（见下面的 reveal）。
   //   风险（业主已知，效果不好就退回 P1）：尾屏 WebGL 编译是整条链上最重的
   //   主线程负载，与视频首帧解码重叠会把首帧推晚 —— 存在"抢了自己要等的那道
@@ -6105,12 +6235,12 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id, weight, progress: 0 } }));
       } catch (_) { /* noop */ }
     };
-    /* ★ 2026-10-11：尾屏在进度条里的权重由 2 提到 TAIL_PROGRESS_WEIGHT(8)。
+    /* ★ 2026-10-11：尾屏权重由 2 → 8 → 22 → TAIL_PROGRESS_WEIGHT(50)。
        ⚠ 这个数**只影响读数，不影响揭幕**：揭幕问的是 __bootTasks().pending
        （该项的值到没到 1），权重大小不进那条判据，所以调大不会推迟也不会提前揭幕。
-       为什么调大：尾屏烧录是首屏 loading 末段**唯一还在动**的任务，原先只占 2 权重 →
+       为什么一路调大：尾屏烧录是首屏 loading 末段**唯一还在动**的任务，权重 2 时
        烧录那 0.5 权重只值总分的 0.9%，2 秒里读数几乎不动，观感就是"卡在 98%"。
-       提到 8 之后烧录段值约 3.1%，条子在这 2 秒里一路在爬。 */
+       50 之后烧录段值总分约 16.7%，条子在末段每一步都看得见在涨。 */
     announce(TAIL_EVENT_ID, TAIL_PROGRESS_WEIGHT);
   }, []);
 
@@ -6220,29 +6350,45 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       img.src = src;
       try { store.appendChild(img); } catch (_) { /* noop */ }
     });
-    /* ★ 2026-10-11 P2：并发跑，但**同时只有 6 张在飞**（每完成一张就补一张）。
-       为什么不是 33 条一起上（2026-10-13 实测踩过）：33 个并发请求会把连接池占满，
-       视频的 range 请求被排到队尾 → 视频首帧被自己人拖慢 → heroVideoReady 更晚 →
-       抢的正是自己要等的那道闸门。6 路在 HTTP/1.1 下已接近浏览器每域名上限，
-       带宽照样吃得满，同时给视频留出位置。
+    /* ★ 2026-10-11 P2 + C3：并发窗口**先窄后宽**。
+       冷态 6 路：为什么不是 33 条一起上（2026-10-13 实测踩过）：33 个并发请求会把
+       连接池占满，视频的 range 请求被排到队尾 → 视频首帧被自己人拖慢 →
+       heroVideoReady 更晚 → 抢的正是自己要等的那道闸门。
+       一旦 hero:ready（React 侧"能连续播"严格判据通过，见上面 dispatch），说明视频
+       已经攒够余量、不再怕被挤，窗口放宽到 12 路，图片立刻加速收尾（省排队时间）。
+       ⚠ 窗口只决定"同时最多几张在飞"，不改变总量、不改变任何一张的计分与揭幕条件。
        **每完成一张就报一次**（进度条据此一张张爬）；单张失败/超时照样 resolve，
        所以收尾用"全部 settle"，不会被某一张打断。 */
-    const PRELOAD_CONCURRENCY = 6;
-    const run = async (list) => {
+    const PRELOAD_CONCURRENCY_COLD = 6;
+    const PRELOAD_CONCURRENCY_WARM = 12;
+    let lanesWarm = window.__heroReady === true;
+    const onHeroReady = () => { lanesWarm = true; };
+    window.addEventListener('hero:ready', onHeroReady);
+    const laneTarget = () => (lanesWarm ? PRELOAD_CONCURRENCY_WARM : PRELOAD_CONCURRENCY_COLD);
+    /* 泵式调度：每完成一张就按**当前**窗口补位，所以窗口放宽那一刻立即多跑 6 张。
+       （固定 N 个 worker 的写法做不到中途放宽 —— worker 数在起跑时就定死了。） */
+    const run = (list) => new Promise((resolve) => {
+      const total = list.length;
       let cursor = 0;
-      const worker = async () => {
-        while (cursor < list.length) {
+      let inFlight = 0;
+      let settled = 0;
+      const pump = () => {
+        while (inFlight < laneTarget() && cursor < total) {
           const src = list[cursor];
           cursor += 1;
-          // eslint-disable-next-line no-await-in-loop
-          await preloadOne(src);
-          done += 1;
-          announce(`img:${src}`, 1);
+          inFlight += 1;
+          preloadOne(src).then(() => {
+            inFlight -= 1;
+            settled += 1;
+            done += 1;
+            announce(`img:${src}`, 1);
+            if (settled >= total) resolve();
+            else pump();
+          });
         }
       };
-      const lanes = Math.max(1, Math.min(PRELOAD_CONCURRENCY, list.length));
-      await Promise.all(Array.from({ length: lanes }, () => worker()));
-    };
+      pump();
+    });
     /* 隐藏预载容器用完即撤：卡片们此时已经各自挂上 src（markImagePreloaded 的订阅
        在预载成功那一刻就把 src 派给了 DOM 里已存在的卡组/轨道），
        资源也已在内核缓存里，移除容器不再影响任何一张卡的显示，只把内存还回去。 */
@@ -6278,11 +6424,16 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
     // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
     // ⚠ 2026-10-11 P2：它现在与视频缓冲**同时**发生（warmStage 挂载即为 1）。
+    //   C1 又把它的 707KB 入口 JS 提到 t=0 预下载（见 index.html 的 preload），
+    //   网络那一段不再等 React 挂载；编译时机不变（仍等 iframe 创建）。
     //   代价：WebGL 编译是整条链上最重的主线程负载，重叠会拖慢视频首帧。
     //   兜底仍在：heroVideoReady 不满足就不揭幕，最坏情况只是 loading 变长，
     //   不会让用户在视频卡顿的状态下进入 hero。
     setContactPreload(true);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hero:ready', onHeroReady);
+    };
   }, [warmStage]);
   /* ⚠ 依赖数组只有 warmStage：worksItems / mobileWorksItems 每次渲染都是新数组，
      放进依赖会让这个 effect 每渲染一次就 cleanup 一次（cancelled=true + 清掉兜底
@@ -6711,10 +6862,30 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
        这里只是往 Set 里加数字，幂等，StrictMode 下重复渲染也无副作用。 */
   const playedRef = useRef(null);
   if (playedRef.current === null) playedRef.current = new Set();
-  if (profileVisible) playedRef.current.add(1);
-  if (projectsVisible) playedRef.current.add(2);
-  if (contactVisible) playedRef.current.add(3);
+  /* ★ 入场窗口 .hm-entering（只给 PC 卡组 + 移动端副卡展开用；见 styles.css 块 ③）
+     —— 与 hm-played 在**同一个提交**里挂上：如果放到 useEffect 里晚一帧，
+     transition 已经以 delay:0 起步了，再补 delay 也来不及（transition-delay 只在
+     过渡开始那一刻被读取）。窗口到点后摘类 + 触发一次重渲染收尾。
+     ⚠ Set 只加不删（和 playedRef 同款）：StrictMode 下重复渲染是幂等的；
+       `has(n)` 判断保证不会重复排计时器。 */
+  const enteringRef = useRef(null);
+  if (enteringRef.current === null) enteringRef.current = new Set();
+  const [, bumpEntering] = useState(0);
+  const latch = (visible, n) => {
+    if (!visible || playedRef.current.has(n)) return;
+    playedRef.current.add(n);
+    enteringRef.current.add(n);
+    window.setTimeout(() => {
+      if (!enteringRef.current.has(n)) return;
+      enteringRef.current.delete(n);
+      bumpEntering((v) => v + 1);
+    }, HM_DECK_WINDOW_MS);
+  };
+  latch(profileVisible, 1);
+  latch(projectsVisible, 2);
+  latch(contactVisible, 3);
   const played = playedRef.current;
+  const entering = enteringRef.current;
 
   return (
     <>
@@ -6729,7 +6900,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
           restarting at the top of each screen, so turning a page never reveals a
           fresh bright corner sliding in. */}
       <div className="home-ground">
-      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}${played.has(2) ? ' hm-played' : ''}`} id="projects">
+      <section ref={projectsRef} className={`section projects motion-reveal-section${projectsVisible ? ' is-visible' : ''}${played.has(2) ? ' hm-played' : ''}${entering.has(2) ? ' hm-entering' : ''}`} id="projects">
         <div className="container">
           <div className="projects-heading">
             <h2 className="display-reveal-title rany-display-heading">Project Display</h2>
@@ -6737,7 +6908,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
         </div>
         <div className="project-list">
           {isMobile ? (
-            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} chromeIn={chromeIn} deckVeiled={deckVeiled} />
+            <MobileShowcaseDeck items={mobileWorksItems} openWorks={openWorks} active={active} focusId={deckFocusId} chromeHidden={chromeHidden} chromeIn={chromeIn} deckVeiled={deckVeiled} deckEntering={entering.has(2)} deckPlayed={played.has(2)} />
           ) : (
             <ShowcaseDeck items={worksItems} openWorks={openWorks} />
           )}
