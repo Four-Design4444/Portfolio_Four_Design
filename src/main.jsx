@@ -1707,11 +1707,9 @@ function App() {
                 activeCategory={exitDetail ? exitDetail.category : activeCategory}
                 work={exitDetail ? exitDetail.work : activeWork}
                 flip={mobileFlip}
-                onSwipeProject={
-                  !exitDetail && isMobileDevice() && works.length > 1
-                    ? (dir) => goDetailByIndex(activeIndex + dir)
-                    : null
-                }
+                /* 2026-10-11(业主):移动端三级页禁用左右滑动切换详情页,
+                   只允许通过导航翻页切换;竖滑返回(onBack)不受影响。 */
+                onSwipeProject={null}
                 onBack={!exitDetail && isMobileDevice() ? goDetailBack : null}
                 /* 左右滑动切项目的落点就是 works 里的 ±1（goDetailByIndex 越界即返回，
                    所以不做环绕），把这两件作品交给详情页做首图预取。 */
