@@ -188,9 +188,8 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
       const burning = armed && !burnedRef.current;
       try {
-        /* 翻页/文字入场冻结：翻页档之外，移动端文字入场期间也暂时停掉
-           iframe 的 WebGL 回调。两者取 OR，避免 flipping 结束时把入场冻结提前解除。 */
-        win.__streetFrozen = (active && flipping) || !!win.__streetEntryFreeze;
+        /* 翻页冻结：双门控（active 且 flipping）。见文件上方「翻页冻结档」注释。 */
+        win.__streetFrozen = active && flipping;
         win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
         /* 空转保活间隔两档：
