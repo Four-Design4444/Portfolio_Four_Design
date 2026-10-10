@@ -377,6 +377,11 @@
         })();
         var fill = progress.fill;
         var num = progress.num;
+        // ★ 淡入交接期的"影子条"（修业主「进度条原地闪一下」）：placeIntoDemo 把真节点
+        //   搬进 iframe 的那一帧，静态占位的条子区域立刻空掉，而 iframe 还要 .3s 才淡入
+        //   到不透明 ⇒ 条子"灭一下再随 iframe 淡回来"= 原地闪烁。搬走时克隆一条留在
+        //   静态占位里（位置与 iframe 内那条逐像素一致），paint() 双写同步，淡入结束后移除。
+        var staticBar = null;
         // 进度条先挂到静态猫占位的 .copy 里（与 iframe 内 .copy 同位置），
         // 空窗期就有进度；placeIntoDemo 会把它搬进 iframe 的 .copy。
         staticCopy.appendChild(progress.root);
@@ -473,6 +478,16 @@
             svg.insertBefore(frag, svg.firstChild);
           }
           copy.appendChild(progress.root);
+          // 影子条：补进静态占位，顶到 iframe 淡入结束（.3s 过渡 + 余量）。两条
+          // 位置/样式逐像素一致（探针已验证 DELTA 全 0），叠在一起看不出是两条。
+          try {
+            staticBar = progress.root.cloneNode(true);
+            staticCopy.appendChild(staticBar);
+          } catch (_) { staticBar = null; }
+          window.setTimeout(function () {
+            if (staticBar && staticBar.parentNode) staticBar.parentNode.removeChild(staticBar);
+            staticBar = null;
+          }, 400);
           placed = true;
           // 注入全部落位后才让 iframe 可见：门控解除前用户看到的是静态猫占位，
           // 而不是 iframe 注入前可能带有的旧样式/旧位置。
@@ -558,21 +573,66 @@
         //     拿不到就退回"资源条目完成"这种 0/1 判定；
         //   · React 首屏就绪：由 app:ready 事件给出。
         var tasks = [];
-        var addEntryTask = function (href, weight, cap) {
-          tasks.push({
-            weight: weight,
-            read: function () {
-              var value = 0;
-              try {
-                var abs = new URL(href, location.href).href;
-                var entries = performance.getEntriesByName(abs, 'resource');
-                if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
-                if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
-              } catch (_) { /* noop */ }
-              // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
-              return cap ? Math.min(cap, value) : value;
-            }
-          });
+        /* ── 任务注册表（2026-10-13 业主口径）──────────────────────────────────
+           业主原话：「后续有新加入 loading 加载的内容时，加载进度和加载时间必须是实时跟
+           加载内容挂钩的，不能出现『这轮加了新任务，进度还按旧任务量算』。」
+           所以进度条**不存任何固定的总权重**：总分 = 每次 tick 现算的
+           sum(tasks[].weight)，任何时刻（哪怕加载到一半）新登记的任务都会立刻改变
+           分母与目标值。反过来，"够了没有"也只认这张表：React 侧的揭幕闸门问
+           __bootTasks().pending 是否为空 —— **进度条上还有没完成的任务，就不揭幕**。
+           ⇒ 以后新增任何加载内容（图片/字体/模型…）只要按约定派发
+              window.dispatchEvent(new CustomEvent('loading:progress',
+                { detail: { id, weight, progress } }))
+           就会自动进入进度条、自动推迟揭幕，不需要改闸门代码。
+           gating:false 的项只参与"条子好不好看"的测量（例如视频的 buffered 比例，它
+           按设计永远到不了 1），不参与"完成了没有"的判断。 */
+        var registry = {};   // id -> 任务项（唯一事实来源）
+        var tasks = [];      // 同批任务项的数组视图，只给 tick 求和用
+        var addTask = function (id, weight, read, gating) {
+          if (registry[id]) return registry[id];
+          var entry = { id: id, weight: weight, read: read, gating: gating !== false };
+          registry[id] = entry;
+          tasks.push(entry);
+          return entry;
+        };
+        var addEntryTask = function (href, weight, cap, gating) {
+          var id = 'res:' + href;
+          return addTask(id, weight, function () {
+            var value = 0;
+            try {
+              var abs = new URL(href, location.href).href;
+              var entries = performance.getEntriesByName(abs, 'resource');
+              if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
+              if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
+            } catch (_) { /* noop */ }
+            // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
+            return cap ? Math.min(cap, value) : value;
+          }, gating);
+        };
+        /* 揭幕闸门问的就是这里：进度条上还有没有"该完成却没完成"的项。
+           永远现算、不缓存 —— 所以任何时刻新登记的任务都会立刻反映进来。 */
+        window.__bootTasks = function () {
+          var total = 0;
+          var sum = 0;
+          var pending = [];
+          var detail = {};
+          for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            var value = 0;
+            try { value = Math.min(1, Math.max(0, t.read() || 0)); } catch (_) { value = 1; }
+            total += t.weight;
+            sum += t.weight * value;
+            detail[t.id] = Math.round(value * 1000) / 1000;
+            if (t.gating && value < 0.999) pending.push(t.id);
+          }
+          return {
+            count: tasks.length,
+            totalWeight: total,
+            sum: Math.round(sum * 1000) / 1000,
+            ratio: total ? sum / total : 1,
+            pending: pending,
+            detail: detail,
+          };
         };
         var videoBuffered = function () {
           var list = document.querySelectorAll('video');
@@ -593,33 +653,40 @@
         (window.__bootAssets || []).forEach(function (asset) {
           // 视频是首屏字节大头（~1.9MB），权重给高，进度才不会"一上来就 90%"。
           var weight = asset.kind === 'video' ? 4 : 1;
-          addEntryTask(asset.href, weight, asset.kind === 'video' ? 0.92 : 0);
+          /* ⚠ 视频的"资源条目"这一项**不参与揭幕判定**（gating:false）：它的 read 被
+             cap 在 0.92（下载完不算完，得等视频真能连续播），所以永远到不了 1 ——
+             让它 gating 就会在注册表里永久挂着一项未完成，把"任务都做完了吗"这条判据
+             废掉。视频那一段由 React 的 heroVideoReady 判定，严格得多。 */
+          addEntryTask(asset.href, weight, asset.kind === 'video' ? 0.92 : 0, asset.kind !== 'video');
           if (asset.kind === 'video') {
-            tasks.push({
-              weight: weight,
-              read: function () {
-                var buffered = videoBuffered();
-                // 取两者较大值：buffered 更平滑，资源条目完成后直接封顶 1。
-                var done = 0;
-                try {
-                  var abs = new URL(asset.href, location.href).href;
-                  var entries = performance.getEntriesByName(abs, 'resource');
-                  if (!entries.length) entries = performance.getEntriesByName(asset.href, 'resource');
-                  if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
-                } catch (_) { /* noop */ }
-                // 下载完只算到 92%：剩下的 8% 必须由「视频真的能连续播」来补
-                // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
-                return Math.min(0.92, Math.max(buffered, done));
-              }
-            });
+            /* 视频的"缓冲比例"只是**观感**用的探针（按设计封顶 0.92，永不到 1），
+               所以 gating:false —— "视频到底能不能连续播"由 React 侧的 heroVideoReady
+               判据负责，不在这里重复判。 */
+            addTask('video-buffered:' + asset.href, weight, function () {
+              var buffered = videoBuffered();
+              // 取两者较大值：buffered 更平滑，资源条目完成后直接封顶 1。
+              var done = 0;
+              try {
+                var abs = new URL(asset.href, location.href).href;
+                var entries = performance.getEntriesByName(abs, 'resource');
+                if (!entries.length) entries = performance.getEntriesByName(asset.href, 'resource');
+                if (entries.length && entries[entries.length - 1].responseEnd > 0) done = 1;
+              } catch (_) { /* noop */ }
+              // 下载完只算到 92%：剩下的 8% 必须由「视频真的能连续播」来补
+              // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
+              return Math.min(0.92, Math.max(buffered, done));
+            }, false);
           }
         });
         // 应用脚本（Vite 注入的 module + modulepreload）
         Array.prototype.forEach.call(document.querySelectorAll('script[src], link[rel="modulepreload"]'), function (node) {
           addEntryTask(node.src || node.href, 1);
         });
-        // 首屏图片：视口内的 <img> 里已经 decode 完的比例。这是真能观测到的量
-        // （complete + naturalWidth），不是按数量拍脑袋。
+        /* 首屏图片：视口内的 <img> 的"尘埃落定"比例。
+           ⚠ 判据是 complete **而不是** complete && naturalWidth（2026-10-13）：坏图
+           （404/解码失败）永远拿不到 naturalWidth，那样这一项会永久停在 <1，
+           把整条进度和揭幕一起吊死。complete 对成功与失败都为真 —— 失败也算"有结论"，
+           这正是"加载任务"该有的语义（真加载不出来就要放行，而不是无限等）。 */
         var imagesProgress = function () {
           var list = document.querySelectorAll('img');
           var done = 0;
@@ -628,27 +695,36 @@
             var rect = list[i].getBoundingClientRect();
             if (rect.bottom < 0 || rect.top > window.innerHeight || !rect.width) continue;
             total++;
-            if (list[i].complete && list[i].naturalWidth) done++;
+            if (list[i].complete) done++;
           }
           return total ? done / total : 0;
         };
-        tasks.push({ weight: 2, read: imagesProgress });
+        addTask('viewport-images', 2, imagesProgress);
 
-        // 外部进度（React 侧在 loading 阶段预载的内容：作品封面、尾屏 WebGL）：
+        // 外部进度（React 侧在 loading 阶段预载的内容：作品封面/详情长图、尾屏 WebGL）：
         // 通过 window 'loading:progress' 事件上报 { id, weight, progress }，并入同一条
         // 加权进度条，于是条子会随封面一张张下完、尾屏着色器编译完而真实爬升，
         // 用户能直接"看见 loading 在干活"。权重在首次上报时锁定，之后只更新 progress。
-        var external = {};
+        //
+        // ⚠ 一条约定，以后加任何加载内容都照它做，别再改闸门代码：
+        //   1) 开始加载**之前**（最好是挂载当帧）就派发一次 progress:0 把任务登记进去
+        //      —— 否则总分里没有它，条子会先算到 100% 再"倒退"（paint 只增不减，
+        //      于是表现为卡住不动）；
+        //   2) 每完成一份就派发新的 progress（0..1，内部取 max，单调）；
+        //   3) 全部完成时派发 1。**进度条上还有没到 1 的任务，React 就不会揭幕**
+        //      （它读的是 __bootTasks().pending），所以"加载时间"自动跟着内容变。
         window.addEventListener('loading:progress', function (e) {
           var d = e.detail || {};
           if (!d.id) return;
-          if (!external[d.id]) {
+          var entry = registry['ext:' + d.id];
+          if (!entry) {
             var w = (typeof d.weight === 'number' && d.weight > 0) ? d.weight : 2;
-            external[d.id] = { weight: w, progress: 0 };
-            tasks.push({ weight: w, read: function () { return external[d.id] ? external[d.id].progress : 0; } });
+            var box = { progress: 0 };
+            entry = addTask('ext:' + d.id, w, function () { return box.progress; });
+            entry.box = box;
           }
           if (typeof d.progress === 'number') {
-            external[d.id].progress = Math.max(external[d.id].progress, Math.min(1, d.progress));
+            entry.box.progress = Math.max(entry.box.progress, Math.min(1, d.progress));
           }
         });
 
@@ -664,29 +740,43 @@
           var percent = Math.round(shown * 100);
           fill.style.width = percent + '%';
           num.textContent = percent + '%';
+          // 影子条同步：淡入交接的 0.4s 里百分比也可能涨，两边必须一致。
+          if (staticBar) {
+            var sbFill = staticBar.querySelector('.app-loader-bar > i');
+            var sbNum = staticBar.querySelector('.app-loader-num');
+            if (sbFill) sbFill.style.width = percent + '%';
+            if (sbNum) sbNum.textContent = percent + '%';
+          }
         };
+        var lastGainAt = Date.now(); // 上次"进度真的涨了"的时刻（看门狗用）
         var tick = function () {
+          // ⚠ 分母每次现算（tasks 的实时权重和）：加载中途新登记的任务立刻改变目标值，
+          //   所以永远不存在"按旧任务量算到 100%"这回事。
           var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;
           var sum = 0;
           for (var i = 0; i < tasks.length; i++) sum += tasks[i].weight * tasks[i].read();
           var target = Math.min(1, sum / total);
+          if (target > eased + 0.002) lastGainAt = Date.now();
           eased += (target - eased) * 0.3;
           if (target - eased < 0.004) eased = target; // 收尾别拖着不到 100
           paint(eased);
         };
+        // 自查用：控制台敲 __bootProgress() 就能看到"条子读到多少 / 还差哪些任务"。
+        window.__bootProgress = function () {
+          var s = window.__bootTasks();
+          return { shown: shown, eased: Math.round(eased * 1000) / 1000, ratio: Math.round(s.ratio * 1000) / 1000, pending: s.pending, count: s.count, totalWeight: s.totalWeight, detail: s.detail };
+        };
 
         var MIN_SHOW = 600;
-        // 硬超时（最后的安全网，只在 app:ready 始终不来时才生效）。
-        // ⚠ 2026-10-08：6s → 12s。揭幕闸门现在多了一道"尾屏灯光烧录"（见
-        // Street.jsx / HomePage）：demo 的 intro 渐入被 clamp 到 0.05s/帧、无法快进，
-        // 只能在遮罩期按受控帧率跑完 ~3.4s。原来的 6s 会在正常路径上提前揭幕
-        // （首屏视频在慢网下本身就可能 >4s），那就等于把烧录又漏回 hero 播放期。
-        // ⚠ 2026-10-13：12s → 18s。业主口径「确保视频能流畅播放，再结束 loading 页」：
-        // 冷缓存慢网要 6~12s 才把首屏视频攒到 2.5s 余量，旧的 12s 会抢在 React 侧的
-        // 质量闸门之前把遮罩收掉 —— 揭幕时视频还没攒够，进去就卡。这里只是"最后一道
-        // 保险"（防某一闸门彻底不动把首屏永久扣住），正常路径 ~3.6s、慢网 6~12s 都远
-        // 在它之前。等待期间进度条是按 <video> 的真实 buffered/duration 爬的。
-        var HARD_CAP = 18000;
+        /* 看门狗（2026-10-13 取代固定 HARD_CAP）：**不再看时钟到点就放**，只看两件事 ——
+             ① 已经跑了 WATCHDOG_MIN_MS 以上；② 连续 WATCHDOG_STALL_MS 一点进度都没涨。
+           业主口径「加载时间必须实时跟加载内容挂钩」：固定 18s 会在图片变多时抢在任务
+           之前揭幕（他就是这么发现"新任务没算进去"的）；只看"有没有在动"则与内容量无关
+           —— 加再多图，只要还在下就继续等，真卡住了才放行。
+           放行用 hide(false)：**不补满 100%**，条子停在实际读数上淡出（假 100% 是业主
+           明确讨厌的）。它仍会播报 app:ready，否则首屏标题会永远停在 opacity:0。 */
+        var WATCHDOG_MIN_MS = 15000;
+        var WATCHDOG_STALL_MS = 5000;
         var startedAt = Date.now();
         var hidden = false;
         var hide = function (finished) {
@@ -725,14 +815,18 @@
         window.__hideAppLoader = function () { announceReady(); hide(true); };
         window.addEventListener('app:ready', function () { ready = true; window.__appRevealed = true; hide(true); });
         var timer = window.setInterval(tick, 120);
-        window.setTimeout(function () { window.clearInterval(timer); }, HARD_CAP + 200);
-        // 兜底：无论如何 HARD_CAP 后必须揭幕，避免某一闸门（如 hero 视频在异常环境下
-        // 始终不就绪）导致 loading 永久卡住。这是最后的安全网，正常路径由 app:ready 触发。
-        // 硬超时也必须播报：只淡出遮罩而不给 app:ready，首屏标题就永远不入场。
-        window.setTimeout(function () { if (!hidden) { announceReady(); hide(true); } }, HARD_CAP);
-        // 兜底：hero 视频失败 / 微信端无原生 video 时 heroVideoReady 永不触发，
-        // 也要揭幕（不补满进度）。
-        window.setTimeout(function () { hide(false); }, HARD_CAP);
+        // 看门狗：与内容量无关，只看"有没有在动"。真卡死了也必须播报 app:ready
+        // （只淡出遮罩不给信号，首屏标题会永远停在 opacity:0），但不补满进度。
+        var watchdog = window.setInterval(function () {
+          if (hidden) { window.clearInterval(watchdog); return; }
+          if (Date.now() - startedAt < WATCHDOG_MIN_MS) return;
+          if (Date.now() - lastGainAt < WATCHDOG_STALL_MS) return;
+          announceReady();
+          hide(false);
+        }, 500);
+        // 极端情况：任务表本身出错 / 一直没有任何任务在动（含 tick 抛错）。
+        // 40s 后无论如何也要揭幕，否则首屏永久扣住。
+        window.setTimeout(function () { if (!hidden) { announceReady(); hide(false); } }, 40000);
         tick();
       })();
     </script>
