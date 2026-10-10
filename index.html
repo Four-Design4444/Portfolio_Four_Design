@@ -595,19 +595,58 @@
           tasks.push(entry);
           return entry;
         };
+        var ENTRY_GRACE_MS = 10000;
+        /* 标记"这一项本次可能根本用不到"：登记后 ENTRY_GRACE_MS 内如果还没被真正用到，
+           就从任务表里移除（分母随之变小、ratio 立刻变准）。见 addEntryTask 的注释。
+           started 由各自的 read() 负责置真，语义就是"本次真的用到它了吗"。 */
+        var markExpirable = function (entry) {
+          entry.expireAt = Date.now() + ENTRY_GRACE_MS;
+          entry.started = false;
+          return entry;
+        };
+        /* 某个视频变体**是否真的被播放器用到了**（在 <video> 的 src / currentSrc /
+           <source> 列表里）。只被 preload 过、没挂到播放器上的变体不算"用到" ——
+           它没有"缓冲比例"可言，不该永远占着进度条（线上实测踩到）。 */
+        var videoUses = function (href) {
+          var abs = '';
+          try { abs = new URL(href, location.href).href; } catch (_) { return false; }
+          var list = document.querySelectorAll('video');
+          for (var i = 0; i < list.length; i++) {
+            var v = list[i];
+            if (v.currentSrc && v.currentSrc === abs) return true;
+            if (v.src && v.src === abs) return true;
+            var srcs = v.querySelectorAll('source');
+            for (var j = 0; j < srcs.length; j++) {
+              var s = srcs[j].src || srcs[j].getAttribute('src');
+              if (!s) continue;
+              try { if (new URL(s, location.href).href === abs) return true; } catch (_) { /* noop */ }
+            }
+          }
+          return false;
+        };
         var addEntryTask = function (href, weight, cap, gating) {
           var id = 'res:' + href;
-          return addTask(id, weight, function () {
+          var entry = addTask(id, weight, function () {
             var value = 0;
             try {
               var abs = new URL(href, location.href).href;
               var entries = performance.getEntriesByName(abs, 'resource');
               if (!entries.length) entries = performance.getEntriesByName(href, 'resource');
+              if (entries.length || videoUses(href)) entry.started = true; // 请求发出过 / 播放器用到了
               if (entries.length && entries[entries.length - 1].responseEnd > 0) value = 1;
             } catch (_) { /* noop */ }
             // cap：下载完 ≠ 能流畅播，视频类留最后一段给 app:ready 判据。
             return cap ? Math.min(cap, value) : value;
           }, gating);
+          /* ★ 2026-10-13（线上实测踩到，必须记一笔）：__bootAssets 列的是**候选**资源，
+             不是本次一定会请求的资源 —— 例如 hero-hevc.mp4 / hero-mask-hevc.mp4 只在
+             支持 HEVC 的设备上才会被 <video> 请求。别的设备上它们永远没有 performance
+             条目、value 恒为 0，条子就被**永久**扣在低位（线上实测停在 18.2%，
+             九个任务里三个永远完成不了），直到看门狗认输。
+             规则：登记后 ENTRY_GRACE_MS 内一次都没被用到 ⇒ 判定"本次用不到"，
+             从任务表里移除，并留一条 console.info。
+             注意 paint 只增不减，所以移除只会让条子往上走，不会倒退。 */
+          return markExpirable(entry);
         };
         /* 揭幕闸门问的就是这里：进度条上还有没有"该完成却没完成"的项。
            永远现算、不缓存 —— 所以任何时刻新登记的任务都会立刻反映进来。 */
@@ -662,7 +701,11 @@
             /* 视频的"缓冲比例"只是**观感**用的探针（按设计封顶 0.92，永不到 1），
                所以 gating:false —— "视频到底能不能连续播"由 React 侧的 heroVideoReady
                判据负责，不在这里重复判。 */
-            addTask('video-buffered:' + asset.href, weight, function () {
+            var bufferedEntry = addTask('video-buffered:' + asset.href, weight, function () {
+              /* started 只看"播放器是否真的用到它"：没挂到 <video> 上的变体没有缓冲比例
+                 可言，不该永远占着进度条（线上实测正是 res+buffered 各 4 权重一起把
+                 条子钉在 18.2%）。到点由 tick 的清理逻辑移除。 */
+              if (videoUses(asset.href)) bufferedEntry.started = true;
               var buffered = videoBuffered();
               // 取两者较大值：buffered 更平滑，资源条目完成后直接封顶 1。
               var done = 0;
@@ -676,6 +719,7 @@
               // （app:ready），否则条子会先跳到 100% 再干等，那就是假进度。
               return Math.min(0.92, Math.max(buffered, done));
             }, false);
+            markExpirable(bufferedEntry);
           }
         });
         // 应用脚本（Vite 注入的 module + modulepreload）
@@ -686,7 +730,10 @@
            ⚠ 判据是 complete **而不是** complete && naturalWidth（2026-10-13）：坏图
            （404/解码失败）永远拿不到 naturalWidth，那样这一项会永久停在 <1，
            把整条进度和揭幕一起吊死。complete 对成功与失败都为真 —— 失败也算"有结论"，
-           这正是"加载任务"该有的语义（真加载不出来就要放行，而不是无限等）。 */
+           这正是"加载任务"该有的语义（真加载不出来就要放行，而不是无限等）。
+           ⚠⚠ 视口里**一张图都没有**时必须返回 1（2026-10-13 线上实测）：过去返回 0，
+           于是"没图可等"被当成"图还没好"，这一项（权重 2）永久为 0 —— 线上那份包里
+           React 崩了、DOM 里没有任何图，条子就被这一项钉死。没有要等的东西 = 已经等完了。 */
         var imagesProgress = function () {
           var list = document.querySelectorAll('img');
           var done = 0;
@@ -697,7 +744,7 @@
             total++;
             if (list[i].complete) done++;
           }
-          return total ? done / total : 0;
+          return total ? done / total : 1;
         };
         addTask('viewport-images', 2, imagesProgress);
 
@@ -750,6 +797,16 @@
         };
         var lastGainAt = Date.now(); // 上次"进度真的涨了"的时刻（看门狗用）
         var tick = function () {
+          /* 先把"本次根本用不到的候选资源"清出去（见 addEntryTask 的注释）：
+             它们不在分母里，进度与加载时间才是真的跟本次内容挂钩。 */
+          for (var k = tasks.length - 1; k >= 0; k--) {
+            var tk = tasks[k];
+            if (tk.expireAt && !tk.started && Date.now() > tk.expireAt) {
+              tasks.splice(k, 1);
+              try { delete registry[tk.id]; } catch (_) { registry[tk.id] = null; }
+              try { console.info('[loading] 本次没有请求这个资源，已从加载任务中移除：' + tk.id); } catch (_) { /* noop */ }
+            }
+          }
           // ⚠ 分母每次现算（tasks 的实时权重和）：加载中途新登记的任务立刻改变目标值，
           //   所以永远不存在"按旧任务量算到 100%"这回事。
           var total = tasks.reduce(function (acc, t) { return acc + t.weight; }, 0) || 1;

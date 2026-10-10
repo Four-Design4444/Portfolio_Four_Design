@@ -3,8 +3,14 @@
 // site-config.json；相对路径由 demo 的 base:'./' 保证），这里只用一个全屏
 // iframe 加载它 —— demo 字节级不变、不进 React 构建图、不重移植。
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { cancelMailto, launchMailto } from './mailHandoff.js';
 
 const DEMO_URL = `${import.meta.env.BASE_URL}contact-street/index.html`;
+
+// 形态判定与 index.html / main.jsx 同一口径（<html data-device>）——
+// 不用 matchMedia：桌面窄窗口应当与 PC 完全一致，否则同一个宽度会出现
+// "demo 是移动版布局、邮件却弹了移动端弹层"的错配。
+const isMobileDevice = () => document.documentElement.getAttribute('data-device') === 'mobile';
 
 // 尾屏「烧录」——把这条街的冷启动代价全部塞进首屏 loading 遮罩期间，遮罩掀开时
 // 用户只看到一条已经烧熟的街。为什么非要烧：这条街一旦满帧渲染就吃掉主线程
@@ -53,6 +59,22 @@ const BURN_MAX_MS = 9000;
 // 尾屏进入视野后，档位立刻是满帧，**但第 2500ms 才画出第一帧** —— 就是那段"冻住"。
 // 回到 1s（原值）后遮罩期能喂够帧。撞转场那一帧的概率会回升，但"尾屏能立刻开播"优先。
 const IDLE_KEEPALIVE_MS = 1000;
+/* 「已烧完」之后的空转间隔（2026-10-13）。
+   ⚠ 为什么必须比 1s 大得多 —— 两条都是硬事实：
+   ① 每喂一帧都是**一次完整渲染**，手机上 82~88ms 主线程占用。1s 一帧 =
+      用户待在首页的每一秒都被咬掉 85ms，正好砸在 hero 视频、人物卡点击动效、
+      一级↔二级张开(700ms)这些窗口上（实测：街景满速工作的那次 run，hero 视频
+      出现 5 次 >50ms 的呈现间隔，最长 83ms；街景安静的对照 run 是 0 次）。
+   ② demo 的场景钟按"真实时钟差、clamp 0.05s"推进，所以每喂一帧场景时间就
+      +0.05s。灯光脉冲周期只有 4.8 场景秒：1s 一帧 = 5% 实时速度，峰值窗口
+      （n≥0.95，场景时间 2.10~2.70s）只撑真实 12 秒，约 50 秒后 n≈0.03 ——
+      灯几乎全灭。用户在首页停留越久，滑到尾屏越是"一条黑街 + 现场重新亮 2.4s"，
+      正好是"烧完=进入瞬间满亮度"的反面。
+   120s 一帧把两者同时压下去：咬主线程的频率降到 1/120（一次抖动/2 分钟），
+   场景钟每个钟头只推进 1.5 场景秒 → 灯在现实停留时长内**基本冻在波峰**，
+   而 WebGL 上下文与已编译 shader 依旧被周期性触碰，不会凉。
+   冷启动 + 烧录阶段仍然走 1s（那时候必须喂够帧，见上面 IDLE_KEEPALIVE_MS 注释）。 */
+const IDLE_BURNED_MS = 120000;
 
 export default function ContactStreet({ active, preload, onTailReady, onTailBurned }) {
   // 挂载条件：进入尾屏(active)，或提前一屏(preload)—— 提前挂载让 Three.js 的
@@ -140,7 +162,9 @@ export default function ContactStreet({ active, preload, onTailReady, onTailBurn
       try {
         win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
-        win.__streetIdleMs = IDLE_KEEPALIVE_MS;
+        /* 空转间隔分两档：没烧完 = 1s（冷启动与烧录都靠喂帧推进，是功能性的），
+           烧完 = 2 分钟（纯粹保上下文，见 IDLE_BURNED_MS 的两条理由）。 */
+        win.__streetIdleMs = burnedRef.current ? IDLE_BURNED_MS : IDLE_KEEPALIVE_MS;
       } catch (_) { /* 已销毁 / 跨域时静默 */ }
     };
     apply();
@@ -472,6 +496,28 @@ body:not([data-mode="overview"]) .street-quick { opacity: 0; pointer-events: non
      demo 是 gap:18px + letter-spacing 1px（6.5px 字号下相当于 3 个字宽）。 */
   .intro-foot { font-size: 6.5px; letter-spacing: .8px; margin-top: 12px; gap: 8px; }
 }
+
+/* ── ⑩ 邮箱面板「救急行」（移动端专用）───────────────────────────────────
+   点「写一封信 ↗」= 直接唤起系统邮件列表，中间不再有自己的选择层。
+   只有**系统没接住**（本机没有可用邮件应用）时，父页面才在 iframe 的 <html>
+   上挂 .street-mail-failed，这一行才出现 —— 平时 display:none，不占位。 */
+#detail-content .mail-rescue { display: none; }
+html.street-mail-failed #detail-content .mail-rescue {
+  display: block;
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  letter-spacing: .2px;
+  color: #7d8f9a;
+}
+html.street-mail-failed #detail-content .mail-rescue a {
+  color: #a9c2d6;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(169, 194, 214, .42);
+}
+@media (max-width: 700px) {
+  html.street-mail-failed #detail-content .mail-rescue { margin-top: 12px; font-size: 11px; }
+}
 `;
 
 // iframe 内部执行：劫持滚动 → 交还父页面；其余一概不碰。
@@ -553,8 +599,11 @@ const HOST_JS = `
       return;
     }
     var half = BASE_FOV * Math.PI / 360;
-    cam.fov = 2 * Math.atan(Math.tan(half) / mag) * 180 / Math.PI;
-    cam.updateProjectionMatrix();
+    var nextFov = 2 * Math.atan(Math.tan(half) / mag) * 180 / Math.PI;
+    if (cam.fov !== nextFov) {
+      cam.fov = nextFov;
+      cam.updateProjectionMatrix();
+    }
   };
   window.__streetZoomDebug = function () {
     return {
@@ -574,6 +623,7 @@ const HOST_JS = `
       WeakMap.prototype.get = originalWeakGet;
       window.__streetCarCameraReady = true;
       var originalLookAt = key.lookAt;
+      var carLookTarget = null;
       key.lookAt = function () {
         var state = window.__four;
         if (state && state.mode === 'car') {
@@ -606,7 +656,9 @@ const HOST_JS = `
               carCameraOffset = { x: rx * d, y: 0, z: rz * d };
               key.position.x = px + carCameraOffset.x;
               key.position.z = pz + carCameraOffset.z;
-              var moved = tgt.clone();
+              if (!carLookTarget) carLookTarget = tgt.clone();
+              else carLookTarget.copy(tgt);
+              var moved = carLookTarget;
               moved.x += carCameraOffset.x;
               moved.z += carCameraOffset.z;
               window.__streetCarPanApplied = { panUnits: panUnits, eased: +eased.toFixed(3) };
@@ -647,8 +699,10 @@ const HOST_JS = `
   // 查全局，所以在这里包一层就能控帧。
   //
   // 三个档位（都由宿主写 window 上的开关）：
-  //   __streetPaused     —— 空转保活（默认 5s 一帧，见 __streetIdleMs；早期是 1s，
-  //     但手机上一帧 85ms，太密会撞进跨级转场）。WebGL 上下文、已编译的 shader、
+  //   __streetPaused     —— 空转保活（间隔见 __streetIdleMs，宿主按"是否烧完"写两档：
+  //     未烧完 1s、烧完 2 分钟。1s 是为了喂够帧让冷启动跑完；烧完之后 1s 一帧就成了
+  //     纯负担 —— 手机上一帧 85ms，且它每帧都把场景钟推进 0.05s，50 秒就能把灯从
+  //     波峰拖到全灭，见文件上方 IDLE_BURNED_MS）。WebGL 上下文、已编译的 shader、
   //     已加载的纹理全部保活，回到尾屏立刻满帧，预挂载红利一点不丢。
   //     期间宿主可用 __streetHold / parent.__streetHoldUntil 让它一帧都不喂。
   //   __streetFrameMs > 0 —— 受控帧率（"烧录档"）：把回调按截止时刻摊平到每
@@ -974,12 +1028,18 @@ try {
     .catch(() => {});
 } catch (_) { /* 保持兜底值 */ }
 
+// 「写一封信」的 mailto 目标。**单一来源**：面板里邮箱地址的 href 与移动端实际
+// 交付给系统的那一次 mailto 用的是同一个字符串（subject 文案就不会两处漂移）。
+// 写成函数而不是常量：site-config.json 是异步读回来的，调用时取值才拿得到最新的 email。
+const STREET_MAIL_SUBJECT = '你好 Four Design，聊聊一个新想法';
+const streetMailto = () => `mailto:${streetCfg.email}?subject=${encodeURIComponent(STREET_MAIL_SUBJECT)}`;
+
 function formatStreetPhone(p) {
   try { return p.replace(/(\d{3})(\d{4})(\d{4})/, '$1 $2 $3'); } catch (_) { return p; }
 }
 
 function detailHtmlFor(mode) {
-  const mailHref = `mailto:${streetCfg.email}?subject=${encodeURIComponent('你好 Four Design，聊聊一个新想法')}`;
+  const mailHref = streetMailto();
   // ⚠ 每个面板的第一个元素都带 data-host-copy="1" —— 它是「这一版内容是宿主写的」
   //   的子元素级标记：demo 每次重写 #detail-content 的 innerHTML 都会把我们的
   //   子节点全部换掉，标记随之下消失 ⇒ observer 下一轮必然重新替换。不要改成
@@ -1001,10 +1061,19 @@ function detailHtmlFor(mode) {
     + '<h2 id="detail-title" class="detail-title">把想法，<br>轻轻寄到这里。</h2>'
     + '<div class="detail-rule"></div>'
     + '<div class="contact-label">A LETTER TO FOUR</div>'
-    + `<a class="contact-value email" href="${mailHref}">${streetCfg.email}</a>`
-    // 「写一封信」按业主指定跳 QQ 邮箱网页版（新标签页），不再走 mailto。
-    + '<div class="actions"><a class="primary-action" href="https://wx.mail.qq.com/" target="_blank" rel="noopener noreferrer">写一封信 <span>↗</span></a>'
-    + '<button class="copy" data-copy>复制邮箱 ↗</button></div>';
+    // ⚠ 2026-10-13 移动端：两个入口都打上 data-mail-app —— 点击被宿主在捕获阶段
+    //   接走，**直接**发起一次 mailto（顶层窗口，见 mailHandoff.js），系统随即弹出
+    //   本机邮件应用列表。业主口径：这里不要再插一层自己的选择弹层。
+    //   href 一个字节没改：PC 端与"父页面不在场"时（有人直接打开 demo 目录）
+    //   行为与改动前完全一致 —— 邮箱地址照旧 mailto，写一封信照旧 QQ 邮箱网页版。
+    + `<a class="contact-value email" href="${mailHref}" data-mail-app>${streetCfg.email}</a>`
+    // 「写一封信」按业主指定跳 QQ 邮箱网页版（新标签页）；PC 走这条。
+    + '<div class="actions"><a class="primary-action" href="https://wx.mail.qq.com/" target="_blank" rel="noopener noreferrer" data-mail-app>写一封信 <span>↗</span></a>'
+    + '<button class="copy" data-copy>复制邮箱 ↗</button></div>'
+    // 救急行：只在**移动端点过之后系统没接住**（本机没有可用邮件应用）时才由父页面
+    // 挂 .street-mail-failed 显示。平时 display:none，不占位、不是"第二层"。
+    + '<p class="mail-rescue">本机没有可用的邮件应用 —— '
+    + '<a href="https://wx.mail.qq.com/" target="_blank" rel="noopener noreferrer">用网页版写这封信 ↗</a></p>';
   if (mode === 'car') return '<p class="detail-kicker" data-host-copy="1">FOUR DESIGN</p>'
     + '<h2 id="detail-title" class="detail-title">给自己充电，<br>驶向更远的明天。</h2>'
     + '<div class="detail-rule"></div>'
@@ -1018,6 +1087,12 @@ function applyDetailCopy(doc) {
   if (!dc) return;
   const mode = doc.body.getAttribute('data-mode');
   if (!mode || mode === 'overview') return;
+  // ⑩ 离开邮箱面板就把「本机没接住」的救急行标记清掉：它是挂在 <html> 上的，
+  //    不清的话下次再进邮箱面板会直接看到上一轮的说明（清在"看别的面板"这个
+  //    确定时机上，用户下一次点「写一封信」时还有一次复位，双保险）。
+  if (mode !== 'mail') {
+    try { doc.documentElement.classList.remove('street-mail-failed'); } catch (_) { /* noop */ }
+  }
   // 防回环判据是「子元素里还有没有我们的标记」（见 detailHtmlFor 注释）：
   // demo 重写 innerHTML 会把标记节点一并清掉，所以这里必然重新接管；
   // 我们自己写完触发的下一轮 observer 也能正确跳过。
@@ -1080,6 +1155,58 @@ function bindStreetCopy(doc) {
     const mode = doc.body.getAttribute('data-mode');
     streetCopyText(doc, mode === 'phone' ? streetCfg.phone : streetCfg.email);
   }, true);
+}
+
+// ── ⑩ 邮箱面板的两个邮件入口 → 交给父页面**直接**发起 mailto（仅移动端）──────
+// 业主 2026-10-13：「在邮箱里点发封邮件，应该是调取用户本地 APP」，
+//         二次口径：「点『写一封信 ↗』后就应该直接唤起用户的系统列表」。
+// 所以这里**没有**中间选择层：拦截 → 上报 → 父页面一拍即发 mailto。
+//
+// 为什么拦截点在这里、而交付动作在父页面：
+//   `mailto:` 是**外部协议**。从子 iframe 发起时，iOS Safari 与各家 WebView 都
+//   可能直接拒绝（页面里连报错都看不到，用户只感觉"点了没反应"）；顶层框架发起
+//   才是各端都认的路径。所以 iframe 只做"别让它按老路跳 QQ 邮箱网页版"，把意图
+//   上报给父页面（mailHandoff.js 在那边负责 mailto 与"没接住"的报告）。
+//
+// 门控 __streetMailHandoff 由父页面在注入时写入（见 injectMailCta）：
+//   PC ⇒ false ⇒ 本监听器什么都不做，两个入口保持改动前的默认行为；
+//   父页面不在场（有人直接打开 public/contact-street/index.html）⇒ 连注入都没有，
+//   同样走默认行为。失败方向是安全的。
+//
+// 与 bindStreetCopy 同一套结构：document 捕获阶段先于 demo 挂在 #detail 上的
+// 冒泡委托，命中就只能由我们处理（demo 既有的 data-copy / data-switch 不受影响）。
+function bindStreetMailCta(doc) {
+  if (!doc || !doc.body) return false;
+  const win = doc.defaultView;
+  // ⚠ 标记必须挂在**文档**上，不能挂 window：iframe 的 window 对象跨导航存活
+  //   （about:blank → 真文档是同一个 window），挂在 window 上会让真文档永远
+  //   绑不上监听器 —— 与 bindStreetCopy 的 doc.__streetCopyBound 同一口径。
+  if (!win || doc.__streetMailCtaBound) return false;
+  doc.__streetMailCtaBound = true;
+  doc.addEventListener('click', (ev) => {
+    if (win.__streetMailHandoff !== true) return;
+    let el = null;
+    try { el = ev.target && ev.target.closest ? ev.target.closest('[data-mail-app]') : null; } catch (_) { return; }
+    if (!el) return;
+    // 只认邮箱面板里的那两个（宿主换过文案的 #detail-content 内）；
+    // 别的地方出现同名属性不算数。
+    const dc = doc.getElementById('detail-content');
+    if (!dc || !dc.contains(el)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { win.parent.postMessage({ __streetContact: true, type: 'mail-cta' }, '*'); } catch (_) { /* noop */ }
+  }, true);
+  return true;
+}
+
+function injectMailCta(doc) {
+  if (!doc || !doc.body) return false;
+  const win = doc.defaultView;
+  if (!win) return false;
+  // ⚠ 每次都重写：注入会跟着 iframe 的文档走（about:blank → 真文档），窗口对象
+  //   可能也是新的。幂等的布尔赋值，没有副作用。
+  win.__streetMailHandoff = isMobileDevice();
+  return bindStreetMailCta(doc);
 }
 
 function injectDetailCopy(doc) {
@@ -1565,6 +1692,36 @@ function useStreetWheelBridge(enabled) {
 
   useStreetWheelBridge(mounted && active);
 
+  // ⑩ 邮箱面板的邮件 CTA → **直接**发起一次 mailto（仅移动端）。
+  //   业主 2026-10-13 二次口径：「点『写一封信 ↗』后就应该直接唤起用户的系统列表」——
+  //   所以这里没有中间弹层：一拍即发，系统随即弹出本机邮件应用列表。
+  //   消息只可能来自被 injectMailCta 放行过的 iframe（PC 上 __streetMailHandoff 是
+  //   false，iframe 根本不会发），这里再按 data-device 兜一道。
+  //   门控 mounted && active：active=false 时首页整叠是 display:none（或被二级页盖住），
+  //   用户物理上点不到那个按钮，迟到的消息直接忽略。
+  useEffect(() => {
+    if (!mounted || !active) return undefined;
+    const onMessage = (event) => {
+      const d = event.data;
+      if (!d || d.__streetContact !== true || d.type !== 'mail-cta') return;
+      if (!isMobileDevice()) return;
+      const doc = frameRef.current && frameRef.current.contentDocument;
+      // 新一轮先把上一轮的"没接住"标记清掉（否则用户会看着上次的说明再点一次）。
+      if (doc && doc.documentElement) doc.documentElement.classList.remove('street-mail-failed');
+      launchMailto(streetMailto(), () => {
+        // 系统没接住：只在面板里补一行说明 + 网页版入口，**不自动跳转**
+        // —— 系统选择器可能正开着，自动跳会和它抢屏幕。
+        const d2 = frameRef.current && frameRef.current.contentDocument;
+        if (d2 && d2.documentElement) d2.documentElement.classList.add('street-mail-failed');
+      });
+    };
+    window.addEventListener('message', onMessage);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      cancelMailto();   // 收起尾屏/进二级页时不留悬空探测
+    };
+  }, [mounted, active]);
+
   // 业主滑到尾屏时**再触发一次**尾屏排版校准（见 startStreetAlign 的长注释）：
   // 注入可能发生在文档刚创建那几帧（那时 .intro/.controls 还没解析出来，或文档随后
   // 被导航替换 ⇒ 闭包里的 doc 失效），这里是"真的到了尾屏"这个确定时机的兜底。
@@ -1657,7 +1814,7 @@ function useStreetWheelBridge(enabled) {
         }
         // ⚠ 不挂在 cssDone 分支里 —— 那是一次性门控，若首帧 doc.body 还没就绪就会
         //   永远跳过。新块是纯静态 DOM，晚一步注入只是晚一步出现，无副作用。
-        try { injectStreetQuick(doc); injectIntroCopy(doc); injectDetailCopy(doc); } catch (_) { /* onLoad 兜底 */ }
+        try { injectStreetQuick(doc); injectIntroCopy(doc); injectDetailCopy(doc); injectMailCta(doc); } catch (_) { /* onLoad 兜底 */ }
 if (!readyDone) {
           // 双信号就绪判定（任一成立即可）：
           //  ① demo 的 ui.setReady() 给 #loading 加 .loaded —— 时机是
@@ -1736,6 +1893,7 @@ function applyHostOverrides(iframe) {
     injectStreetQuick(doc);
     injectIntroCopy(doc);
     injectDetailCopy(doc);
+    injectMailCta(doc);
   } catch (_) {
     /* 同源 public 资源可读；跨域时静默跳过 */
   }

@@ -3779,6 +3779,24 @@ html[data-paging="on"] .contact-page {
   animation: pf-profile-kenburns 1.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
+/* 2026-10-13 业主反馈：「PC 端首页个人信息这里的人物背景有在动，不应该出现」。
+   实测确认是两处叠加的运动（探针 outputs/perf-reveal/pc-profile-bg-check.mjs）：
+     · 翻进去：.is-visible 挂上 pf-profile-kenburns → scale 1.05 → 1（1.2s 推近）
+     · 翻出去：基础态 scale(1.04) + 1.6s transform 过渡 → 1 → 1.04（反向拉远）
+   分屏模式下 profileVisible = (index === 1)，**每一次翻进/翻出**都会挂/摘
+   .is-visible，于是这张全屏形象照来回做 4~5% 的缩放 —— 人物边缘整体位移，
+   看起来就是"底图自己在动"。
+   分屏里整屏是一块幕布，翻页时它必须与内容刚性平移：这里把缩放与动画一起摘掉。
+   静止态本来就停在 scale(1)（动画终点 / 过渡终点），**外观零变化**，只是不再动。
+   ⚠ 选择器必须压过 `.profile-shot.is-visible .pf-bg-img`（3 个 class），
+     所以带上 html[data-paging="on"] 与 .profile-shot 两段。 */
+html[data-paging="on"] .profile-shot .pf-bg-img,
+html[data-paging="on"] .profile-shot.is-visible .pf-bg-img {
+  transform: none;
+  transition: none;
+  animation: none;
+}
+
 .profile-shot.is-visible .pf-title { opacity: 1; transform: none; transition-delay: 120ms; }
 .profile-shot.is-visible .pf-swap { opacity: 1; transform: none; transition-delay: 260ms; }
 .profile-shot.is-visible .pf-skills-entrance { opacity: 1; transform: none; transition-delay: 420ms; }

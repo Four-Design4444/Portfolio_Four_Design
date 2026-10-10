@@ -235,6 +235,7 @@ export async function createWebCodecsPlayer({
       try { pending[i].frame.close(); } catch (_) { /* already closed */ }
     }
     pending = [];
+    for (let i = 0; i < frames.length; i += 1) frames[i].chunkData = null;
     if (readerRef) {
       try { readerRef.cancel(); } catch (_) { /* stream already closed */ }
       readerRef = null;
@@ -287,16 +288,21 @@ export async function createWebCodecsPlayer({
   canvas.height = height;
 
   const feed = (i) => {
-    const parts = [];
-    if (decoder && decoder.__mode === 'annexb' && i === 0) {
-      parts.push(sps);
-      parts.push(pps);
+    const frame = frames[i];
+    if (!frame.chunkData) {
+      const parts = [];
+      if (decoder && decoder.__mode === 'annexb' && i === 0) {
+        parts.push(sps);
+        parts.push(pps);
+      }
+      parts.push(frame.data);
+      frame.chunkData = decoder.__mode === 'annexb' ? toAnnexB(parts) : toLengthPrefixed(parts);
+      frame.data = null;
     }
-    parts.push(frames[i].data);
     decoder.decode(new window.EncodedVideoChunk({
       type: frames[i].type === 5 ? 'key' : 'delta',
       timestamp: Math.round((i * 1000000) / fps),
-      data: decoder.__mode === 'annexb' ? toAnnexB(parts) : toLengthPrefixed(parts)
+      data: frame.chunkData
     }));
   };
 

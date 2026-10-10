@@ -48,7 +48,11 @@ function SideRays({
   /* 页面级点亮开关(2026-10-07 统一环境光):环境光现在是 App 层**单例**,
      跨一级/二级复用同一个 WebGL 实例。路由不点亮它时(如详情页)传 false,
      渲染循环直接跳过 —— 保上下文但不空转,重新点亮当帧即续,无重建闪烁。 */
-  active = true
+  active = true,
+  /* 遮罩期预热(2026-10-13):true 表示"现在就建上下文与 program,别等 isVisible"。
+     见下方 initArmed 的说明 —— 图层在首屏时被 syncRays 停在视口**下方**,
+     天然 isVisible=false,不预热的话编译就落在用户开始滚动的那一帧。 */
+  prewarm = false
 }) {
   const containerRef = useRef(null);
   const uniformsRef = useRef(null);
@@ -87,8 +91,22 @@ function SideRays({
     };
   }, []);
 
+  /* 初始化**锁存**(2026-10-13):一旦开始建 WebGL 就永不拆。
+     原实现把 isVisible 直接当初始化的开关与依赖,有三个后果:
+       ① 遮罩期预热挂载时图层还在视口下方(syncRays 把它停在视口外),isVisible=false
+          → 预热形同虚设,shader 编译仍然发生在"用户开始滚动进作品屏"的那一帧;
+       ② 滚进作品屏 isVisible=true → 编译;滚回首屏 false → cleanup 把整个 WebGL 拆掉;
+       ③ 再滚进去 → 又编译一遍(与文件顶部"首次点亮后常驻、再次点亮不重建"的
+          设计意图矛盾,来回滚动等于反复付编译钱)。
+     锁存后:预热期(或首次可见时)建好,此后 isVisible 只影响是否**渲染**
+     (渲染另由 active 控制),不再触发重建。 */
+  const [initArmed, setInitArmed] = useState(false);
   useEffect(() => {
-    if (!isVisible || !containerRef.current) return undefined;
+    if (isVisible || prewarm) setInitArmed(true);
+  }, [isVisible, prewarm]);
+
+  useEffect(() => {
+    if (!initArmed || !containerRef.current) return undefined;
 
     if (cleanupFunctionRef.current) {
       cleanupFunctionRef.current();
@@ -102,10 +120,17 @@ function SideRays({
       if (!containerRef.current) return;
 
       // 全平台限 30fps：背景光线是慢效果，30fps 视觉无差，却能砍掉约一半 GPU
-      // 预算；移动端 dpr 上限再从 2 降到 1.5，全屏片元着色器像素量再减约 44%。
+      // 预算；移动端 dpr 上限再从 2 降到 1.25（2026-10-13）：这是全屏片元着色，
+      // 像素量直接等于开销，而这道光是弥散的柔光 —— 1.25 与 1.5 肉眼分不出，
+      // 像素量再降约 30%。
       const isMobile = document.documentElement.dataset.device === 'mobile';
-      const maxDpr = isMobile ? 1.5 : 2;
+      const maxDpr = isMobile ? 1.25 : 2;
       const frameInterval = 33; // ms；30fps。iTime 用真实时间推进，动画速度不变
+      /* 跨级转场（一级↔二级）期间的降频间隔（2026-10-13 业主诉求：把这 700~1000ms
+         的 GPU/主线程预算让给卡面张开）。只降频、**不冻结** —— iTime 始终是真实
+         时间，解冻当帧图案不会跳。150ms ≈ 6.7fps，对一道慢速柔光仍然连贯，
+         而全屏片元开销掉到 1/4.5。 */
+      const MORPH_FRAME_MS = 150;
 
       const renderer = new Renderer({
         dpr: Math.min(window.devicePixelRatio, maxDpr),
@@ -276,7 +301,10 @@ void main() {
         }
         if (!rendered) return;
         // 移动端按 frameInterval 节流：iTime 用真实时间推进，动画速度不变。
-        if (frameInterval && time - lastRender < frameInterval) return;
+        // 跨级转场窗口内改用 MORPH_FRAME_MS（见上面的常量注释）。
+        const morphing = typeof window !== 'undefined' && performance.now() < (window.__worksMorphUntil || 0);
+        const interval = morphing ? MORPH_FRAME_MS : frameInterval;
+        if (interval && time - lastRender < interval) return;
         lastRender = time;
         uniforms.iTime.value = time * 0.001;
         try {
@@ -324,7 +352,7 @@ void main() {
         cleanupFunctionRef.current = null;
       }
     };
-  }, [isVisible, speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity]);
+  }, [initArmed, speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity]);
 
   useEffect(() => {
     if (!uniformsRef.current) return;

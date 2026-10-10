@@ -2458,6 +2458,14 @@ html[data-device="mobile"] .profile-shot.is-visible .mob-profile-bg {
   animation: mob-profile-kenburns 1.2s cubic-bezier(0.34, 1.2, 0.44, 1) backwards;
 }
 
+/* 2026-10-13 与 PC 同一条业主口径（翻页时人物背景不应该动）：分屏翻页下摘掉这记
+   1.06 → 1 的推近。移动端本来就只在 .is-visible 时挂动画（基础态无 scale），
+   所以静止态外观零变化，去掉的只是"翻进个人信息屏时底图自己缩一下"。
+   ⚠ 选择器要比上面那条（html[data-device] + 3 个 class）更专一，故补 [data-paging="on"]。 */
+html[data-paging="on"][data-device="mobile"] .profile-shot.is-visible .mob-profile-bg {
+  animation: none;
+}
+
 /* Contact rows: plain icon + value lines, no pill chrome (per the mock). */
 html[data-device="mobile"] .mob-profile-contact {
   display: flex;

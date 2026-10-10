@@ -327,6 +327,77 @@ const WORKS_RAIL = Object.entries(worksByCategory).flatMap(([category, list]) =>
 const RAIL_N = WORKS_RAIL.length;
 const RAIL_COPIES = 2;
 const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL];
+
+/* ── 作品图片总清单：首屏 loading 的**唯一**数据来源（2026-10-13 业主口径）─────────
+   业主原话：「一级页面的作品封面和二级页面的作品封面都要进 loading 一同加载；
+   以后我在同一位置替换了图，不用重新告诉你这些图要进加载任务；加了新的加载内容，
+   进度和加载时间也要跟着变，不能还按旧任务量算。」
+   所以这里**不写死一张张图，而是扫数据**：
+     · worksByCategory 里每个作品对象的**所有字符串字段**，凡是站内图片路径
+       （/ 开头 + 图片后缀）都算 ⇒ 以后新增字段（新比例、新详情图）、新增作品、
+       把一个字段换成另一张图，都会自动进入 loading，不需要改这段代码；
+     · 再加「详情页首屏那一块」= 每件作品长图的第一块 tile（按设备选宽度：视口
+       ≤1100px 用 @714 版，与 ScrollTile 的 sizes 断点一致 —— 预载的必须和真页面
+       会请求的是同一个文件，否则白下一份）。
+   长图其余 tile（单作品 19 块 / 桌面 ~2MB）**故意不进 loading**：那是滚动才看的，
+   而且 ScrollTile 自带 LQIP 模糊占位，进去不会白屏。
+   下面的 IMAGE_FIELD_PRIORITY 只管**先下哪张**（排序），不影响成员资格 ——
+   漏写在这里的字段照样进 loading，只是排在后面。 */
+const IMG_PATH_RE = /^\/.*\.(?:webp|jpe?g|png|avif|gif)$/i;
+/* 详情页长图 tile 的两个宽度版本，浏览器是**按 srcSet 规则自己挑**的：
+   ScrollTile 的 sizes =「≤1100px 视口 → calc(100vw - 36px)，否则 min(1470px, 100vw - 220px)」，
+   候选 714w / 1470w，挑"不小于 槽宽 × DPR 的最小候选"。
+   ⇒ 393px 视口 + DPR 3 的手机：槽宽 357css → 要 1071 设备像素 → 浏览器挑的是
+     **1470w（桌面版）**，不是 @714。预载错版本 = 白下一份、真页面还得再下一份。
+   这里严格照同一套规则算，保证预载的就是页面会请求的那一个。 */
+function scrollTileVariant() {
+  const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 3);
+  const vw = (typeof window !== 'undefined' && window.innerWidth) || 1440;
+  const slotCss = vw <= 1100
+    ? Math.max(1, vw - 36)
+    : Math.min(DETAIL_SCROLLS.desktopWidth, vw - 220);
+  return slotCss * dpr <= DETAIL_SCROLLS.mobileWidth ? '@714' : '';
+}
+/* 本机马上就会显示的两套比例（进 loading，参与揭幕）；剩下那套是**换设备/跨断点**
+   才会用到的（PC 上的 3:5、手机上的 16:9），历史上一律是不参与闸门的后台预热 ——
+   一次 660~730KB，卡在启动路径上纯属浪费。新出现的未知字段归到「本机」这一侧：
+   宁可多等一点，也不能让新内容被漏算（业主 2026-10-13 口径）。 */
+const DEVICE_FIELDS = { mobile: ['image', 'cover43'], pc: ['cover43', 'detailHero'] };
+const CROSS_FIELDS = { mobile: ['detailHero'], pc: ['image'] };
+function worksImageInventory(isMobile) {
+  const key = isMobile ? 'mobile' : 'pc';
+  const order = DEVICE_FIELDS[key];
+  const crossOrder = CROSS_FIELDS[key];
+  const buckets = new Map(order.map((field) => [field, []]));
+  const crossBuckets = new Map(crossOrder.map((field) => [field, []]));
+  const extra = [];
+  const seen = new Set();
+  const push = (bucket, src) => {
+    if (!src || seen.has(src)) return;
+    seen.add(src);
+    bucket.push(src);
+  };
+  Object.values(worksByCategory).forEach((list) => list.forEach((work) => {
+    Object.entries(work).forEach(([field, value]) => {
+      if (typeof value !== 'string' || !IMG_PATH_RE.test(value)) return;
+      push(buckets.get(field) || crossBuckets.get(field) || extra, value);
+    });
+  }));
+  const tiles = [];
+  const variant = scrollTileVariant();
+  Object.entries(DETAIL_SCROLLS.works).forEach(([workId, work]) => {
+    const scroll = work && work.scrolls && work.scrolls[0];
+    const tile = scroll && scroll.tiles && scroll.tiles[0];
+    if (!tile) return;
+    const base = `/detail/${workId}/${scroll.slug}/tile-${String(tile.i).padStart(3, '0')}`;
+    push(tiles, `${base}${variant}.webp`);
+  });
+  return {
+    covers: [...order.flatMap((field) => buckets.get(field)), ...extra],
+    cross: crossOrder.flatMap((field) => crossBuckets.get(field)),
+    tiles,
+  };
+}
 const RAIL_HOME = RAIL_N;        // 初始落点 = 第二份的第一张
 /* 「活跃窗口」(2026-10-07 性能):只有距当前索引 ±RAIL_WINDOW 的卡参与绘制
    (data-far → visibility:hidden),再远的整份副本既不渲染也不解码图片。
@@ -996,6 +1067,36 @@ function App() {
     if (layer) layer.classList.remove('is-on');
   }, [raysMounted]);
 
+  /* 环境光预热（2026-10-13，GPT 清单第 5 条：环境光的 WebGL 初始化、编译与首次绘制）。
+     过去 WebGL 上下文 + 全屏片元 shader 的编译发生在**首次点亮那一刻**（滚到作品屏
+     或进二级页）—— 正好压在滚动和跨级转场的起跑上。现在趁 loading 遮罩还在时把它
+     挂起来（active=false → 只建上下文与 program，不渲染），编译成本留在遮罩下，
+     首次点亮当帧即续（SideRays 本来就是为"常驻不重建"设计的）。
+     ⚠ 只在遮罩仍在时挂：揭幕后才挂就等于在首屏加一次冷启动，那是反效果。 */
+  useEffect(() => {
+    if (raysMounted) return undefined;
+    /* ⚠ 不能用"遮罩节点在不在"当判据（2026-10-13 实测踩坑）：遮罩 div 由 index.html
+       的 body 内联脚本创建，而它的执行时机与 React 首帧**没有先后保证** —— 首次实测
+       就是这个 effect 跑在遮罩入 DOM 之前，预热被静默跳过（探针里 raysCanvas 一直 false）。
+       换成 App 级权威信号：HomePage 在 hero 视频"够播"那一声 hero:ready（那时遮罩
+       通常还剩 ~1–2.5s，正是预热的窗口），外加 1.8s 兜底。__appRevealed 之后不再预热，
+       避免把冷启动搬到用户看得见的首屏上。 */
+    const masked = () => !window.__appRevealed;
+    let fired = false;
+    const fire = () => {
+      if (fired) return;
+      fired = true;
+      if (masked()) setRaysMounted(true);
+    };
+    if (window.__heroReady) fire();
+    window.addEventListener('hero:ready', fire);
+    const t = window.setTimeout(fire, 1800);
+    return () => {
+      window.removeEventListener('hero:ready', fire);
+      window.clearTimeout(t);
+    };
+  }, [raysMounted]);
+
   useEffect(() => {
     if (route.page !== 'home') {
       setHomeActiveSection('hero');
@@ -1486,6 +1587,14 @@ function App() {
     if (window.location.hash !== `#${url}`) window.history.replaceState(null, '', `#${url}`);
   }, []);
 
+  // Keep works mounted beneath mobile detail, but remount after returning home.
+  // Entry geometry assumes fresh slides, without the previous exit pose.
+  const worksLayerVisible = route.page === 'works' || exitWorks || pcWorksExit;
+  const worksLayerUnder = !worksLayerVisible && route.page === 'detail' && isMobileDevice();
+  const worksLayerMounted = worksLayerVisible || worksLayerUnder;
+  const worksWrapClass = worksLayerVisible
+    ? 'works-layer'
+    : `mw-under${worksLayerUnder && mobileFlip === 'enter' ? ' mw-under-exit-down' : ' is-covered'}`;
   return (
     <>
       {/* 环境光单例层(2026-10-07):一级与二级共用这**一个**实例。
@@ -1497,17 +1606,24 @@ function App() {
           <SideRays
             className="home-rays"
             active={raysLit}
+            /* 遮罩期预热(2026-10-13):挂载时若还没点亮,就让 SideRays 立刻把 WebGL
+               上下文与 program 建好(它的 isVisible 此刻必然为 false —— syncRays
+               在首屏把整层停在视口下方),点亮当帧即续,不再有编译卡顿。 */
+            prewarm={!raysLit}
             speed={2.5}
             rayColor1="#EAB308"
             rayColor2="#96c8ff"
-            intensity={2}
+            /* 2026-10-13 业主诉求：移动端这道右上角环境光**调弱**（手机屏幕小、
+               像素密度高，同样的强度看起来更刺眼，而它是全屏片元着色 —— 弱一点
+               既顺眼又省 GPU）。PC 维持原值不动。dpr 上限与转场降频见 SideRays.jsx。 */
+            intensity={isMobileDevice() ? 1.35 : 2}
             spread={2}
             origin="top-right"
             tilt={0}
-            saturation={1.5}
+            saturation={isMobileDevice() ? 1.3 : 1.5}
             blend={0.75}
             falloff={1.6}
-            opacity={1}
+            opacity={isMobileDevice() ? 0.82 : 1}
           />
         )}
       </div>
@@ -1555,8 +1671,12 @@ function App() {
                 2026-10-07 exitWorks:二级 → 一级的回程期间同样**保持挂载** ——
                 收拢动画由轨道在原地执行,动画结束(onLeavingDone)才卸下,
                 所以返回一级时看到的是同一张卡缩回去,而不是它先消失。 */}
-            {route.page === 'works' || exitWorks || pcWorksExit ? (
-              <WorksPage
+            {worksLayerMounted ? (
+              <div className={worksWrapClass} aria-hidden={worksLayerVisible ? undefined : 'true'}>
+                {/* workId 跟随路由:详情翻入的 640ms 里,底下露出的必须是
+                    用户刚点进来的那张卡,而不是回落到第 0 张。
+                    under 期间保留详情返回所需的二级状态。 */}
+                <WorksPage
                 activeCategory={activeCategory}
                 goDetail={goDetail}
                 workId={route.workId}
@@ -1577,17 +1697,9 @@ function App() {
                   setWorksEntry(null);
                   setChromeHidden(false);
                 }}
-                onActiveWorkChange={syncWorksActive}
+                onActiveWorkChange={worksLayerVisible ? syncWorksActive : null}
                 onHome={goHome}
-              />
-            ) : route.page === 'detail' && isMobileDevice() ? (
-              <div
-                className={`mw-under${mobileFlip === 'enter' ? ' mw-under-exit-down' : ' is-covered'}`}
-                aria-hidden="true"
-              >
-                {/* workId 跟随路由:详情翻入的 640ms 里,底下露出的必须是
-                    用户刚点进来的那张卡,而不是回落到第 0 张 */}
-                <WorksPage activeCategory={activeCategory} goDetail={goDetail} workId={route.workId} />
+                />
               </div>
             ) : null}
             {route.page === 'detail' || exitDetail ? (
@@ -1601,6 +1713,11 @@ function App() {
                     : null
                 }
                 onBack={!exitDetail && isMobileDevice() ? goDetailBack : null}
+                /* 左右滑动切项目的落点就是 works 里的 ±1（goDetailByIndex 越界即返回，
+                   所以不做环绕），把这两件作品交给详情页做首图预取。 */
+                neighborWorks={!exitDetail && works.length > 1
+                  ? [works[activeIndex - 1], works[activeIndex + 1]]
+                  : null}
               />
             ) : null}
         </>
@@ -3089,6 +3206,23 @@ function Reveal({ as: Tag = 'div', className = '', children, threshold = 0.18, r
   );
 }
 
+/* 已被 loading 期预载成功的图：**直接上 src，不走 IntersectionObserver**。
+   ⚠ 2026-10-13 微信移动端实测（业主反馈"滑到作品页 3:5 封面还是没加载出来"）：
+   `LazyImage` 的判据是"元素进入视口"，而首页卡组(.mob-card)是 3D 变换的卡堆、
+   副卡常年半出屏，`rootMargin` 用的还是百分比（100% 0px 100% 0px）——
+   iOS 版 WebKit / 微信 X5 对百分比 rootMargin 与变换容器里的 IO 回调时机都不可靠，
+   出现过"卡已经滑到眼前、src 还没被赋上"的空卡。
+   这些图**本来就已经在内存里**（loading 期付过费了），早挂 src 不会多下一个字节，
+   却能把上面那类内核差异整条绕过去 —— 等于把"懒"降级成"预载 + 立即上屏"。
+   预载完成是异步的，所以用订阅：预载到哪张，已经在 DOM 里的卡片就立刻挂哪张。 */
+const preloadedImageSrcs = new Set();
+const preloadSubscribers = new Set();
+function markImagePreloaded(src) {
+  if (!src || preloadedImageSrcs.has(src)) return;
+  preloadedImageSrcs.add(src);
+  preloadSubscribers.forEach((fn) => { try { fn(src); } catch (_) { /* noop */ } });
+}
+
 /* Lazy-loads an image: the real src is only assigned once the element is within
    one viewport of the screen, so flipping to the next paged screen already has
    its images ready. No placeholder is used; the surrounding layout reserves the
@@ -3097,12 +3231,26 @@ function LazyImage({ src, alt = '', className, ...rest }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el || !src) return;
+    if (!el || !src) return undefined;
+    /* 预载过的（以及没有 IO 的环境）：立即上 src —— 见 preloadedImageSrcs 的注释 */
+    if (preloadedImageSrcs.has(src)) {
+      el.src = src;
+      return undefined;
+    }
+    let io = null;
+    const arm = (hit) => {
+      if (hit === src && !el.src) {
+        el.src = src;
+        if (io) io.disconnect();
+      }
+    };
+    preloadSubscribers.add(arm);
     if (typeof IntersectionObserver === 'undefined') {
       el.src = src;
-      return;
+      preloadSubscribers.delete(arm);
+      return undefined;
     }
-    const io = new IntersectionObserver(
+    io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           el.src = src;
@@ -3112,7 +3260,7 @@ function LazyImage({ src, alt = '', className, ...rest }) {
       { root: null, rootMargin: '100% 0px 100% 0px', threshold: 0 }
     );
     io.observe(el);
-    return () => io.disconnect();
+    return () => { preloadSubscribers.delete(arm); io.disconnect(); };
   }, [src]);
   return <img ref={ref} className={className} alt={alt} decoding="async" {...rest} />;
 }
@@ -4125,11 +4273,30 @@ function ProfileContentPC() {
 // canplay 只代表数据够了，实际首帧还没上屏），并要求 readyState >= 3。
 // 揭幕判据已升级为「能连续播」而非「能播」：只按 readyState>=3 揭幕会出现进度条刚
 // 到 100% 视频却还卡着不动。下面两个常量就是这条判据的阈值，细节见文件内使用处。
-// 缓冲余量：短视频取「片长的一半」，长片最多等 1.5s，避免为一条几十秒的片子干等。
-const HERO_SMOOTH_AHEAD_SEC = 1.5;
-// 兜底：视频报错 / 极慢网络 / 自动播放被拦时永远等不到「能连续播」，不能把首屏永久
-// 扣在遮罩后面，到点直接放行。要小于 index.html 的 HARD_CAP，这样揭幕时进度条是补
-// 满 100% 的，而不是硬超时那种「停在原处淡出」。
+// 缓冲余量：短视频取「片长的一半」，长片最多等 2.5s。
+// ⚠ 2026-10-13 由 1.5s 提到 2.5s（业主：无缓存时进首页视频仍会卡一会）。
+//   1.5s 在冷缓存 + 4G 上只有零点几秒余量，揭幕那一下尾屏/封面刚好收尾，
+//   网络稍有抖动就吃光 → 视频当场 rebuffer。2.5s 是"能连续播"而不是"能播"。
+const HERO_SMOOTH_AHEAD_SEC = 2.5;
+/* 尾屏在 index.html 进度注册表里的任务 id。
+   ⚠ 两个 id 不一样，别混：**上报时**用的是 Street.jsx 里的裸 id 'tail'
+   （announce('tail', 2)，注册表统一加 'ext:' 前缀），**核对 pending 时**用的是
+   加过前缀的注册表 id 'ext:tail'（见 6s 兜底的"可跳过清单"）。
+   写反了会变成两个任务：一个是能完成的 ext:tail，一个是永远到不了 100% 的
+   ext:ext:tail（实测踩过，会把揭幕闸门永久卡住）。 */
+const TAIL_EVENT_ID = 'tail';
+const TAIL_TASK_ID = 'ext:tail';
+// 首查时刻：到点先问一次「还有救吗」（见 HeroSection 里的 armFailSafe）。有救就每
+// 1.5s 复查一次继续等 —— 慢网冷缓存上"还在下载"绝不等于"播不了"。
+// 兜底的三道时限（全部是防"永久扣住"的安全网，不是正常路径）：
+//   · 本文件的 6s：heroVideoReady && coversPreloaded 之后 6s，只在尾屏/封面异常时生效
+//     （它已经以 heroVideoReady 为前置，所以**不会**绕过视频质量闸门）；
+//   · 本文件的 15s：终极放行（不看任何闸门）；
+//   · index.html 的 18s HARD_CAP：连 JS 都没跑起来时的最后一道。
+// ⚠ 2026-10-13：后两道由 9s / 12s 放宽到 15s / 18s —— 业主口径是「先确保视频能流畅
+//   播放，再结束 loading」；慢网冷缓存的首屏视频实测 6~12s 才攒够余量，旧的 9s/12s
+//   会抢在质量闸门之前揭幕，进去就是卡。等待期间进度条是按视频真实缓冲比例爬的
+//   （index.html 给 <video> 登记的 read 就是 buffered/duration），所以"等"是看得见的。
 const HERO_SMOOTH_FAILSAFE_MS = 4500;
 function HeroSection({ active = true, onVideoReady }) {
   const isMobile = document.documentElement.getAttribute('data-device') === 'mobile';
@@ -4290,17 +4457,36 @@ function HeroSection({ active = true, onVideoReady }) {
   // opacity:0（loading 一消失就只剩视频、标题不出现）。
   // canvas 路径的就绪信号就是「首帧画上画布」，这里补上；解码器始终不出帧时
   // （WebCodecs 是空壳、JSMpeg 超时回落）再用同一个兜底时长强放，绝不让闸门卡死。
+  // ⚠ 2026-10-13 再改（业主口径「确保视频能流畅播放，再结束 loading 页」）：原来 4.5s
+  //   到点**无条件**放行 —— 微信冷缓存下 2.53MB 的 .264 常常还没下完就被放行，进去只有
+  //   poster、随后才一帧帧追上来。现在只要**解码器实例已经在跑**（wcPlayer/jsmpegPlayer
+  //   存在 ⇒ 资源在下载/解码中）就每 1.5s 复查，最多等到 WECHAT_WAIT_MS；连解码器都没
+  //   建起来（WebCodecs 是空壳、JSMpeg 也没起来）才按 4.5s 放行。最坏仍由 app 级 15s
+  //   与 index.html 的 18s HARD_CAP 兜住。
   useEffect(() => {
     if (!onVideoReady || !(useJsmpeg || useWebCodecs)) return undefined;
     if (videoReadyRef.current) return undefined;
-    const mark = () => {
+    const mark = (reason) => {
       if (videoReadyRef.current) return;
       videoReadyRef.current = true;
+      try { window.__heroReadyReason = reason || 'wechat-canvas'; } catch (_) { /* noop */ }
       try { onVideoReady(); } catch (_) { /* noop */ }
     };
-    if (canvasPainted) { mark(); return undefined; }
-    const t = window.setTimeout(mark, HERO_SMOOTH_FAILSAFE_MS);
-    return () => window.clearTimeout(t);
+    if (canvasPainted) { mark('wechat-canvas-painted'); return undefined; }
+    const WECHAT_WAIT_MS = 12000;
+    const startedAt = performance.now();
+    let timer = 0;
+    const check = () => {
+      if (videoReadyRef.current) return;
+      const decoderRunning = !!(wcPlayerRef.current || jsmpegPlayerRef.current);
+      if (decoderRunning && performance.now() - startedAt < WECHAT_WAIT_MS) {
+        timer = window.setTimeout(check, 1500);
+        return;
+      }
+      mark(decoderRunning ? 'wechat-timeout' : 'wechat-no-decoder');
+    };
+    timer = window.setTimeout(check, HERO_SMOOTH_FAILSAFE_MS);
+    return () => window.clearTimeout(timer);
   }, [onVideoReady, useJsmpeg, useWebCodecs, canvasPainted]);
   // WeChat kernels block programmatic video.play() until either the visitor
   // interacts OR the page answers WeixinJSBridgeReady (WeChat's own unlock
@@ -4355,35 +4541,128 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           } catch (_) { return 0; }
           return ahead;
         };
+        /* 2026-10-13 业主口径：「确保视频能够流畅播放的情况下，再结束 loading 页」。
+           只要求"手里有 2.5s"还不够 —— 若此刻的下载速度**慢于**播放速度，2.5s 之后
+           必然二次卡顿（这正是"进度条满了、进去先卡几秒"的成因）。所以"能连续播"的
+           判据补上"不会断粮"这一条，三者取或（任一成立即视为不会断粮）：
+             · ample：余量 ≥ 4s（或已覆盖片子剩余部分）；
+             · fullyBuffered：覆盖播放点的那段缓冲已经追到片尾；
+             · fillHealthy：实测缓冲填充速率 ≥ 1.1× 播放速度（缓冲在变厚）。
+           速率用 WeakMap 按元素分别采样，采样窗口不足 0.9s 时**不给结论**（返回
+           false），以免用一次抖动的采样误判成"会断粮"而白等。 */
+        const FILL_MIN_RATE = 1.1;
+        const FILL_WINDOW_MS = 900;
+        const fillSamples = new WeakMap();
+        const bufferedEndAt = (node) => {
+          if (!node) return 0;
+          const at = node.currentTime || 0;
+          try {
+            for (let i = 0; i < node.buffered.length; i += 1) {
+              if (at + 0.05 >= node.buffered.start(i) && at <= node.buffered.end(i)) return node.buffered.end(i);
+            }
+          } catch (_) { return 0; }
+          return 0;
+        };
+        const fillHealthy = (node) => {
+          const end = bufferedEndAt(node);
+          const now = performance.now();
+          if (!end) return false;
+          const prev = fillSamples.get(node);
+          if (!prev) { fillSamples.set(node, { t: now, end }); return false; }
+          const dt = (now - prev.t) / 1000;
+          if (dt * 1000 < FILL_WINDOW_MS) return false;
+          const rate = (end - prev.end) / dt;
+          fillSamples.set(node, { t: now, end });
+          return rate >= FILL_MIN_RATE;
+        };
         const smooth = (node) => {
           if (!node) return false;
           if (node.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return false;
           // 真的在动才算：缓冲够了但被自动播放策略摁住的，交给兜底放行。
           if (node.paused && (node.currentTime || 0) <= 0.05) return false;
-          const need = isFinite(node.duration) && node.duration
-            ? Math.min(HERO_SMOOTH_AHEAD_SEC, node.duration * 0.5)
-            : HERO_SMOOTH_AHEAD_SEC;
-          return bufferedAhead(node) >= need;
+          const dur = isFinite(node.duration) && node.duration ? node.duration : 0;
+          const need = dur ? Math.min(HERO_SMOOTH_AHEAD_SEC, dur * 0.5) : HERO_SMOOTH_AHEAD_SEC;
+          const runway = bufferedAhead(node);
+          if (runway < need) return false;
+          const rest = dur ? Math.max(0, dur - (node.currentTime || 0)) : Infinity;
+          const fullyBuffered = rest <= runway + 0.25;
+          const ample = runway >= Math.min(Math.max(need * 1.6, 4), rest || Infinity);
+          return ample || fullyBuffered || fillHealthy(node);
         };
         const heroSmooth = () => {
           const list = [v];
           document.querySelectorAll('video.hero-video-alpha').forEach((extra) => list.push(extra));
           return list.every(smooth);
         };
-        const mark = (force) => {
+        const mark = (force, reason) => {
           if (videoReadyRef.current) return;
           if (!force && !heroSmooth()) return;
           videoReadyRef.current = true;
+          // 自查用：揭幕时是"真的攒够了"还是走了某条兜底（控制台 window.__heroReadyReason）
+          try { window.__heroReadyReason = reason || (force ? 'forced' : 'smooth'); } catch (_) { /* noop */ }
           if (stopReadyWatch) { stopReadyWatch(); stopReadyWatch = null; }
           try { onVideoReady(); } catch (_) { /* noop */ }
         };
-        const onProgress = () => mark(false);
+        const onProgress = () => mark(false, 'smooth');
         v.addEventListener('playing', onProgress);
         v.addEventListener('canplay', onProgress);
         v.addEventListener('progress', onProgress);
         v.addEventListener('timeupdate', onProgress);
         const smoothPoll = window.setInterval(onProgress, 200);
-        const smoothFailSafe = window.setTimeout(() => mark(true), HERO_SMOOTH_FAILSAFE_MS);
+        /* 兜底放行的判据（2026-10-13 再改，业主口径「确保能流畅播放再结束 loading」）。
+           ⚠ 上一版这里有个洞：判据是 `readyState >= HAVE_CURRENT_DATA(2) && bufferedAhead > 0`，
+             冷缓存慢网在 4.5s 时常常**还停在 readyState 1**（只拿到元数据、第一帧没解码），
+             于是被判成"死了" → mark(true) 强放行 → heroVideoReady 提前为真 → app 级 6s
+             兜底随即揭幕 —— 用户看到的就是"进度条满了、进去视频卡几秒"。**这才是根因。**
+           ⚠ 2026-10-13 二改：**「还没开始」不等于「卡死」**。实测（hero-gate-check TAG=hold，
+             把 mp4 请求扣住 9s 模拟"视频排在 JS 后面"）发现：视频一个字节都没到时，
+             旧判据 5s 就判 `!byteFlow()` → 6.7s 揭幕，那一刻 readyState 还是 0 ——
+             遮罩照样在视频前面收掉了。现在把两者分开：
+             · 有数据了又停（stalled）   —— STALL_MS(5s) 无新数据 → 认输放行；
+             · 一直没数据（never-started）—— 宽限到 NEVER_START_MS(12s) 才认输
+               （请求可能只是排在模块/封面后面，不是失败）；
+             加上两种立刻认输的情形：
+             · error                     —— 请求/解码彻底失败；
+             · autoplayBlocked           —— 数据已够（rs>=3）却被自动播放策略摁住，
+                                            再等也不会自己播起来（由 poster 顶着，交还用户手势）。
+           仍在下载 → 每 1.5s 复查一次；最坏情况由 app 级 15s 与 index.html 的 18s HARD_CAP
+           兜住，绝不会把首屏永久扣住。认输原因写在 window.__heroReadyReason 里可自查。 */
+        const STALL_MS = 5000;
+        const NEVER_START_MS = 12000;
+        let lastDataAt = performance.now();
+        let lastEnd = 0;
+        let lastRs = 0;
+        const noteData = () => {
+          const end = bufferedEndAt(v);
+          if (end > lastEnd + 0.01 || v.readyState > lastRs) {
+            lastEnd = Math.max(lastEnd, end);
+            lastRs = v.readyState;
+            lastDataAt = performance.now();
+          }
+        };
+        const dataEvents = ['progress', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'timeupdate'];
+        dataEvents.forEach((ev) => v.addEventListener(ev, noteData));
+        const hadData = () => lastEnd > 0 || v.readyState >= HTMLMediaElement.HAVE_METADATA;
+        const quietFor = () => performance.now() - lastDataAt;
+        const autoplayBlocked = () => v.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA
+          && v.paused && (v.currentTime || 0) <= 0.05;
+        const giveUpReason = () => {
+          if (v.error) return 'error';
+          if (autoplayBlocked()) return 'autoplay-blocked';
+          if (hadData() && quietFor() >= STALL_MS) return 'stalled';
+          if (!hadData() && quietFor() >= NEVER_START_MS) return 'never-started';
+          return null;
+        };
+        let smoothFailSafe = 0;
+        const armFailSafe = (delay) => {
+          smoothFailSafe = window.setTimeout(() => {
+            if (videoReadyRef.current) return;
+            const reason = giveUpReason();
+            if (!reason) { armFailSafe(1500); return; }
+            mark(true, reason);
+          }, delay);
+        };
+        armFailSafe(HERO_SMOOTH_FAILSAFE_MS);
         stopReadyWatch = () => {
           window.clearInterval(smoothPoll);
           window.clearTimeout(smoothFailSafe);
@@ -4391,6 +4670,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           v.removeEventListener('canplay', onProgress);
           v.removeEventListener('progress', onProgress);
           v.removeEventListener('timeupdate', onProgress);
+          dataEvents.forEach((ev) => v.removeEventListener(ev, noteData));
         };
       }
     }
@@ -4564,10 +4844,31 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     let lastPresentedKey = -1;
     let showImmediatePair = false;
 
-    const releaseSnapshot = (snapshot) => {
-      if (!snapshot) return;
+    // Keep at most one spare per alpha mode; pending/visible ownership stays unchanged.
+    const snapshotSpare = [[], []];
+    const snapshotInfo = new WeakMap();
+    const discardSnapshot = (snapshot) => {
       snapshot.width = 1;
       snapshot.height = 1;
+    };
+    const clearSnapshotSpare = () => {
+      snapshotSpare.forEach((pool) => {
+        pool.forEach(discardSnapshot);
+        pool.length = 0;
+      });
+    };
+    const releaseSnapshot = (snapshot) => {
+      if (!snapshot) return;
+      const info = snapshotInfo.get(snapshot);
+      if (info && info.pooled) return;
+      const owner = info && info.keepAlpha ? alphaCanvas : baseCanvas;
+      const pool = info && snapshotSpare[info.keepAlpha ? 1 : 0];
+      if (!disposed && info && snapshot.width === owner.width && snapshot.height === owner.height && pool.length < 1) {
+        info.pooled = true;
+        pool.push(snapshot);
+      } else {
+        discardSnapshot(snapshot);
+      }
     };
     const clearPending = (role, queues = pending, states = frameState) => {
       queues[role].forEach(releaseSnapshot);
@@ -4585,6 +4886,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         const width = Math.max(1, Math.round(rect.width * scale));
         const height = Math.max(1, Math.round(rect.height * scale));
         if (canvas.width !== width || canvas.height !== height) {
+          clearSnapshotSpare();
           canvas.width = width;
           canvas.height = height;
         }
@@ -4593,13 +4895,27 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     const makeSnapshot = (video, canvas, keepAlpha) => {
       const width = canvas.width || HERO_FRAME_WIDTH;
       const height = canvas.height || HERO_FRAME_HEIGHT;
-      const snapshot = typeof OffscreenCanvas === 'function'
-        ? new OffscreenCanvas(width, height)
-        : document.createElement('canvas');
-      snapshot.width = width;
-      snapshot.height = height;
-      const context = snapshot.getContext('2d', { alpha: keepAlpha });
-      if (!context) return null;
+      const pool = snapshotSpare[keepAlpha ? 1 : 0];
+      let snapshot = pool.pop();
+      if (snapshot && (snapshot.width !== width || snapshot.height !== height)) {
+        discardSnapshot(snapshot);
+        snapshot = null;
+      }
+      if (!snapshot) {
+        snapshot = typeof OffscreenCanvas === 'function'
+          ? new OffscreenCanvas(width, height)
+          : document.createElement('canvas');
+        snapshot.width = width;
+        snapshot.height = height;
+        const context = snapshot.getContext('2d', { alpha: keepAlpha });
+        if (!context) { discardSnapshot(snapshot); return null; }
+        snapshotInfo.set(snapshot, { keepAlpha, context, pooled: false });
+      }
+      const info = snapshotInfo.get(snapshot);
+      info.pooled = false;
+      const context = info.context;
+      // Match a fresh bitmap for both transparent and alpha:false canvases.
+      context.clearRect(0, 0, width, height);
       const sourceWidth = video.videoWidth || HERO_FRAME_WIDTH;
       const sourceHeight = video.videoHeight || HERO_FRAME_HEIGHT;
       const cover = Math.max(width / sourceWidth, height / sourceHeight);
@@ -5039,6 +5355,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         releaseSnapshot(visiblePair.alpha);
         visiblePair = null;
       }
+      clearSnapshotSpare();
     };
   }, [assetMode, isMobile, useWebglRenderer, active]);
 
@@ -5482,22 +5799,96 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
     revealedRef.current = true;
     window.requestAnimationFrame(() => window.dispatchEvent(new Event('app:ready')));
   }, []);
+  /* 「进度条上所有登记过的加载任务都完成了吗」—— 直接问 index.html 的注册表
+     （__bootTasks().pending），而不是在本文件里维护一份清单。
+     ★ 业主 2026-10-13 的核心要求就落在这里：**以后任何新加的加载内容**只要按约定
+       派发 loading:progress，就自动出现在进度条上、也自动成为揭幕条件 ——
+       进度和加载时间都跟着内容走，不需要回来改这段闸门代码。
+     注册表不存在（老 HTML / 缓存）时返回 true，退回原来的四道闸门。 */
+  const bootTasksIdle = useCallback((exceptId = null) => {
+    const snapshot = typeof window.__bootTasks === 'function' ? window.__bootTasks() : null;
+    if (!snapshot) return true;
+    const pending = snapshot.pending;
+    return exceptId ? pending.every((id) => id === exceptId) : pending.length === 0;
+  }, []);
   useEffect(() => {
-    if (heroVideoReady && coversPreloaded && tailReady && tailBurned) reveal();
-  }, [heroVideoReady, coversPreloaded, tailReady, tailBurned, reveal]);
+    if (heroVideoReady && coversPreloaded && tailReady && tailBurned && bootTasksIdle()) reveal();
+  }, [heroVideoReady, coversPreloaded, tailReady, tailBurned, bootTasksIdle, reveal]);
+  /* 6s 兜底：只放行「尾屏烧录」这一件事（低端 GPU 上着色器编译 + 烧录可能很慢，
+     但绝不能让首屏永久扣在遮罩后面；烧录会在后台继续跑完）。
+     ⚠ 2026-10-13 收紧授权范围 —— 原来这里是 `setTimeout(reveal, 6000)`，只看
+       heroVideoReady && coversPreloaded，于是**任何新登记的加载任务都被它绕过**：
+       合成一个"7s 才完成"的新任务实测，遮罩照样在 6.8s 收掉、新任务被无视，
+       正是业主说的"加了新任务、进度还按旧任务量算"。
+       现在它必须等注册表里**除尾屏之外**的任务全部完成（bootTasksIdle(TAIL_TASK_ID)），
+       新任务想被漏算也漏不掉。 */
   useEffect(() => {
     if (!heroVideoReady || !coversPreloaded) return undefined;
-    const t = window.setTimeout(reveal, 6000);
-    return () => window.clearTimeout(t);
-  }, [heroVideoReady, coversPreloaded, reveal]);
-  // 终极兜底：上面两道都以 heroVideoReady / coversPreloaded 为前置条件，任一闸门永远
-  // 不来（微信 canvas 解码不出帧、封面请求全挂…）reveal 就永不发生 → app:ready 不来 →
-  // 首屏 SVG 入场停在 opacity:0。这里不看任何闸门，到点无条件揭幕（reveal 幂等）。
-  // 9s 长于正常路径（≈5s），只在异常时生效。
+    let id = 0;
+    const start = window.setTimeout(() => {
+      // 之后每 500ms 复核一次：尾屏之外的任务一完成就放行（尾屏本身不再等）。
+      const check = () => {
+        if (revealedRef.current) { window.clearInterval(id); return; }
+        if (bootTasksIdle(TAIL_TASK_ID)) { reveal(); window.clearInterval(id); }
+      };
+      check();
+      id = window.setInterval(check, 500);
+    }, 6000);
+    return () => { window.clearTimeout(start); window.clearInterval(id); };
+  }, [heroVideoReady, coversPreloaded, bootTasksIdle, reveal]);
+  /* 这里原本还有一道「15s 无条件揭幕」的 React 侧终极兜底，2026-10-13 **删掉了**：
+     业主口径是「加载时间必须实时跟加载内容挂钩」，而固定 15s 会在图片/长图变多时
+     抢在任务完成之前揭幕（"新任务没算进去"就是这么暴露的）。
+     现在"什么时候认输"只有一个地方说了算 —— index.html 的**看门狗**：
+     跑满 15s 且**连续 5s 一点进度都没涨**才放行（真卡住才走，与内容多少无关），
+     它自己会派发 app:ready 并从内部把遮罩收掉，所以首屏标题不会停在 opacity:0。 */
+  /* 揭幕闸门「为什么还没放行」的现场快照（2026-10-13，业主自查用）：
+     在控制台敲 `window.__revealGate` 即可看到四道闸门 + 进度条上还差哪些任务
+     （bootPending）、首屏视频的真实缓冲余量与揭幕时刻；揭幕后保留**揭幕那一刻**的快照。
+     250ms 采样、不写任何 DOM、揭幕即停，无可感知开销。
+     顺带承担一件事：**每次采样都完整复核一遍闸门**（含 bootTasksIdle），满足即揭幕 ——
+     这样即使某个任务是在四道 state 闸门都已为真之后才登记的，也照样会被等到。 */
   useEffect(() => {
-    const t = window.setTimeout(reveal, 9000);
-    return () => window.clearTimeout(t);
-  }, [reveal]);
+    let timer = 0;
+    const tick = () => {
+      const v = document.querySelector('video.hero-mobile-video, video.hero-video-base');
+      let ahead = 0;
+      if (v) {
+        try {
+          const at = v.currentTime || 0;
+          for (let i = 0; i < v.buffered.length; i += 1) {
+            if (at + 0.05 >= v.buffered.start(i) && at <= v.buffered.end(i)) {
+              ahead = Math.max(ahead, v.buffered.end(i) - at);
+            }
+          }
+        } catch (_) { /* noop */ }
+      }
+      const snapshot = typeof window.__bootTasks === 'function' ? window.__bootTasks() : null;
+      window.__revealGate = {
+        gates: { heroVideoReady, coversPreloaded, tailReady, tailBurned },
+        bootPending: snapshot ? snapshot.pending : null,
+        bootCount: snapshot ? snapshot.count : null,
+        bootRatio: snapshot ? Math.round(snapshot.ratio * 1000) / 1000 : null,
+        video: v ? {
+          readyState: v.readyState,
+          paused: v.paused,
+          currentTime: Number((v.currentTime || 0).toFixed(2)),
+          duration: isFinite(v.duration) ? Number(v.duration.toFixed(2)) : null,
+          aheadSec: Number(ahead.toFixed(2)),
+        } : null,
+        revealed: revealedRef.current,
+        heroReadyReason: typeof window !== 'undefined' ? window.__heroReadyReason : undefined,
+        atMs: Math.round(performance.now()),
+      };
+      if (!revealedRef.current
+        && heroVideoReady && coversPreloaded && tailReady && tailBurned && bootTasksIdle()) {
+        reveal();
+      }
+      if (!revealedRef.current) timer = window.setTimeout(tick, 250);
+    };
+    timer = window.setTimeout(tick, 250);
+    return () => window.clearTimeout(timer);
+  }, [heroVideoReady, coversPreloaded, tailReady, tailBurned, bootTasksIdle, reveal]);
   const [projectsRef, projectsSeen, projectsResync] = useRevealOnView();
   const [contactRef, contactSeen] = useRevealOnView({ threshold: 0.16 });
   const [contactPreload, setContactPreload] = useState(false);
@@ -5540,53 +5931,182 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
 
   // 预载全部挪到 loading 阶段：封面 + 尾屏 WebGL 都在首页可见前就绪，
   // 揭幕进入 hero 后不再有任何网络/编译负载 → 零卡顿（PC 与移动端一致）。
-  // 此 effect 在 HomePage 挂载时（即 loading 遮罩仍可见时）立即执行。
+  //
+  // ⚠ 2026-10-13 冷缓存顺序（业主反馈「无缓存时进首页后视频还会卡一会」）：
+  //   过去这三批是 t=0 **同时**起跑的 —— hero 视频（1.66MB，靠连续 range 请求）
+  //   + 33 张封面（33 个并发请求把连接池占满）+ 尾屏 693KB。视频的 range 请求
+  //   排在 33 张图后面 → 闸门量到的"刚好 1.5s 缓冲"是硬挤出来的，揭幕瞬间
+  //   尾屏又开始编译抢主线程 → 视频就卡在开场那几秒。
+  //   现在串行化：**视频 > 封面（含显式 decode）> 尾屏**，都排在视频确认能连续播之后。
+  // 进度条权重**先登记**（2026-10-13）：这些任务排在视频之后才启动，若等它们
+  // 真开始才上报，条子会在视频下完后先冲到很高、等新任务进来再"停住"。
+  // 这里在挂载当帧就把权重报一次 0 —— index.html 的任务表按 id 锁权重、
+  // progress 取 max（单调），重复上报无副作用，条子从第一帧起就按真实总量爬。
+  // ⚠ 作品封面**不在**这里整组登记了（2026-10-13 改）：它们改成**一张图一个任务**
+  //   （id = img:<路径>），见下面 warmStage 的预载 effect —— 业主口径是"进度要实时
+  //   跟加载内容挂钩"，一张一份权重，加图/换图自动生效，也不会漏算。
   useEffect(() => {
+    const announce = (id, weight) => {
+      try {
+        window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id, weight, progress: 0 } }));
+      } catch (_) { /* noop */ }
+    };
+    announce(TAIL_EVENT_ID, 2);
+  }, []);
+
+  /* hero 视频"够播"了就播报一声（2026-10-13）：App 拿它当"最危险的那段下载已经过去"的
+     信号，在遮罩还在时预热环境光的 WebGL 上下文与 shader 编译。只做一次跨组件通知，
+     不进 state、不触发任何重渲染。 */
+  useEffect(() => {
+    if (!heroVideoReady) return;
+    window.__heroReady = true;
+    try { window.dispatchEvent(new Event('hero:ready')); } catch (_) { /* noop */ }
+  }, [heroVideoReady]);
+
+  const [warmStage, setWarmStage] = useState(0);
+  useEffect(() => {
+    if (heroVideoReady) { setWarmStage(1); return undefined; }
+    // 视频本身异常（自动播放被拒 / 解码失败）时不能把后面全卡死：2.5s 后无条件放行。
+    const t = window.setTimeout(() => setWarmStage(1), 2500);
+    return () => window.clearTimeout(t);
+  }, [heroVideoReady]);
+
+  const warmStartedRef = useRef(false);
+  // 此 effect 在 HomePage 挂载时（即 loading 遮罩仍可见时）立即执行，
+  // 但真正开跑要等 warmStage —— 见上面的顺序说明。
+  useEffect(() => {
+    if (!warmStage || warmStartedRef.current) return undefined;
+    warmStartedRef.current = true;
     let cancelled = false;
-    // 预载**三个比例**:PC 卡组用 4:3、移动卡组用 3:5、二级用 16:9。
-    // 同设备下只用得到其中两个,但 loading 阶段一次下完成本极低(全量 1.5MB),
-    // 换来「跨端/改窗口尺寸后零加载负载」。Set 去重,同一 URL 不重复请求。
-    const set = new Set();
-    for (const it of [...worksItems, ...mobileWorksItems]) {
-      if (it.cover) set.add(it.cover);
-      if (it.cover43) set.add(it.cover43);
-    }
-    for (const work of WORKS_RAIL) if (work.detailHero) set.add(work.detailHero);
-    const covers = [...set];
-    const total = covers.length;
+    /* 作品图片总清单（一级封面 + 二级/详情封面）。分两拨：
+       · critical = 本机马上要显示的封面 + 详情页首屏那块长图 → **每张一个 loading 任务**，
+         参与计分也参与揭幕；
+       · cross    = 另一套比例（换设备/跨断点才用到）→ **不进 loading**，揭幕后静默预热。 */
+    const inventory = worksImageInventory(isMobile);
+    const all = [...inventory.covers, ...inventory.tiles];
+    const total = all.length;
     let done = 0;
-    // 把封面预载进度并回首屏 loading 进度条（见 index.html 的 loading:progress 监听）。
-    const emit = (progress) => {
+    /* 每张图 = **一个独立的 loading 任务**（id 带文件名），不再是"整组一个 covers"。
+       为什么必须一张一个：
+         ① 业主口径「进度和加载时间要实时跟加载内容挂钩」—— 一张图一份权重，
+            加一张图总分就自动 +1、揭幕就自动推迟一点，不需要改任何计分代码；
+         ② 整组一个 id 时，progress 只能报"完成比例"，看不出是哪张在拖，
+            而且以后往组里加图容易忘了改总量。
+       登记必须在**开跑之前**：index.html 的总分是现算的，晚登记会让条子先冲到高处
+       再卡住（paint 只增不减），观感就是"假进度"。 */
+    const announce = (id, progress) => {
       try {
         window.dispatchEvent(new CustomEvent('loading:progress', {
-          detail: { id: 'covers', weight: 3, progress }
+          detail: { id, weight: 1, progress }
         }));
       } catch (_) { /* noop */ }
     };
+    all.forEach((src) => announce(`img:${src}`, 0));
     const finish = () => { if (!cancelled) setCoversPreloaded(true); };
+    /* 一张封面 = 下载 + **显式解码**。
+       ⚠ onload 只代表"字节到齐"，解码还排在主线程队列里。33 张 WebP 的解码
+       如果留到揭幕后（首次显示某张卡才做）就会砸在首屏视频与入场动画上 ——
+       这正是"进入后卡一会"的另一半成因。这里在遮罩下解掉，decode() 完成才算数。
+       decode() 失败/不支持一律当完成，绝不让它把闸门吊死。 */
+    const IMG_TIMEOUT_MS = 12000;
+    /* ★ 2026-10-13（微信移动端业主反馈"滑到作品页 3:5 封面还是空的"）：
+       过去这里只有游离的 `new Image()`。游离图片在微信 X5 / WKWebView 里不保证被
+       真正取回并留在图片缓存里（X5 的"智能图片加载"会把没进 DOM 的图当成不需要），
+       于是 loading 期等于白下：卡片上屏那一刻又得重新走一趟网络，慢网下就是空卡。
+       改法：把这些图**挂进一个隐藏容器**（位置挪出屏幕、1×1 裁切、opacity 极低但
+       仍在渲染树里 —— 不是 display:none，避免被判定为"不可见就不解码"），
+       让内核按"页面里的图"来取。全部落地后容器立刻移除，不长期占内存。
+       配合同一提交里 `markImagePreloaded`：已经在 DOM 里的卡组/轨道卡会在预载
+       完成的那一帧就挂上 src，解码也发生在遮罩下 —— 这正是"进入后不卡"的来源。 */
+    const store = document.createElement('div');
+    store.id = 'img-preload-store';
+    store.setAttribute('aria-hidden', 'true');
+    store.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;'
+      + 'overflow:hidden;opacity:0.01;pointer-events:none;z-index:-1';
+    if (document.body) document.body.appendChild(store);
+    const preloadOne = (src) => new Promise((resolve) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.alt = '';
+      let settled = false;
+      const settle = (ok) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        if (ok) markImagePreloaded(src);
+        resolve();
+      };
+      /* 单张的兜底（2026-10-13）：某张图 404 / 挂住时不能把整条 loading 吊死。
+         到点算"有结论"，但**明确记一笔**，方便在控制台一眼看出是哪张图的问题 ——
+         这不是"假装成功"，页面侧那张卡本来也就只能用占位图。 */
+      const timer = window.setTimeout(() => {
+        console.warn('[loading] 图片超时，按完成处理：', src);
+        settle(false);
+      }, IMG_TIMEOUT_MS);
+      img.onload = () => {
+        markImagePreloaded(src);
+        let p = null;
+        try { p = typeof img.decode === 'function' ? img.decode() : null; } catch (_) { p = null; }
+        if (p && typeof p.then === 'function') p.then(() => settle(true), () => settle(true));
+        else settle(true);
+      };
+      img.onerror = () => {
+        console.warn('[loading] 图片加载失败：', src);
+        settle(false);
+      };
+      img.src = src;
+      try { store.appendChild(img); } catch (_) { /* noop */ }
+    });
+    /* 并发跑，但**每完成一张就报一次**（进度条据此一张张爬）。
+       收尾判定用"全部 settle"而不是 Promise.all 的顺序 —— settle 不会被
+       单张的失败打断（onerror/超时都 resolve）。 */
+    const run = (list) => Promise.all(list.map((src) => preloadOne(src).then(() => {
+      done += 1;
+      announce(`img:${src}`, 1);
+      return null;
+    })));
+    /* 隐藏预载容器用完即撤：卡片们此时已经各自挂上 src（markImagePreloaded 的订阅
+       在预载成功那一刻就把 src 派给了 DOM 里已存在的卡组/轨道），
+       资源也已在内核缓存里，移除容器不再影响任何一张卡的显示，只把内存还回去。 */
+    const dropStore = () => {
+      /* 只撤容器，**不**清元素上的 src：清 src 等于告诉内核"这张图不要了"，
+         在个别内核上会把已解码的位图一起丢掉，详情页的长图就要重下（实测过
+         resource timing 里多出一条条件请求）。元素随容器一起被回收，
+         缓存条目照旧留着，卡片各自身上的 src 也不受影响。 */
+      try { store.remove(); } catch (_) { /* noop */ }
+    };
     if (total === 0) {
-      emit(1);
+      dropStore();
       finish();
     } else {
-      emit(0);
-      covers.forEach((src) => {
-        const img = new Image();
-        img.decoding = 'async';
-        img.onload = img.onerror = () => {
-          done += 1;
-          emit(done / total);
-          if (done >= total) finish();
-        };
-        img.src = src;
+      run(all).then(() => {
+        dropStore();
+        finish();
       });
-      // 兜底：封面下载过慢也不让 loading 卡死（4s 后强制放行）
-      window.setTimeout(finish, 4000);
+    }
+    /* 跨比例那批（PC 的 3:5 / 手机的 16:9）不占启动带宽：等**揭幕之后**再悄悄下，
+       纯粹暖 HTTP 缓存（换设备、跨 1100px 断点时才用得到）。 */
+    if (inventory.cross.length) {
+      const warmCross = () => {
+        inventory.cross.forEach((src) => {
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = src;
+        });
+      };
+      if (window.__appRevealed) warmCross();
+      else window.addEventListener('app:ready', warmCross, { once: true });
     }
     // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
     // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
+    // ⚠ 它排在 hero 视频之后（本 effect 由 warmStage 驱动）—— 它的 WebGL 编译
+    //   是整条加载链上最重的一段主线程负载，绝不能与视频的首次缓冲同时发生。
     setContactPreload(true);
     return () => { cancelled = true; };
-  }, []);
+  }, [warmStage]);
+  /* ⚠ 依赖数组只有 warmStage：worksItems / mobileWorksItems 每次渲染都是新数组，
+     放进依赖会让这个 effect 每渲染一次就 cleanup 一次（cancelled=true + 清掉兜底
+     定时器），预载会被自己掐断、闸门永不打开。warmStartedRef 保证只跑一次。 */
 
   // Where the controller thinks it is. On a paged home the scroll position is
   // the only thing that can say: the browser may have restored one from an
@@ -7070,10 +7590,17 @@ function DetailScroll({ workId, fallbackImages }) {
   return (
     <div className="detail-scrolls">
       {scrolls.map((scroll) => (
-        <div className="detail-scroll" key={scroll.slug}>
+        /* ⚠ key 里必须带 workId（2026-10-13 业主反馈的「三级页图片残留」）。
+           只按 scroll.slug / tile.i 做 key 时，A→B 切项目 React 会**复用同一批
+           DOM 节点**，只把 <img> 的 src 换成 B 的地址 —— 而浏览器在**新图解码完成
+           之前会继续绘制旧图**，于是 B 的页面里明晃晃地留着 A 的图，误导性极强。
+           带上 workId 后整块重建：新 <img> 没有任何旧位图，加载期间只显示
+           ScrollTile 自己的 LQIP（24×25 内联 webp，拉伸即模糊），
+           真图 onLoad 后才淡入（.scroll-tile.is-loaded img）。 */
+        <div className="detail-scroll" key={`${workId}-${scroll.slug}`}>
           {scroll.tiles.map((tile, index) => (
             <ScrollTile
-              key={tile.i}
+              key={`${workId}-${tile.i}`}
               workId={workId}
               slug={scroll.slug}
               tile={tile}
@@ -7087,10 +7614,34 @@ function DetailScroll({ workId, fallbackImages }) {
   );
 }
 
-function WorkDetailPage({ activeCategory, work, flip = '', onSwipeProject = null, onBack = null }) {
+function WorkDetailPage({ activeCategory, work, flip = '', onSwipeProject = null, onBack = null, neighborWorks = null }) {
   const pageRef = useRef(null);
   const swipeRef = useRef({ down: false, startX: 0, dx: 0, lastDX: 0, vel: 0, moved: false });
   const backRef = useRef({ active: false, startY: 0, pulled: 0 });
+
+  /* 相邻项目首图预取（2026-10-13）:左右滑/点导航切项目时,新项目第一屏的图是
+     现场请求的 —— 慢网下用户要盯着 LQIP 模糊图等一会。这里在详情页停留 700ms 后
+     （错开当前项目首图的带宽窗口）把左右邻居的第一块 tile 拉进 HTTP 缓存,
+     滑动落地时通常已在缓存里。⚠ 只取移动端实际会用的 @714 变形,别把 1470 的
+     大图也拉下来 —— 那是桌面端 sizes 才会选中的。 */
+  const neighborKey = neighborWorks && neighborWorks.length
+    ? neighborWorks.map((item) => (item && item.id) || '').filter(Boolean).join('|')
+    : '';
+  useEffect(() => {
+    if (!neighborKey) return undefined;
+    const timer = window.setTimeout(() => {
+      neighborKey.split('|').forEach((id) => {
+        const entry = DETAIL_SCROLLS.works[id];
+        const scroll = entry && entry.scrolls && entry.scrolls[0];
+        const tile = scroll && scroll.tiles && scroll.tiles[0];
+        if (!scroll || !tile) return;
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = `${SCROLL_ROOT}/${id}/${scroll.slug}/tile-${String(tile.i).padStart(3, '0')}@714.webp`;
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [neighborKey]);
 
   // 内滚归位:每次切换作品(Last/Next、分类下拉、二级页进入)都回到顶部。
   // ⚠ 返回翻页期间组件**不重挂**、work.id 不变,这个 effect 不会跑 ——
