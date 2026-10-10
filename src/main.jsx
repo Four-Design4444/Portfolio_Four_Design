@@ -4689,30 +4689,11 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         };
       }
     }
-    /* ⚠ 出屏之后不许再"救活"hero（2026-10-10 实测定位到的那次 reintroduce）：
-       本看门狗的重试（400/1200/2600/5000/8000ms，见下方 timers）与手势监听都挂在
-       window 上，而它只认 `paused`、不认「在不在屏」。用户翻到尾屏时首屏视频已被
-       出屏暂停，若此刻那次 8s 重试（或任意一次 wheel/scroll 手势）落下，就会把
-       已经在视口外 2700px 的视频重新拉起 —— 解码 + 逐帧合成继续烧（每帧 2 次
-       drawImage + 1 次 getError 同步往返），而且**没有任何东西会再把它按下去**：
-       出屏暂停只由 IntersectionObserver 的边界事件触发，元素一直不在视口里就
-       不会再报第二次。判据直接用 DOM 实测，不依赖别处的状态，保证两套逻辑解耦。 */
-    const heroStageOnScreen = (video) => {
-      const stage = video && video.closest ? video.closest('.hero-video-stage') : null;
-      if (!stage) return true;                        // 找不到舞台 → 按"在屏"处理，不误伤
-      const rect = stage.getBoundingClientRect();
-      // 尺寸为 0 = 还没排好版（或不可测）→ 同样按"在屏"处理，绝不用它挡掉正常起播。
-      if (!rect.width && !rect.height) return true;
-      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-      return rect.bottom > 0 && rect.top < vh;
-    };
     const kick = () => {
       const video = pickVideo();
       if (!video) return;
       diag.attempts += 1;
       diag.mutedAttr = video.hasAttribute('muted');
-      // 已出屏（用户翻到二级/尾屏）→ 不救援、不绘制，本次直接放行。
-      if (!heroStageOnScreen(video)) return;
       if (!video.paused || video.ended) { paint(video); return; }
       // The desktop hero pairs a base clip with a matte clip; both must run.
       document.querySelectorAll('video.hero-video-alpha').forEach((extra) => {
@@ -4837,15 +4818,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         return undefined;
       }
     }
-    /* getError() 是同步往返：它把命令缓冲刷给驱动并等回执。合成循环**每帧**都调一次，
-       而它只是在"确认上一次绘制没出错"（见下方 throw → 降级 fallback 那条路）。
-       实测首页静置 4s 窗口吃掉约 50ms 主线程（占比 ~1.2%），纯粹是白付。
-       改为抽样：前 24 帧逐帧查（初始化/首帧纹理上传最容易出问题），之后每 24 帧查一次。
-       真错误仍走同一条 fallback，最多晚 24 帧上报（满帧约 0.4s）—— 那点时间里画面
-       本来就是坏的，早报晚报对观感没有差别。 */
-    const MATTE_ERROR_DENSE_FRAMES = 24;
-    const MATTE_ERROR_INTERVAL = 24;
-    let matteErrorCountdown = MATTE_ERROR_DENSE_FRAMES;
     const renderMatte = (colorSnapshot, matteSnapshot) => {
       alphaGl.viewport(0, 0, alphaCanvas.width, alphaCanvas.height);
       [colorSnapshot, matteSnapshot].forEach((snapshot, index) => {
@@ -4854,10 +4826,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         alphaGl.texImage2D(alphaGl.TEXTURE_2D, 0, alphaGl.RGBA, alphaGl.RGBA, alphaGl.UNSIGNED_BYTE, snapshot);
       });
       alphaGl.drawArrays(alphaGl.TRIANGLE_STRIP, 0, 4);
-      if (--matteErrorCountdown <= 0) {
-        matteErrorCountdown = MATTE_ERROR_INTERVAL;
-        if (alphaGl.getError() !== alphaGl.NO_ERROR) throw new Error('WebGL matte render failed');
-      }
+      if (alphaGl.getError() !== alphaGl.NO_ERROR) throw new Error('WebGL matte render failed');
     };
 
     const pending = { base: new Map(), alpha: new Map() };
@@ -5318,56 +5287,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       window.addEventListener('resize', redrawVisiblePair);
     }
 
-    /* ── 出屏暂停链路诊断（默认完全空转，仅诊断探针置位 window.__heroMediaDebug）──
-       背景：翻到尾屏后 hero 舞台已在视口上方 2700px、IO 也报了 hit:false，但两条轨
-       仍 paused=false、currentTime 继续走，matte 合成循环还在烧 getError。
-       这里按事件记账（含调用栈与元素身份），用来钉死「暂停之后是谁又把它播起来」，
-       以及「是不是 React 重建了 <video>（新元素带 autoPlay，自己就播了）」。
-       生产不收集：只有当 Page.addScriptToEvaluateOnNewDocument 事先置位才启用。 */
-    const heroMediaLog = (typeof window !== 'undefined' && window.__heroMediaDebug)
-      ? (window.__heroMediaLog = window.__heroMediaLog || [])
-      : null;
-    const mediaTag = (el) => {
-      if (!el) return '-';
-      if (!el.__mediaTag) el.__mediaTag = 'v' + (window.__heroMediaTagSeq = (window.__heroMediaTagSeq || 0) + 1);
-      return el.__mediaTag;
-    };
-    const heroMediaSnapshot = (el) => (el ? {
-      tag: mediaTag(el),
-      paused: el.paused,
-      ct: Number.isFinite(el.currentTime) ? +el.currentTime.toFixed(2) : null,
-      conn: el.isConnected,
-      rs: el.readyState
-    } : null);
-    const logHeroMedia = (kind, extra) => {
-      if (!heroMediaLog) return;
-      heroMediaLog.push(Object.assign({
-        t: Math.round(performance.now()),
-        kind,
-        heroInView,
-        active,
-        base: heroMediaSnapshot(base),
-        alpha: heroMediaSnapshot(alpha),
-        stack: (new Error().stack || '').split('\n').slice(2, 6)
-          .map((s) => s.trim().replace(/\s+/g, ' ').slice(0, 140))
-      }, extra || {}));
-      if (heroMediaLog.length > 200) heroMediaLog.shift();
-    };
-    if (heroMediaLog) {
-      logHeroMedia('effect-run', { assetMode, isMobile, useWebglRenderer });
-      const onMediaLog = (kind) => (event) => {
-        const el = event.currentTarget;
-        logHeroMedia(kind, { which: el === alpha ? 'alpha' : 'base', tag: mediaTag(el) });
-      };
-      base.addEventListener('play', onMediaLog('media-play'));
-      base.addEventListener('pause', onMediaLog('media-pause'));
-      alpha.addEventListener('play', onMediaLog('media-play'));
-      alpha.addEventListener('pause', onMediaLog('media-pause'));
-    }
-
     // 暂停：停时钟 + 丢帧配对 + 取消 rVFC 合成循环（同时停掉兜底 rAF）。
     const pauseHidden = () => {
-      logHeroMedia('pauseHidden');
       try { base.pause(); } catch {}
       try { alpha.pause(); } catch {}
       cancelVideoFrameCallbacks();
@@ -5377,8 +5298,7 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     // 两个时钟，但暂停前若已因解码快慢错开，回到屏幕就必须先对齐 —— 否则用户看到的
     // 前景（alpha 猫）与背景（base 天空）不是同一帧。
     const resumeVisible = () => {
-      if (!active) { logHeroMedia('resumeVisible-skip'); return; }
-      logHeroMedia('resumeVisible');
+      if (!active) return;
       if (Number.isFinite(base.currentTime) && Number.isFinite(alpha.currentTime)
         && !base.seeking && !alpha.seeking
         && Math.abs(base.currentTime - alpha.currentTime) > HERO_SYNC_TOLERANCE) {
@@ -5401,10 +5321,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       // Pause the clocks and drop the frame pairing so the decoder and the
       // stall watchdog stop; the watchdog would otherwise read the pause as a
       // stall and restart playback nobody can see.
-      logHeroMedia('init-inactive');
       pauseHidden();
     } else {
-      logHeroMedia('init-active');
       resumeVisible();
       stallTimer = window.setTimeout(checkForStall, STALL_CHECK_MS);
     }
@@ -5416,12 +5334,10 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
     visibilityObserver = new IntersectionObserver((entries) => {
       const inView = entries[0] ? entries[0].isIntersecting : true;
       heroInView = inView;
-      logHeroMedia('io', { inView });
       if (!inView) pauseHidden();
       else resumeVisible();
     }, { threshold: 0 });
     if (heroSection) visibilityObserver.observe(heroSection);
-    else logHeroMedia('io-no-section');
 
     return () => {
       disposed = true;
@@ -5457,46 +5373,6 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
       clearSnapshotSpare();
     };
   }, [assetMode, isMobile, useWebglRenderer, active]);
-
-  /* 移动端 hero 的出屏暂停（2026-10-10 补）。
-     PC 那条「出屏即暂停」装在上面 WebGL matte 的 effect 里，而它的入口要求
-     base + alpha 两个 <video> 同时存在 —— 移动端两者都没有（走 hero-mobile-video
-     或 WebCodecs/jsmpeg 画布），于是**移动端 hero 从不暂停**：实测翻到尾屏后
-     hero-mobile-video 仍 paused=false、currentTime 持续走（解码与浏览器合成一直
-     在跑，与尾屏 WebGL 争 GPU），用户翻回首页时视频其实已经空跑了好几秒。
-     这里补一条独立、轻量的同款：只观察 hero 舞台在不在视口，离开即暂停、回来再播。
-     ⚠ 只作用于原生 <video>（非微信）。微信的 WebCodecs / jsmpeg 画布路径没有
-       可暂停的媒体元素，其解码由各自的 effect 负责，不在本次范围内。 */
-  useEffect(() => {
-    if (!isMobile) return undefined;
-    const stage = document.querySelector('.hero-video-stage');
-    if (!stage) return undefined;
-    const apply = (inView) => {
-      document.querySelectorAll('video.hero-mobile-video').forEach((video) => {
-        try {
-          if (inView) {
-            // 回屏：暂停过的元素要显式起播（autoplay 只管首次加载）。
-            if (video.paused) { const p = video.play(); if (p && p.catch) p.catch(() => {}); }
-          } else if (!video.paused) {
-            video.pause();
-          }
-        } catch (_) { /* noop */ }
-      });
-    };
-    // 打开二级/三级页时 home 层只是被隐藏；这条路径不经过观察器（舞台可能仍与
-    // 视口相交），所以直接用 active 判定，与 PC 侧同义。
-    if (!active) { apply(false); return undefined; }
-    // 挂载/切换 assetMode 会重建 <video>（自带 autoPlay），此时先按当前几何定一次，
-    // 否则元素会在视口外自己播起来而观察器不会再报边界事件。
-    const rect = stage.getBoundingClientRect();
-    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-    apply((rect.width || rect.height) ? (rect.bottom > 0 && rect.top < vh) : true);
-    const io = new IntersectionObserver((entries) => {
-      apply(entries[0] ? entries[0].isIntersecting : true);
-    }, { threshold: 0 });
-    io.observe(stage);
-    return () => io.disconnect();
-  }, [isMobile, assetMode, active]);
 
   const updatePointerFromEvent = (event) => {
     const svg = wrapRef.current?.querySelector('svg');
