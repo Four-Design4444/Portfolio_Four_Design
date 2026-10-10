@@ -23,6 +23,8 @@
         position: fixed;
         inset: 0;
         z-index: 99999;
+        display: grid;
+        place-items: center;
         /* 底色与 demo 注入后的 main 背景同源（radial #161d1e → #111719）。iframe 还没
            解析出 .rail 的那段等待期里（有时几十到几百 ms），遮罩不再是"一块纯黑"，
            而是与随后出现的 demo 同色同构 ⇒ 视觉无缝，不再被读成"先黑一下"。 */
@@ -34,6 +36,8 @@
       #app-loader.is-gone { opacity: 0; pointer-events: none; }
       #app-loader.is-off { display: none; }
       #app-loader > iframe {
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
         height: 100%;
@@ -44,6 +48,22 @@
         transition: opacity .3s ease;
       }
       #app-loader > iframe.is-in { opacity: 1; }
+      /* 静态猫占位：iframe 就绪前盖在下面，空窗期直接显示猫，不再是一块纯色。
+         与 iframe 内的 demo 同源（viewBox 平移 / 光晕 / 接地阴影 / 进度条位置都照搬），
+         所以 iframe 以 0→1 淡入覆盖时两者画面一致，无跳变。 */
+      .loader-static { width: min(570px, 97vw); }
+      .loader-static .loader { width: min(570px, 97vw); text-align: center; }
+      .loader-static .scene { }
+      .loader-static .art { display: block; width: calc(100% * .8); margin-inline: auto; height: auto; overflow: visible; }
+      .loader-static .copy { margin-top: 10px; }
+      .loader-static .copy p { margin: 0; font: 11px/22px "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: 4px; color: #cbd4dc; }
+      .loader-static .app-loader-progress {
+        position: static;
+        left: auto;
+        bottom: auto;
+        transform: none;
+        margin: 17px auto 0;
+      }
       /* 进度读数：宽度/字号/字距都抄 demo 的微观排版（rail 用 #8b9eaf、副文字
          9px/1px 字距、#8291a0），所以它是"长在 demo 里"的，而不是外来控件。 */
       .app-loader-progress {
@@ -133,6 +153,16 @@
           preload.href = '/media/hero-mobile-webcodecs.264';
           document.head.appendChild(preload);
           window.__bootAssets.push({ href: '/media/hero-mobile-webcodecs.264', kind: 'video' });
+          // JSMpeg 是 WeChat 的**终极回退**（原生 video 解码失败后才用，138KB，
+          // 在 main.jsx 里按需注入）。它对 WeChat 用户是首屏关键路径的一环，
+          // 却要等 React 起来、发现解码失败之后才开始下载 —— 那正好是最不能卡的时刻。
+          // 只给 WeChat 预载（其余浏览器永远用不到这 138KB）。
+          var jsm = document.createElement('link');
+          jsm.rel = 'preload';
+          jsm.as = 'script';
+          jsm.href = '/vendor/jsmpeg.min.js';
+          document.head.appendChild(jsm);
+          window.__bootAssets.push({ href: '/vendor/jsmpeg.min.js', kind: 'script' });
         }
         // Native-video paths: preload the exact hero clips this device will
         // play, using the SAME decision React makes in HeroSection (device +
@@ -203,6 +233,41 @@
           heroPreload('/media/hero-mask-fallback.mp4');
           heroPosterPreload();
         }
+
+        // ── 字体（2026-10-13，GPT 清单第 4 条「实际使用字体的加载」）──────────
+        // Rany Display 只用在几处大号英文标题上（Project Display / Hi, I Am Four /
+        // 作品标题），但 @font-face 是 display:swap：字体往往在标题已经上屏之后才到，
+        // 用户会看到一次换字 + 整块重排（项目的 measure 钩子还得为此在 fonts.ready
+        // 之后再测一遍几何）。全量 4 个字重 198KB 没必要 —— 真正会被渲染的是
+        // **500（.mob-heading / .pf-title-en 显式 500）与 700（h2 默认粗体，
+        // .display-reveal-title 没有覆写 font-weight）**，只 preload 这两个。
+        // ⚠ as="font" 必须带 crossOrigin：字体一律按 CORS 取，缺这个属性会变成
+        //   "预载了但没用上"，白下一遍。
+        var fontPreload = function (href) {
+          var link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'font';
+          link.type = 'font/ttf';
+          link.crossOrigin = 'anonymous';
+          link.href = href;
+          document.head.appendChild(link);
+          window.__bootAssets.push({ href: href, kind: 'font' });
+        };
+        fontPreload('/fonts/Rany-Medium.ttf');
+        fontPreload('/fonts/Rany-Bold.ttf');
+
+        // 移动端 hero 首帧海报：PC 一直有 heroPosterPreload()，移动端过去没有。
+        // 视频首帧上屏之前的黑屏窗口里，它是最便宜的一块补丁（28KB，已在
+        // HERO_MOBILE_POSTER_SRC 里用到，path 与 React 侧一致）。
+        if (isMobile && !/MicroMessenger/i.test(ua)) {
+          var mobilePoster = document.createElement('link');
+          mobilePoster.rel = 'preload';
+          mobilePoster.as = 'image';
+          mobilePoster.fetchPriority = 'high';
+          mobilePoster.href = '/media/hero-mobile-poster.webp';
+          document.head.appendChild(mobilePoster);
+          window.__bootAssets.push({ href: '/media/hero-mobile-poster.webp', kind: 'image' });
+        }
         // The home route always uses one-screen paging. Keep secondary routes
         // in their regular document flow from the first paint.
         var hash = window.location.hash || '';
@@ -263,7 +328,20 @@
         document.body.appendChild(el);
         var drop = function () { if (el && el.parentNode) el.remove(); };
 
-        // ① demo 本体
+        // ① 静态猫占位（根治「进入 Loading 一闪黑屏」）：iframe 还没就绪的空窗期，
+        //    遮罩下面直接显示一只与 loader 同源、同位、同构的猫（viewBox 平移 / 光晕 /
+        //    接地阴影都照搬 placeIntoDemo 注入的结果），于是空窗期看到的是猫而非纯色。
+        //    iframe 透明度 0→1 淡入覆盖时，两者画面一致（猫+光晕+接地阴影+进度条），
+        //    视觉无缝，没有"纯色闪一下"，也没有切换跳变。
+        var CAT_SVG = '<svg class="art" xmlns="http://www.w3.org/2000/svg" viewBox="88 0 1080 659" role="img" aria-label="长尖耳燕尾服猫，灰白胸腹、亮白前爪，黑色尾巴连接身体"><defs><linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8994a1"/><stop offset="1" stop-color="#818e9b"/></linearGradient><linearGradient id="base" x2="1" y2="0"><stop stop-color="#828e9c"/><stop offset="1" stop-color="#606d7d"/></linearGradient><radialGradient id="halo"><stop stop-color="#b9d7cd" stop-opacity=".2"/><stop offset=".62" stop-color="#b9d7cd" stop-opacity=".055"/><stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient><radialGradient id="floor"><stop stop-color="#b9d7cd" stop-opacity=".16"/><stop offset="1" stop-color="#b9d7cd" stop-opacity="0"/></radialGradient><filter id="loader-shadow-soft" x="-20%" y="-300%" width="140%" height="700%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="24 15"/></filter><filter id="loader-shadow-contact" x="-10%" y="-180%" width="120%" height="460%" color-interpolation-filters="sRGB"><feGaussianBlur stdDeviation="7 4"/></filter></defs><ellipse cx="628" cy="254" rx="670" ry="596" fill="url(#halo)"/><ellipse cx="628" cy="630" rx="567" ry="79" fill="url(#floor)"/><g class="loader-ground-shadow" fill="#000" aria-hidden="true" pointer-events="none"><ellipse cx="630" cy="615" rx="365" ry="38" opacity=".23" filter="url(#loader-shadow-soft)"/><ellipse cx="630" cy="605" rx="335" ry="13" opacity=".38" filter="url(#loader-shadow-contact)"/></g><g fill="#080909"><g class="tail-sway"><path class="tail" fill="none" stroke="#080909" stroke-width="24" stroke-linecap="round" d="M351 562 C315 535 296 471 293 401 C291 382 291 363 291 345"/></g><path class="body" d="M421 345 C426 369 413 395 400 419 C374 465 336 525 310 576 Q296 604 326 604 L533 604 Q552 604 549 586 C543 535 532 503 522 468 C514 437 507 397 510 366 L543 347Z"/></g><path class="bib" fill="#bdc0be" d="M479 316 C472 333 451 345 421 355 C427 373 419 389 420 400 C435 416 455 432 461 451 C465 468 453 489 450 510 C447 532 449 555 450 579 L519 579 C516 544 508 493 500 461 C496 443 514 429 511 407 C508 391 508 380 510 367 C526 361 537 357 547 350 C516 345 490 335 479 316Z"/><g class="head"><path d="M366 318 L319 319 M370 331 L319 343 M379 344 L337 366 M559 318 L609 312 M558 332 L609 339 M550 347 L594 363" fill="none" stroke="#a6adb2" stroke-width="1.8" stroke-linecap="round"/><path fill="#080909" d="M359 276 C347 218 365 169 388 123 C397 106 405 98 414 114 C431 145 443 178 449 210 C459 208 474 208 486 209 C498 171 509 137 518 119 C525 106 532 106 541 123 C561 164 575 219 567 274 C576 300 571 329 556 345 C548 353 540 356 535 356 C513 348 490 335 479 316 C469 335 444 346 420 354 L413 362 C376 352 350 325 356 292Z"/><g class="inner-ears" fill="#3b4348"><path class="inner-ear" d="M405 144 Q402 139 399 146 C384 171 374 197 374 224 Q374 230 380 226 C393 218 407 213 427 213 C423 190 416 163 405 144Z"/><path class="inner-ear" d="M529 146 Q526 140 523 147 C513 168 506 193 501 215 C518 215 533 219 544 227 Q550 232 549 225 C549 199 540 166 529 146Z"/></g><g class="eyes"><path fill="#f6f4ed" d="M426 245 C444 244 457 258 459 276 C462 296 450 310 433 312 C413 315 396 303 394 285 C391 265 406 248 426 245Z"/><path fill="#f6f4ed" d="M524 245 C541 246 552 261 552 280 C552 300 540 312 524 312 C506 312 494 299 494 282 C493 262 506 246 524 245Z"/><ellipse class="pupil" cx="438" cy="280" rx="6.2" ry="11.4" fill="#080909"/><ellipse class="pupil" cx="516" cy="280" rx="6.2" ry="11.4" fill="#080909"/></g><path class="closed-eyes" d="M402 280 Q429 286 453 280 M501 280 Q524 285 545 280" fill="none" stroke="#f6f4ed" stroke-width="3.2" stroke-linecap="round" opacity="0"/><path fill="#f6f4ed" d="M474 304 Q480 301 486 304 Q484 308 480 310 Q476 307 474 304Z"/></g><g class="hands" fill="#f6f4ed"><path class="paw paw-far"/><path class="paw paw-near"/></g><g class="computer"><g class="screen-panel" transform="matrix(0.98 0 0 1.12 19.380000000000017 -68.16000000000005)"><path fill="url(#metal)" d="M680 329 H989 C1006 329 1018 340 1014 357 L969 546 C966 559 956 568 940 568 H637 C620 568 609 558 613 542 L656 352 C659 337 667 329 680 329Z"/><g class="apple-logo" transform="matrix(1.85 0 -0.2698745 1.5 792.6089 422.95)" fill="#e2e6e8" aria-label="Apple MacBook"><path d="M18.7 5.7C19.9 4.2 20.8 2.1 20.6 0C18.8.1 16.5 1.3 15.2 2.9C14 4.2 13 6.4 13.3 8.4C15.4 8.6 17.5 7.3 18.7 5.7ZM23.1 18.5C23.1 14.6 26.3 12.7 26.5 12.6C24.6 9.9 21.8 9.5 20.8 9.5C18.4 9.2 16.1 10.9 14.9 10.9C13.7 10.9 11.7 9.5 9.7 9.6C7 9.6 4.5 11.2 3.1 13.6C.3 18.5 2.4 25.6 5.1 29.5C6.4 31.4 7.9 33.5 10 33.4C12 33.3 12.8 32.1 15.2 32.1C17.6 32.1 18.3 33.4 20.4 33.4C22.5 33.3 23.8 31.5 25.1 29.6C26.6 27.4 27.2 25.3 27.3 25.2C27.2 25.2 23.2 23.7 23.1 18.5Z"/></g></g><rect x="357" y="566" width="612" height="39" rx="19.5" fill="url(#base)"/><rect x="357" y="566" width="256" height="39" rx="19.5" fill="#8b97a5"/></g></svg>';
+        var staticCat = document.createElement('div');
+        staticCat.className = 'loader-static';
+        staticCat.setAttribute('aria-hidden', 'true');
+        staticCat.innerHTML = '<div class="loader"><div class="scene">' + CAT_SVG + '</div><div class="copy"><p>正在努力捶打加快进度...</p></div></div>';
+        var staticCopy = staticCat.querySelector('.copy');
+        el.appendChild(staticCat);
+
+        // ② demo 本体（iframe：透明度 0→1 淡入覆盖静态猫）
         var frame = document.createElement('iframe');
         frame.id = 'app-loader-frame';
         frame.title = 'Loading';
@@ -290,6 +368,9 @@
         })();
         var fill = progress.fill;
         var num = progress.num;
+        // 进度条先挂到静态猫占位的 .copy 里（与 iframe 内 .rail 同位置），
+        // 空窗期就有进度；placeIntoDemo 会把它搬进 iframe 覆盖。
+        staticCopy.appendChild(progress.root);
         el.appendChild(frame);
 
         // demo 自带的 .rail 是一条 2.6s 无限往返的假动画条，跟真实加载量毫无关系。
@@ -590,8 +671,12 @@
         // Street.jsx / HomePage）：demo 的 intro 渐入被 clamp 到 0.05s/帧、无法快进，
         // 只能在遮罩期按受控帧率跑完 ~3.4s。原来的 6s 会在正常路径上提前揭幕
         // （首屏视频在慢网下本身就可能 >4s），那就等于把烧录又漏回 hero 播放期。
-        // 12s 对正常路径（~5s）留了一倍余量，同时仍能兜住"某一闸门彻底不动"。
-        var HARD_CAP = 12000;
+        // ⚠ 2026-10-13：12s → 18s。业主口径「确保视频能流畅播放，再结束 loading 页」：
+        // 冷缓存慢网要 6~12s 才把首屏视频攒到 2.5s 余量，旧的 12s 会抢在 React 侧的
+        // 质量闸门之前把遮罩收掉 —— 揭幕时视频还没攒够，进去就卡。这里只是"最后一道
+        // 保险"（防某一闸门彻底不动把首屏永久扣住），正常路径 ~3.6s、慢网 6~12s 都远
+        // 在它之前。等待期间进度条是按 <video> 的真实 buffered/duration 爬的。
+        var HARD_CAP = 18000;
         var startedAt = Date.now();
         var hidden = false;
         var hide = function (finished) {
