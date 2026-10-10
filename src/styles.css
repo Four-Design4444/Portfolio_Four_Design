@@ -2019,7 +2019,17 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
     transform var(--hm-text-out) var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
+/* ★ reduce 下**保留淡入淡出，只去掉位移**。
+   之前这里是 animation:none + opacity:1，等于整个动效被抹平 —— 系统开了
+   「减少动态效果」（Windows：辅助功能 → 视觉效果 → 动画效果）或在一些内嵌
+   预览面板里，用户看到的就是「完全没生效」。改成纯 opacity：既符合 reduce
+   的语义（无位移、无缩放、时长缩短），业主要求的淡入淡出也还在。 */
 @media (prefers-reduced-motion: reduce) {
+  @keyframes hm-text-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   .motion-reveal-section.is-visible .pf-title,
   .motion-reveal-section.is-visible .pf-contact,
   .motion-reveal-section.is-visible .pf-swap,
@@ -2028,14 +2038,13 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
   html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact,
   html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats,
   html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
-    animation: none !important;
-    opacity: 1 !important;
+    animation: hm-text-fade 300ms linear backwards !important;
     transform: none !important;
   }
 
   .motion-reveal-section .pf-title,
   .motion-reveal-section .pf-contact {
-    transition: none !important;
+    transition: opacity 200ms linear !important;
   }
 }
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2629,7 +2638,18 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .motion-reveal-section *,
+  /* ⚠ 排除名单 = [HOME MOTION] 的一级页文字元素，别删。
+     这条规则原本是给「旧版整屏入场」兜底的，但 **CSS 级联里 !important 声明高过
+     animation**（动画只压得住普通声明），`opacity: 1 !important`  +
+     `animation-duration: 1ms !important` 会把文字的淡入淡出整个抹平 ——
+     系统开了「减少动态效果」或内嵌预览面板里就会表现为「动效完全没生效」。
+     这些元素在 reduce 下改由 [HOME MOTION] 块里的 hm-text-fade 接管：
+     纯 opacity、无位移、300ms，仍然符合 reduce 的语义。
+     ⚠ 若整块删掉 [HOME MOTION]，这里的 :not() 也应一并还原成 `*` 的写法。 */
+  .motion-reveal-section *:not(
+      .pf-title, .pf-contact, .pf-swap, .pf-skills-entrance,
+      .mob-profile-title, .mob-profile-contact, .mob-profile-stats, .mob-profile-skills
+    ),
   .projects-heading,
   .showcase-deck-card,
   .showcase-deck-button img {
