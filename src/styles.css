@@ -1955,6 +1955,25 @@ h2 {
      元素上挂 delay 会漏进交互动画（技能条 hover 收拢被拖慢）。
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ---- 参数（只改这里就能调力度 / 节奏） ---- */
+.motion-reveal-section {
+  --hm-in: 900ms;        /* 入场时长 */
+  --hm-out: 380ms;       /* 离场时长（比入场快一档，旧屏迅速让位） */
+  --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --hm-lift: 44px;       /* 位移幅度 ⚠ 与下面两条 keyframes 里写死的值保持一致 */
+  --hm-step: 90ms;       /* 相邻档位的错峰间隔 */
+  --hm-base: 300ms;      /* 第 1 档的起跑延迟 */
+}
+
+/* ⚠⚠ 起跑点必须压在**翻页飞行尾段之后**（HOME_FLIP_MS = 700ms）。
+   这一版之前把 delay 写成 60/140/220/300ms，从 is-visible 挂上的那一刻起算，
+   而 is-visible 是 goToPage 一开头就挂的 ⇒ 整段入场都在「视口还在飞」的时候
+   播完了。落到屏上只剩静止画面，业主实测「只有标题在动」—— 标题是唯一还在动的
+   那个，因为它旧的那条 transition 是 900ms + 120ms delay，比动画长。 */
+html[data-paging="on"] .motion-reveal-section {
+  --hm-base: 560ms;
+}
+
 /* ⚠ 位移量写死在 keyframes 里，**不要**改成 var(--xxx)：
    @keyframes 中的自定义属性在动画创建那一刻解析，实测 Chromium 下取不到
    元素上声明的值 → translate3d(0, <invalid>, 0) 整条 transform 失效，
@@ -1962,7 +1981,7 @@ h2 {
 @keyframes hm-text-rise {
   from {
     opacity: 0;
-    transform: translate3d(0, 26px, 0);
+    transform: translate3d(0, 44px, 0);
   }
   to {
     opacity: 1;
@@ -1974,7 +1993,7 @@ h2 {
 @keyframes hm-text-rise-sm {
   from {
     opacity: 0;
-    transform: translate3d(0, 18px, 0);
+    transform: translate3d(0, 26px, 0);
   }
   to {
     opacity: 1;
@@ -1982,42 +2001,76 @@ h2 {
   }
 }
 
-/* ---- 入场：四档错峰，PC 的 pf-* 与移动端的 mob-profile-* 同一套节奏 ---- */
+/* ---- 入场：四档错峰，PC 的 pf-* 与移动端的 mob-profile-* 同一套节奏 ----
+   delay 用 calc(base + step × 档位) 算，动画结束后（backwards，不带 forwards）
+   样式交回普通声明 —— is-visible 在的时候下面「离场」一节已经把终态写好了。 */
 .motion-reveal-section.is-visible .pf-title,
 html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title {
-  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 60ms backwards;
+  --hm-i: 0;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
 }
 
 .motion-reveal-section.is-visible .pf-contact,
 html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact {
-  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 140ms backwards;
+  --hm-i: 1;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
 }
 
 .motion-reveal-section.is-visible .pf-swap,
 html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats {
-  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 220ms backwards;
+  --hm-i: 2;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
 }
 
 .motion-reveal-section.is-visible .pf-skills-entrance,
 html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
-  animation: hm-text-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 300ms backwards;
+  --hm-i: 3;
+  animation: hm-text-rise var(--hm-in) var(--hm-ease)
+    calc(var(--hm-base) + var(--hm-step) * var(--hm-i)) backwards;
 }
 
-/* ---- 离场：只有 PC 的标题与联系方式会淡出 ----
-   .pf-title / .pf-contact 的基础态本来就是 opacity:0 + translateY(22px)，
-   给一条 transition 就能在 is-visible 摘掉时平滑回落（不带 delay）。
-   ⚠ .pf-swap / .pf-skills-entrance 的基础态是 opacity:1（2026-10-03 的既定
-     决策：离开这一屏时这两张卡**不消失**，否则下滑切页会看到它们凭空不见），
-     所以这里不把它们纳入离场。
-   ⚠ 移动端的 mob-profile-* 也不纳入：它们没有 opacity:0 基础态（见上面的
-     失败方向安全铁律），强行给基础态会让整屏文字有空白风险。 */
-.motion-reveal-section .pf-title,
-.motion-reveal-section .pf-contact {
-  --hm-text-out: 380ms;
+/* ---- 离场：四档**全部**纳入（业主：入场 / 离场要成对） ----
+   做法 = 「基础态就是离场态」：opacity 0 + 位移，摘掉 is-visible 时用一条
+   不带 delay 的 transition 平滑回落。
+   ⚠ 基础态只在 `html[data-paging="on"]` 下给。分屏模式下 is-visible = (index 命中)
+     是确定性的，不存在「observer 没触发 → 文字永久空白」的失败方向；非分屏
+     （data-paging:off）时这里一条都不生效，文字常驻可见（失败安全）。
+   ⚠ transition **绝不带 delay**：.pf-skills-entrance 上的任何 transition-delay
+     都会漏进 hover 收拢动画（技能条会先等 420ms 才上移，见下方注释）。
+   ⚠ 这里的 specificity 必须高过文件后段那两套旧规则
+     （`.pf-title{opacity:0;translateY(22px)}` 与
+      `.profile-shot.is-visible .pf-title{opacity:1;transform:none;transition-delay:120ms}`）
+     —— `html[data-paging]` 那一段就是为了这个，删掉它会立刻退回旧行为。 */
+html[data-paging="on"] .motion-reveal-section .pf-title,
+html[data-paging="on"] .motion-reveal-section .pf-contact,
+html[data-paging="on"] .motion-reveal-section .pf-swap,
+html[data-paging="on"] .motion-reveal-section .pf-skills-entrance {
+  opacity: 0;
+  transform: translate3d(0, var(--hm-lift), 0);
   transition:
-    opacity var(--hm-text-out) var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1)),
-    transform var(--hm-text-out) var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1));
+    opacity var(--hm-out) var(--hm-ease),
+    transform var(--hm-out) var(--hm-ease);
 }
+
+/* 入场态（终态）：起身交给上面的 animation，这里只落到终值并交出 transition
+   控制权 —— 同时驱动同一属性会「先跳一下再补」，看起来像动效出错。 */
+html[data-paging="on"] .motion-reveal-section.is-visible .pf-title,
+html[data-paging="on"] .motion-reveal-section.is-visible .pf-contact,
+html[data-paging="on"] .motion-reveal-section.is-visible .pf-swap,
+html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+
+/* ⚠ 移动端的 mob-profile-* 故意**不进上面这份基础态名单**：
+   移动端个人信息区（mobile.css 2026-09-19 起）历来不给 opacity:0 基础态，
+   理由是失败方向 —— 只要 is-visible 因任何原因没到位就是整屏空白且不自愈。
+   移动端继续沿用「keyframes 只在 is-visible 时挂载，拿不到就不动画」的安全形态：
+   入场照播、滚动离屏（那时元素已在视口外）不做淡出，视觉上无损失。 */
 
 /* ★ reduce 下**保留淡入淡出，只去掉位移**。
    之前这里是 animation:none + opacity:1，等于整个动效被抹平 —— 系统开了
@@ -2030,20 +2083,26 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
     to { opacity: 1; }
   }
 
-  .motion-reveal-section.is-visible .pf-title,
-  .motion-reveal-section.is-visible .pf-contact,
-  .motion-reveal-section.is-visible .pf-swap,
-  .motion-reveal-section.is-visible .pf-skills-entrance,
-  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-title,
-  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-contact,
-  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-stats,
-  html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills {
+  /* 只动 opacity —— hm-text-fade 本身不含 transform，所以不必（也不该）在这里
+     写 transform: none：那会连移动端技能/经验卡的 dock 形变一起压掉。
+     PC 的「无位移」由上面基础态的 transform: none !important 保证。 */
+  html[data-paging="on"] .motion-reveal-section.is-visible .pf-title,
+  html[data-paging="on"] .motion-reveal-section.is-visible .pf-contact,
+  html[data-paging="on"] .motion-reveal-section.is-visible .pf-swap,
+  html[data-paging="on"] .motion-reveal-section.is-visible .pf-skills-entrance,
+  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-title,
+  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-contact,
+  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-stats,
+  html[data-paging="on"] .motion-reveal-section.is-visible .mob-profile-skills {
     animation: hm-text-fade 300ms linear backwards !important;
-    transform: none !important;
   }
 
-  .motion-reveal-section .pf-title,
-  .motion-reveal-section .pf-contact {
+  /* 基础态同样只留 opacity（位移归零），离场仍是一条短 transition。 */
+  html[data-paging="on"] .motion-reveal-section .pf-title,
+  html[data-paging="on"] .motion-reveal-section .pf-contact,
+  html[data-paging="on"] .motion-reveal-section .pf-swap,
+  html[data-paging="on"] .motion-reveal-section .pf-skills-entrance {
+    transform: none !important;
     transition: opacity 200ms linear !important;
   }
 }
@@ -2096,17 +2155,23 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
   transition-delay: 180ms;
 }
 
-/* 标题的收尾裁剪窗口同样上下放开 0.2em（specificity 与下面那组并列规则一致）。 */
+/* 标题的收尾裁剪窗口同样上下放开 0.2em（specificity 与下面那组并列规则一致）。
+   ⚠ transition-delay 与 [HOME MOTION] 的 --hm-base 共用同一个起跑点：
+     三屏标题此前 delay 为 0，整段揭示都在翻页飞行途中播完，落到屏上已经静止
+     （与二屏文字同一类问题）。delay 只写在 is-visible 这条上 —— 摘掉 is-visible
+     的离场不带延迟，旧屏立刻让位。 */
 .motion-reveal-section.is-visible .display-reveal-title {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
   clip-path: inset(-0.2em 0 -0.2em 0);
+  transition-delay: var(--hm-base, 0ms);
 }
 
 .motion-reveal-section.is-visible .display-reveal-subtitle {
   opacity: 1;
   transform: translate3d(0, 0, 0) scaleX(1);
   clip-path: inset(0 0 0 0);
+  transition-delay: calc(var(--hm-base, 0ms) + 120ms);
 }
 
 /* 标题单独一条：只有它的裁剪窗口要上下放开 0.2em。
@@ -2527,6 +2592,9 @@ html[data-device="mobile"] .motion-reveal-section.is-visible .mob-profile-skills
   transform: translate3d(0, 0, 0);
   filter: blur(0);
   clip-path: none;
+  /* 与 [HOME MOTION] 同一个起跑点：压在翻页飞行之后（见 styles.css 顶部
+     [HOME MOTION] 块里 --hm-base 的注释）。 */
+  transition-delay: var(--hm-base, 0ms);
 }
 
 .contact-page {
