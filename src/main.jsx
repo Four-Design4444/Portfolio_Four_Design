@@ -6034,12 +6034,15 @@ const HOME_TOUCH_END_DELAY_MS = 120;
    现在自己画，用同一条曲线、同一个时长，观感不变（见 goToPage 的注释）。 */
 const HOME_FLIP_MS = 700;
 
-/* [HOME MOTION] 入场窗口 .hm-entering 的长度：起跑点(--hm-base=700ms = HOME_FLIP_MS)
-   + 卡组过渡(900ms) + 余量。窗口内 PC 卡组才带那条「压过翻页飞行」的 transition-delay；
+/* [HOME MOTION] 入场窗口 .hm-entering 的长度。窗口内 PC 卡组才带那条
+   「压过翻页飞行」的 transition-delay（--hm-base 520ms + 过渡 900ms ≈ 1420ms 收尾）；
    窗口一关就摘掉，免得那条 delay 永久残留、把 hover 张开也拖住
    （实测 probe-deck-hover-delay.mjs）。
-   移动端副卡展开斜坡（620 + 780ms）也在这个窗口里，取同一根时间线。 */
-const HM_DECK_WINDOW_MS = 2600;
+   2026-10-11 业主：「入场动效已经执行完了，怎么还锁了一小会」—— 2600ms 是旧
+   错峰方案（620 起跑 + 5 档 × 72ms + 1080ms 过渡）的遗产；现在的入场 1420ms 就
+   结束，窗口收到 1600ms（+180ms 余量）。移动端副卡斜坡 620+780=1400ms 也在窗内。
+   窗口关闭即触发 ShowcaseDeck 的指针补判：悬停锁在入场一结束就解除。 */
+const HM_DECK_WINDOW_MS = 1600;
 
 /* cubic-bezier(0.42, 0, 0.58, 1) —— 与 CSS 的 ease-in-out 同值，也是内核原生
    平滑滚动用的那条曲线；换掉原生实现后「翻页的手感」必须一模一样。
