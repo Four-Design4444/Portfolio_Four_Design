@@ -2266,8 +2266,43 @@ html[data-device="mobile"] .motion-reveal-section.hm-played
     transform: none !important;
   }
 
+  /* 三屏标题：reduce 下只留淡入（去掉位移与 clip-path 揭示）。 */
+  .motion-reveal-section:not(.hm-played) .projects-heading,
+  .motion-reveal-section:not(.hm-played) .display-reveal-title,
+  .motion-reveal-section:not(.hm-played) .projects-heading h2 {
+    transform: none !important;
+    clip-path: none !important;
+  }
+
+  .motion-reveal-section.hm-played .projects-heading,
+  .motion-reveal-section.hm-played .display-reveal-title {
+    transition-duration: 300ms !important;
+    transition-timing-function: linear !important;
+    transition-delay: var(--hm-base, 0ms) !important;
+  }
+
+  /* 三屏卡组：位移归零，卡片与倒影只淡入。 */
   html[data-paging="on"] .motion-reveal-section:not(.hm-played) .showcase-deck .showcase-deck-card {
     --enter: 0px;
+  }
+
+  html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-card,
+  html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase-deck-reflection {
+    transition-duration: 300ms !important;
+    transition-timing-function: linear !important;
+    transition-delay: calc(var(--hm-base, 0ms) + var(--i, 0) * 24ms) !important;
+  }
+
+  /* 移动端顶部三件套同理：只淡入。 */
+  html[data-device="mobile"] .motion-reveal-section.hm-played
+    .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-heading,
+  html[data-device="mobile"] .motion-reveal-section.hm-played
+    .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-counter,
+  html[data-device="mobile"] .motion-reveal-section.hm-played
+    .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-dots,
+  html[data-device="mobile"] .motion-reveal-section.hm-played
+    .mob-showcase:not(.is-chrome-in):not(.is-chrome-out) .mob-thumbs {
+    transition: opacity 300ms linear var(--hm-base, 0ms) !important;
   }
 }
 

@@ -136,7 +136,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (stopped || burnedRef.current) return;
       burnedRef.current = true;
       setBurned(true);
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 1 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 1 } })); } catch (_) {}
       try { if (onTailBurned) onTailBurned(); } catch (_) { /* noop */ }
     };
     const check = () => {
@@ -146,7 +146,7 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       // 进度条如实反映烧录推进：0.75 → 1.0（单调，不会像按 n 那样来回跳）。
       try {
         window.dispatchEvent(new CustomEvent('loading:progress', {
-          detail: { id: 'tail', weight: 8, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
+          detail: { id: 'tail', weight: 22, progress: 0.75 + 0.25 * Math.min(1, frames / BURN_FRAMES) },
         }));
       } catch (_) {}
       // 能读到 demo 的脉冲值就以它为准（已经最亮就直接放行，不必凑满帧数）。
@@ -565,10 +565,10 @@ html.street-mail-failed #detail-content .mail-rescue a {
    ⚠ 位移量写死在 keyframes 里，**不要**改成 var(--x)：Chromium 在动画创建那一刻
      取不到元素上声明的自定义属性，translate3d(0, <invalid>, 0) 整条失效。
    ⚠ fill-mode 用 backwards（不是 both）：延迟期间停在 from 态，动画一结束就把
-     控制权交回普通声明 —— demo 的 `.intro` 自己有
-     `transition: opacity .5s, transform .6s` 与
-     `body:not([data-mode=overview]) .intro{opacity:0}` 的模式切换，forwards 段
-     会把 opacity 钉死、把返回街角时的淡出压掉。
+     控制权交回普通声明 —— demo 的 .intro 自己有
+     transition: opacity .5s, transform .6s，并且 body:not([data-mode=overview])
+     下 .intro 要挂 opacity:0 做模式切换；forwards 段会把 opacity 钉死、
+     把返回街角时的淡出一起压掉。
    ⚠ 延迟里含翻页时长（宿主是在 goToPage 一开头挂的类）：不补上这一段，整段入场
      会在「屏还在飞」的时候播完，落到屏上只剩静止画面。 */
 @keyframes street-rise {
@@ -1915,14 +1915,14 @@ function useStreetWheelBridge(enabled) {
     const reportTailReady = () => {
       if (tailReportedRef.current) return;
       tailReportedRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 0.75 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 0.75 } })); } catch (_) {}
       try { if (onTailReady) onTailReady(); } catch (_) {}
       // 冷启动完成 = demo 的 rAF 循环已经跑起来，从这一刻起才可以烧录灯光。
       try { setArmed(true); } catch (_) {}
     };
     if (!tailZeroRef.current) {
       tailZeroRef.current = true;
-      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 8, progress: 0 } })); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('loading:progress', { detail: { id: 'tail', weight: 22, progress: 0 } })); } catch (_) {}
     }
 
     const attempt = () => {
