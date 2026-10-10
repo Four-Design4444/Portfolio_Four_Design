@@ -188,8 +188,9 @@ export default function ContactStreet({ active, preload, flipping = false, onTai
       if (!win || !win.__streetHostHooked) { timer = window.setTimeout(apply, 100); return; }
       const burning = armed && !burnedRef.current;
       try {
-        /* 翻页冻结：双门控（active 且 flipping）。见文件上方「翻页冻结档」注释。 */
-        win.__streetFrozen = active && flipping;
+        /* 翻页/文字入场冻结：翻页档之外，移动端文字入场期间也暂时停掉
+           iframe 的 WebGL 回调。两者取 OR，避免 flipping 结束时把入场冻结提前解除。 */
+        win.__streetFrozen = (active && flipping) || !!win.__streetEntryFreeze;
         win.__streetFrameMs = active ? 0 : (burning ? BURN_FRAME_MS : 0);
         win.__streetPaused = !active && !burning;
         /* 空转保活间隔两档：
@@ -556,7 +557,7 @@ html.street-mail-failed #detail-content .mail-rescue a {
    由宿主在「这一屏第一次成为当前屏」（active 翻转）时给 demo 的 <html> 挂
    .street-enter（见 Street.jsx 里 keyed on active 的那个 effect）。
    demo 产物字节级不动，动画全在这里。
-   只动三个浮层**容器**：
+   共同父层统一驱动全部浮层:
      · .intro        —— 左下文案块（eyebrow / h1 / 正文 / 落款）
      · .street-quick —— 右下快捷块（打个电话 / 发封邮件 / 提示行）
      · .controls     —— 右下按钮行（雨 / 暂停 / 画质）。按钮行原本被漏掉了：
@@ -567,10 +568,9 @@ html.street-mail-failed #detail-content .mail-rescue a {
        （**布局值**，不是 transform），所以这里的 translateY 与它不冲突。
    为什么不逐个子元素做错峰：尾屏的排版校准（win.__streetAlignNow）会读
    .intro / .intro-foot / .sq-row / .sq-hint 的 getBoundingClientRect。给这些
-   元素单独加位移，校准就会量到「动画中的几何」。整块容器一起平移是安全的：
-   align 写的是 bottom / right 这类**布局值**，而它内部用到的「间距差」
-   （intro↔foot、foot↔图标墨迹、行高）都在同一个被平移的子树里，差值不变；
-   水平方向因为只用 translateY 也完全不受影响。
+   元素单独加位移，校准就会量到「动画中的几何」。共同父层仅沿 Y 平移，
+   内部间距保持不变；align 还会从视口锚点减去父层位移，再写 bottom 布局值，
+   防止把入场位移反馈到静态排版。
    ⚠ 位移量写死在 keyframes 里，**不要**改成 var(--x)：Chromium 在动画创建那一刻
      取不到元素上声明的自定义属性，translate3d(0, <invalid>, 0) 整条失效。
    ⚠ fill-mode 用 backwards（不是 both）：延迟期间停在 from 态，动画一结束就把
@@ -589,25 +589,24 @@ html.street-mail-failed #detail-content .mail-rescue a {
   to   { opacity: 1; }
 }
 /* 2026-10-11 业主：「这些内容的入场动效跟个人信息那里的入场动效做成一样就行了。」
-   于是位移从 34px 提到与二屏文字同一个 --hm-lift=44px，关键帧曲线/时长/错峰
-   （900ms / cubic-bezier(.22,1,.36,1) / 110ms 档距）与 [HOME MOTION] 块 ① 对齐。 */
-html.street-enter .intro {
+   位移44px、时长900ms与二屏文字对齐；全部浮层由同一父层同时起跑，不做错峰。 */
+/* 单一共同父层：文案、快捷按钮和 HUD 都随它移动，不再分别播放动画。
+   父层永不随 data-mode 隐藏；子层的场景模式切换仍完全交给原逻辑。
+   动画时 transform 会成为 fixed 子元素的 containing block，所以父层必须覆盖视口。 */
+.street-entry-group {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.street-entry-group .hud { pointer-events: auto; }
+html.street-enter:not(.street-enter-done) .street-entry-group {
   animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 820ms backwards;
 }
-html.street-enter .street-quick {
-  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
-}
-/* 2026-10-11 业主：「点击/拖动 探索场景 和 quality 元素要视为同一个元素入场」。
-   .sq-hint 在 .street-quick 里（930ms 起跑），.controls 与它**同 delay 同时长**
-   —— 两块一起升，不再 1040ms 错开。 */
-html.street-enter .controls {
-  animation: street-rise 900ms cubic-bezier(0.22, 1, 0.36, 1) 930ms backwards;
-}
+html.street-enter-done .street-entry-group { animation: none; }
 /* reduce 下保留淡入淡出，只去掉位移。 */
 @media (prefers-reduced-motion: reduce) {
-  html.street-enter .intro,
-  html.street-enter .street-quick,
-  html.street-enter .controls {
+  html.street-enter:not(.street-enter-done) .street-entry-group {
     animation: street-fade 300ms linear 820ms backwards;
   }
 }
@@ -1633,6 +1632,18 @@ function startStreetAlign(doc) {
     if (!n) { dbg.pick += 1; return false; }
     const box = iconBox(n.controls);
     if (!box) { dbg.box += 1; return false; }
+    // 排版必须读静态布局坐标，不能把共同入场层的位移再写回 bottom。
+    // 只有父层承担 translateY；子树内部高度/差值不变，锚点减去父层位移即可。
+    const group = win.document.getElementById('street-entry-group');
+    let entryY = 0;
+    if (group) {
+      const transform = win.getComputedStyle(group).transform;
+      if (transform && transform !== 'none') {
+        try { entryY = new win.DOMMatrixReadOnly(transform).m42; } catch (_) { /* no shift */ }
+      }
+    }
+    box.top -= entryY;
+    box.bottom -= entryY;
     const vh = win.innerHeight;
     // ① 左英文的**墨迹**底边 = 图标行的**墨迹**底边（业主 2026-10-09 第二轮：
     //    「查看红色线框，左边英文和右边图标底部还没有进行对齐」）。旧实现用盒：
@@ -1646,7 +1657,7 @@ function startStreetAlign(doc) {
     const cInk = ctrlInk(n.controls);
     if (fInk && cInk) {
       const descendGap = n.footEl.getBoundingClientRect().bottom - fInk.bottom;
-      setPx(n.introEl, 'bottom', vh - (cInk.bottom + descendGap) - inGap);
+      setPx(n.introEl, 'bottom', vh - (cInk.bottom - entryY + descendGap) - inGap);
     } else {
       setPx(n.introEl, 'bottom', vh - box.bottom - inGap); // 兜底：字体未就绪时退回盒对齐
     }
@@ -1776,9 +1787,33 @@ function startStreetAlign(doc) {
   return true;
 }
 
+// 宿主共同入场层。保留原节点与事件监听，不改 demo 产物，也不重建按钮。
+function ensureStreetEntryGroup(doc) {
+  if (!doc || !doc.body) return null;
+  const intro = doc.querySelector('.intro');
+  const hud = doc.querySelector('.hud');
+  const quick = doc.getElementById('street-quick');
+  if (!intro || !hud || !quick) return null;
+  let group = doc.getElementById('street-entry-group');
+  if (!group) {
+    group = doc.createElement('div');
+    group.id = 'street-entry-group';
+    group.className = 'street-entry-group';
+    doc.body.appendChild(group);
+  }
+  [intro, quick, hud].forEach((el) => {
+    if (el.parentElement !== group) group.appendChild(el);
+  });
+  return group;
+}
+
 function injectStreetQuick(doc) {
   if (!doc || !doc.body) return false;
-  if (doc.getElementById('street-quick')) { startStreetAlign(doc); return true; }
+  if (doc.getElementById('street-quick')) {
+    ensureStreetEntryGroup(doc);
+    startStreetAlign(doc);
+    return true;
+  }
   const host = doc.body;
   host.insertAdjacentHTML('beforeend', STREET_QUICK_HTML);
   // 点击 → 转发给 demo 自己的 #navigation 按钮（它被 display:none 但仍在 DOM 里，
@@ -1791,6 +1826,8 @@ function injectStreetQuick(doc) {
     const target = doc.querySelector('#navigation button[data-mode="' + mode + '"]');
     if (target) target.click();
   });
+  // 共用同一入场父层，再校准：原节点/点击监听原样保留。
+  ensureStreetEntryGroup(doc);
   // 排版：三条关系全实测反推，见 startStreetAlign（幂等可重入）
   startStreetAlign(doc);
   return true;
@@ -2048,10 +2085,24 @@ elapsed += 1;
     const tick = () => {
       let done = false;
       try {
-        const de = frameRef.current && frameRef.current.contentDocument
-          && frameRef.current.contentDocument.documentElement;
-        if (de) {
-          if (!de.classList.contains('street-enter')) de.classList.add('street-enter');
+        const doc = frameRef.current && frameRef.current.contentDocument;
+        const de = doc && doc.documentElement;
+        const group = doc && ensureStreetEntryGroup(doc);
+        if (de && group && doc.getElementById('contact-host-css')) {
+          if (!de.classList.contains('street-enter')) {
+            // 动画只属于稳定父层。收工后撤掉动画声明，子层 display:none→显示
+            // 或模式切换都不能重新创建一次入场；父窗口 timeout 不受 iframe 降频影响。
+            const finish = () => {
+              if (de.classList.contains('street-enter-done')) return;
+              de.classList.add('street-enter-done');
+              group.removeEventListener('animationend', onEnd);
+              try { doc.defaultView.__streetAlignNow?.(); } catch (_) { /* noop */ }
+            };
+            const onEnd = (event) => { if (event.target === group) finish(); };
+            group.addEventListener('animationend', onEnd);
+            de.classList.add('street-enter');
+            window.setTimeout(finish, 2000);
+          }
           done = true;
         }
       } catch (_) { /* 跨源或未就绪：下一帧再试 */ }

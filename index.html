@@ -321,6 +321,7 @@
         }
       })();
     </script>
+    <script type="module" data-boot-entry src="/src/main.jsx"></script>
   </head>
   <body>
     <!-- 首屏 Loading：动画放在 public/loading/loader.html，仅提高眨眼频率；
@@ -749,9 +750,13 @@
             markExpirable(bufferedEntry);
           }
         });
-        // 应用脚本（Vite 注入的 module + modulepreload）
-        Array.prototype.forEach.call(document.querySelectorAll('script[src], link[rel="modulepreload"]'), function (node) {
-          addEntryTask(node.src || node.href, 1);
+        // 只登记显式标记且同源的应用入口，忽略浏览器扩展和其它注入脚本。
+        Array.prototype.forEach.call(document.querySelectorAll('script[data-boot-entry][src], link[data-boot-entry][rel="modulepreload"]'), function (node) {
+          var href = node.src || node.href;
+          try {
+            var url = new URL(href, location.href);
+            if (url.origin === location.origin && /^https?:$/.test(url.protocol)) addEntryTask(href, 1);
+          } catch (_) { /* 无效 URL 不登记 */ }
         });
         /* 首屏图片：视口内的 <img> 的"尘埃落定"比例。
            ⚠ 判据是 complete **而不是** complete && naturalWidth（2026-10-13）：坏图
@@ -976,6 +981,5 @@
       })();
     </script>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

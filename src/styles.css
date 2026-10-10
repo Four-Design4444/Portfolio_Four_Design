@@ -1981,12 +1981,9 @@ h2 {
   --hm-lift: 44px;        /* 位移幅度 ⚠ 与下面 keyframes 里写死的值保持一致 */
   --hm-step: 110ms;       /* 文字档位之间的错峰 */
   --hm-base: 320ms;       /* 第 1 档（文字 / 卡组）的起跑延迟（非分屏时用） */
-  --hm-head: 100ms;       /* 三屏大英文标题的起跑点（业主要它比卡片更前） */
-  /* 业主 2026-10-11：「大英文标题入场时间拉长一点，慢一点入场」。
-     900 → 1400ms。这条动画只在一级翻页**首次到达**时播一次（hm-played 闩保证
-     二级返回不重播），所以用常量、不做 data-paging 变量切档 —— 声明任何形式的
-     「按分屏状态变形」都有在进出二级页时重建动画（= 重播）的理论风险，不值得。 */
-  --hm-head-in: 1400ms;
+  /* 大英文标题的时长回落值：默认 = 原时长 --hm-in。只在首次到达窗口（下面
+     .hm-entering 那条）里被覆盖成放慢的 1400ms —— 二级返回时窗口已摘，自动回落。 */
+  --hm-head-in: var(--hm-in);
 }
 
 html[data-paging="on"] .motion-reveal-section {
@@ -1994,7 +1991,24 @@ html[data-paging="on"] .motion-reveal-section {
      is-visible 是 goToPage 的 setIndex 一开头就挂的（延迟从翻页起点计时），
      翻页时长 HOME_FLIP_MS=700ms，75% ≈ 520ms。原 700ms 是「等滑完整屏」，已废。 */
   --hm-base: 520ms;
-  --hm-head: 260ms;       /* 标题比卡组早 ~260ms 起跑，读作「标题先立住、卡片再散开」 */
+}
+
+/* 大英文标题的「首次翻页到达」专用时序（业主 2026-10-11 两轮口径合并）：
+   起跑推迟一点（400ms，仍早于卡组 520ms）+ 时长放慢（1400ms）。
+   ⚠ 必须挂在 hm-entering（首次到达窗口）上而不是无条件生效：二级页返回时标题
+     会随分屏重播，若新时序常驻，返回那一次也被推迟/放慢 —— 业主要求返回路径
+     保持原样。窗口关闭（hm-entering 摘除）时变量回落到 --hm-base/--hm-in：
+     动画身份不变、只是时序重映射，此刻进度 1200/1400 ≥ 新时长 900ms，直接落到
+     终态，无重播也无肉眼可见的回跳。 */
+html[data-paging="on"] .motion-reveal-section.hm-entering {
+  --hm-head: 400ms;
+  --hm-head-in: 1400ms;
+}
+
+/* PC 二级返回：不再借用卡组 520ms 延迟，标题仅等 100ms。
+   首次到达仍由 hm-entering 的 400ms / 1400ms 接管，移动端不参与此覆盖。 */
+html[data-device="desktop"] .motion-reveal-section.hm-played:not(.hm-entering) {
+  --hm-head: 100ms;
 }
 
 @keyframes hm-text-rise {
@@ -2095,10 +2109,11 @@ html[data-paging="on"] .motion-reveal-section:not(.hm-played) .projects-heading 
   opacity: 1;
   transform: none;
   transition: none;
-  /* 2026-10-11 业主：大英文标题要比卡片更早入场 —— 用独立的 --hm-head 起跑点
-     （非分屏 100ms / 分屏 260ms），卡片仍走 --hm-base（320/520ms）。
-     时长走 --hm-head-in（非分屏 900ms / 分屏 1400ms，业主要首次到达时慢一点）。 */
-  animation: hm-text-rise var(--hm-head-in) var(--hm-ease) var(--hm-head) backwards;
+  /* 2026-10-11 业主：大英文标题比卡片更早入场。时序（起跑 --hm-head / 时长
+     --hm-head-in）只在首次到达窗口 .hm-entering 内被覆盖（400ms/1400ms）；
+     二级返回时回落 —— 起跑 = --hm-base、时长 = --hm-in，与改动前完全一致。
+     ⚠ --hm-head 平时未定义，必须带回落 var(--hm-base)。 */
+  animation: hm-text-rise var(--hm-head-in) var(--hm-ease) var(--hm-head, var(--hm-base)) backwards;
 }
 
 /* h2 自身不再承担任何揭示（历史：clip-path 横向擦开 + scaleX）。 */
@@ -2173,6 +2188,15 @@ html[data-paging="on"] .motion-reveal-section.hm-played .showcase-deck .showcase
 html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-card,
 html[data-paging="on"] .motion-reveal-section.hm-entering .showcase-deck .showcase-deck-reflection {
   transition-delay: var(--hm-base);
+}
+
+/* PC 入场解锁后：一旦发生真实 hover/focus，整组卡片及倒影立即响应。
+   入场锁期间由 React 拦截 pointerenter/focus；静止鼠标不会被补判。 */
+html[data-device="desktop"][data-paging="on"] .motion-reveal-section.hm-played
+  .showcase-deck.is-interacted .showcase-deck-card,
+html[data-device="desktop"][data-paging="on"] .motion-reveal-section.hm-played
+  .showcase-deck.is-interacted .showcase-deck-reflection {
+  transition-delay: 0ms !important;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

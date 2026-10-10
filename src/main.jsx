@@ -2627,33 +2627,101 @@ function MorphNav({ page, navMotion, homeActiveSection, hasSharedWorksPill, acti
 function ShowcaseDeck({ items, openWorks, deckEntering = false }) {
   const [stageRef, visible] = useRevealOnView({ threshold: 0.16, rootMargin: '0px 0px -6% 0px' });
   const [hovered, setHovered] = useState(-1);
+  const [entryReady, setEntryReady] = useState(false);
+  const entryTimerRef = useRef(null);
+  const lastPointerPointRef = useRef(null);
+  const pointerArmedRef = useRef(false);
+  const unlockAtRef = useRef(Infinity);
 
-  /* [HOME MOTION] 入场窗口内的指针屏蔽（业主 2026-10-11：「如果鼠标刚好悬停在
-     卡片的位置，还会有卡片被我命中……待入场效果执行完毕后再判断用户鼠标的位置」）。
-     · deckEntering 为真（hm-entering 窗口内）：pointerenter/focus 一律不置 hover，
-       并把已有 hover 清掉 —— 卡片正从中心飞向落位，此时命中是错的。
-     · 窗口关闭的瞬间：指针可能一动不动地悬在落位上（卡片滑到指针底下不会触发
-       新的 pointerenter），所以用最近一次记录的指针坐标 elementFromPoint 补判一次，
-       命中卡片就补上 hover。坐标始终在 window 上被动记录（passive、无重渲染）。 */
-  const pointerPosRef = useRef(null);
+  /* PC 入场锁：卡片在真正散开期间不响应 pointerenter / focus。
+     解锁不再依赖 HomePage 的 1600ms 窗口，而是从实际 transition 的
+     delay + duration 计算结束点；因此不会在视觉动效结束后额外锁住一段。
+     解锁时不读取鼠标坐标、不补发 hover：鼠标若一直停在落点上，必须
+     发生下一次真实 pointermove 才能触发交互。 */
   useEffect(() => {
-    const onMove = (e) => { pointerPosRef.current = { x: e.clientX, y: e.clientY }; };
+    if (entryTimerRef.current) {
+      window.clearTimeout(entryTimerRef.current);
+      entryTimerRef.current = null;
+    }
+    if (!deckEntering) {
+      pointerArmedRef.current = true;
+      unlockAtRef.current = performance.now();
+      setEntryReady(true);
+      return undefined;
+    }
+
+    pointerArmedRef.current = false;
+    unlockAtRef.current = Infinity;
+    setEntryReady(false);
+    setHovered(-1);
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        const deck = document.querySelector('.showcase-deck');
+        const elements = deck ? [...deck.querySelectorAll('.showcase-deck-card, .showcase-deck-reflection')] : [];
+        const toMs = (value) => {
+          const n = Number.parseFloat(value);
+          return value.trim().endsWith('ms') ? n : n * 1000;
+        };
+        const end = elements.reduce((max, element) => {
+          const style = window.getComputedStyle(element);
+          const delays = style.transitionDelay.split(',').map(toMs);
+          const durations = style.transitionDuration.split(',').map(toMs);
+          const count = Math.max(delays.length, durations.length);
+          for (let i = 0; i < count; i += 1) {
+            max = Math.max(max, (delays[i] ?? delays.at(-1) ?? 0) + (durations[i] ?? durations.at(-1) ?? 0));
+          }
+          return max;
+        }, 0);
+        entryTimerRef.current = window.setTimeout(() => {
+          entryTimerRef.current = null;
+          unlockAtRef.current = performance.now();
+          setEntryReady(true);
+        }, Math.max(0, end) + 16);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      if (entryTimerRef.current) {
+        window.clearTimeout(entryTimerRef.current);
+        entryTimerRef.current = null;
+      }
+    };
+  }, [deckEntering]);
+
+  const entryLocked = deckEntering && !entryReady;
+  // 首次真实交互后不再恢复入场 delay，避免鼠标离开时卡片回落又被延迟。
+  const [interacted, setInteracted] = useState(false);
+  const activate = (index, fromPointer = false) => {
+    if (entryLocked || (fromPointer && !pointerArmedRef.current)) return;
+    setInteracted(true);
+    setHovered(index);
+  };
+
+  // 全程记录真实指针时间和坐标，避免把入场锁期间的旧 pointermove
+  // 误当成解锁后的新移入。只有解锁之后发生了真实位置变化，才做命中检查；
+  // 卡片自己移动到静止鼠标下方不会触发 hover。
+  useEffect(() => {
+    if (document.documentElement.dataset.device !== 'desktop') return undefined;
+    const onMove = (event) => {
+      const now = performance.now();
+      const previous = lastPointerPointRef.current;
+      const moved = !previous || previous.x !== event.clientX || previous.y !== event.clientY;
+      lastPointerPointRef.current = { x: event.clientX, y: event.clientY };
+      if (!moved) return;
+      if (entryLocked) return;
+      pointerArmedRef.current = true;
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      const card = target && target.closest && target.closest('.showcase-deck-card');
+      if (!card) return;
+      const index = Number(card.getAttribute('data-deck-index'));
+      if (!Number.isNaN(index)) activate(index, true);
+    };
     window.addEventListener('pointermove', onMove, { passive: true });
     return () => window.removeEventListener('pointermove', onMove);
-  }, []);
-  useEffect(() => {
-    if (deckEntering) { setHovered(-1); return; }
-    const pos = pointerPosRef.current;
-    if (!pos) return undefined;
-    const raf = window.requestAnimationFrame(() => {
-      const el = document.elementFromPoint(pos.x, pos.y);
-      const card = el && el.closest && el.closest('.showcase-deck-card');
-      if (!card) return;
-      const idx = Number(card.getAttribute('data-deck-index'));
-      if (!Number.isNaN(idx)) setHovered(idx);
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [deckEntering]);
+  }, [entryLocked]);
 
   // Hovering a card lifts it to the front and pushes the others sideways: the
   // cards to its left travel further left, the ones to its right travel further
@@ -2691,7 +2759,8 @@ function ShowcaseDeck({ items, openWorks, deckEntering = false }) {
   return (
     <div
       ref={stageRef}
-      className={`showcase-deck${visible ? ' is-visible' : ''}`}
+      className={`showcase-deck${visible ? ' is-visible' : ''}${interacted ? ' is-interacted' : ''}`}
+      data-entry-locked={entryLocked ? 'true' : 'false'}
       onPointerLeave={() => setHovered(-1)}
     >
       <div className="showcase-deck-mirrors" aria-hidden="true">
@@ -2735,8 +2804,9 @@ function ShowcaseDeck({ items, openWorks, deckEntering = false }) {
             className={`showcase-deck-card${active ? ' is-active' : ''}`}
             style={deckVars}
             data-deck-index={index}
-            onPointerEnter={() => { if (!deckEntering) setHovered(index); }}
-            onFocus={() => { if (!deckEntering) setHovered(index); }}
+            // pointerenter 不能作为激活来源：卡片入场到静止鼠标下方时，浏览器可能自动补发它。
+            // PC 悬停统一由解锁后的真实 pointermove 命中；键盘仍由 focus 激活。
+            onFocus={() => activate(index)}
             onBlur={(event) => {
               // Only drop the card when focus truly leaves it, not on the
               // card -> button hand-off inside the same card.

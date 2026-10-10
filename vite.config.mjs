@@ -11,6 +11,18 @@ export default defineConfig({
      dist 里全部是构建产物（public/ 的拷贝 + assets），没有手工维护的文件，
      所以改为 true：每次构建先清空，dist 恒等于「当前源码真实产出」。 */
   build: { emptyOutDir: true, target: 'es2018' },
+  plugins: [{
+    name: 'mark-boot-entry',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, context) {
+        if (!context.bundle) return html;
+        const entry = /<script type="module" crossorigin src="(\/assets\/index-[^"]+\.js)"><\/script>/;
+        if (!entry.test(html)) throw new Error('Missing Vite app entry: loading progress cannot track its script');
+        return html.replace(entry, (tag) => tag.replace('<script ', '<script data-boot-entry '));
+      }
+    }
+  }],
   server: {
     host: '0.0.0.0',
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
