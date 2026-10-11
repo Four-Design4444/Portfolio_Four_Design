@@ -510,22 +510,38 @@ body.nav-on-light .shared-active-pill-detail {
   background: transparent;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
+  /* 2026-10-11「黑框」PC 终修(第七轮移动端同款):button 的 UA 默认外观
+     (原生按钮衬底/焦点框/点击高亮)在合成层重建时偶发以暗色填充 backing
+     store。移动端 45d7aa5 已验证:显式清空后该来源黑框绝迹。 */
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .morph-logo .four-logo {
-  width: 99px;
-  height: 29px;
-  opacity: 1;
-  transition: width 620ms cubic-bezier(0.22, 1, 0.36, 1), height 620ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.nav-home .morph-logo .four-logo {
+  /* 2026-10-11「黑框」PC 终修(第五轮移动端方案等价移植):
+     字标尺寸**定死为 home 态**(79 × 200/701 = 22.538,取 22.54 与原 home
+     值一致),三态只差 transform:scale —— works/detail = 75/79 = 0.94937
+     (渲染 75.0 × 21.40,与旧 works 值 75×21.4 等价,畸变 <0.01%)。
+     黑框根因:此前 PC 保持逐帧 transition width/height(移动端 9185688
+     已改纯 scale,业主当时明确本轮不碰 PC,PC 一直留着旧实现)。
+     每帧改几何 = 每帧一次新栅格化,字标又正好在 .morph-logo 的独立合成层
+     里,合成器偶发来不及画好新尺寸纹理,就先把该盒底色刷上去 —— 真机截图
+     的 68×29 近黑 #030707 圆角小方块(紧贴字标外缘)就是它。
+     纯 scale 期间合成器沿用已栅格化的旧纹理做合成变换,不存在「新尺寸要
+     现画」的窗口;两端渲染结果与旧实现逐像素等价(width 79→75 与 height
+     22.54→21.4 的旧插值本身就是等比缩放,曲线也相同),中点零畸变。
+     transform-origin 0 0 = 左上角锚定,与旧流内布局(svg display:block
+     从 button 左上角排布)完全一致,视觉位置零漂移。
+     ⚠ 移动端有更高优先级的自包含覆盖(mobile.css absolute+translate 居中),
+     此处只影响 PC。 */
   width: 79px;
-  /* 2026-10-07: 原为 height:auto。auto<->length 在 CSS 过渡里不可插值,
-     home<->works 形变到中点高度会瞬跳 —— 2026-10-05 FOUR 跳帧的成因。
-     79 x 200/701 = 22.538px,与 auto 的解析值一致(实测 79x22.53、畸变0.04%),
-     首页观感零变化,两端变为可插值长度。 */
   height: 22.54px;
+  transform: scale(1);
+  transform-origin: 0 0;
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .nav-home .morph-logo {
@@ -535,11 +551,12 @@ body.nav-on-light .shared-active-pill-detail {
 
 .nav-works .morph-logo .four-logo,
 .nav-detail .morph-logo .four-logo {
-  width: 75px;
-  /* 2026-10-07: works 态此前 75x22 = 3.4091,比 svg 真实比例 3.505 扁 2.74%。
-     按 200/701 推导:75 x 200/701 = 21.398px。宽度不变(75px 是已定稿的
-     视觉尺寸),只把高度从 22 收到 21.4,畸变归零。 */
-  height: 21.4px;
+  /* 2026-10-11: 75/79 = 0.94937。渲染 79×0.94937 = 75.00、
+     22.54×0.94937 = 21.40,与旧 width/height 双值(75×21.4)逐像素等价。
+     translateY(0.3px):旧实现 svg 布局盒(21.4)在 button(22)里由基线布局
+     垂直居中,顶部留 0.3px;纯 scale 后布局盒恒 22.54、顶到 0,补回这
+     0.3px 使 works/detail 端点与旧渲染严格同位(探针 A/B 实测)。 */
+  transform: translateY(0.3px) scale(0.94937);
 }
 
 .nav-works .morph-logo,
