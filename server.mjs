@@ -2,7 +2,8 @@
  * Used by the deploy sandbox: listens on PORT and binds 0.0.0.0. */
 import { createServer } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { stat, readFile } from 'node:fs/promises';
+import { gzipSync, brotliCompressSync } from 'node:zlib';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,7 +35,12 @@ const MIME = {
   '.map': 'application/json; charset=utf-8'
 };
 
-async function send(req, res, filePath) {
+// Text assets worth compressing on the fly. Images/video/webp are already
+// encoded and would only burn CPU for no gain.
+const COMPRESS_EXT = new Set(['js', 'mjs', 'css', 'html', 'json', 'svg', 'txt', 'map']);
+const HAS_BROTLI = typeof brotliCompressSync === 'function';
+
+async function send(req, res, filePath, urlPath) {
   const meta = await stat(filePath);
   const type = MIME[extname(filePath).toLowerCase()] || 'application/octet-stream';
   const total = meta.size;
@@ -45,10 +51,17 @@ async function send(req, res, filePath) {
      re-download the whole body. With ETag the revalidation is a 304 and the
      preloaded body is reused. */
   const etag = `"${total.toString(16)}-${Math.floor(meta.mtimeMs).toString(16)}"`;
+  // Vite-hashed /assets/* (JS/CSS/fonts) never change once built → safe to
+  // cache forever. Everything else (HTML, covers, detail tiles) keeps a
+  // revalidate policy so a content swap on a stable filename is not served stale.
+  const immutable = urlPath.startsWith('/assets/');
+  const cacheControl = immutable
+    ? 'public, max-age=31536000, immutable'
+    : 'public, max-age=0, must-revalidate';
   const common = {
     'Content-Type': type,
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'public, max-age=0, must-revalidate',
+    'Cache-Control': cacheControl,
     ETag: etag,
     'Last-Modified': meta.mtime.toUTCString()
   };
@@ -56,6 +69,22 @@ async function send(req, res, filePath) {
     res.writeHead(304, common);
     res.end();
     return;
+  }
+  // On-the-fly compression for text assets (prefer brotli, fall back to gzip).
+  // Skipped for range requests (video streaming) and already-encoded binaries.
+  const ext = extname(filePath).toLowerCase().slice(1);
+  if (!range && COMPRESS_EXT.has(ext)) {
+    const ae = req.headers['accept-encoding'] || '';
+    const buf = await readFile(filePath);
+    let body = null, enc = null;
+    if (HAS_BROTLI && /\bbr\b/.test(ae)) { body = brotliCompressSync(buf); enc = 'br'; }
+    else if (/\bgzip\b/.test(ae)) { body = gzipSync(buf); enc = 'gzip'; }
+    if (body) {
+      res.writeHead(200, { ...common, 'Content-Encoding': enc, 'Vary': 'Accept-Encoding', 'Content-Length': body.length });
+      if (req.method !== 'HEAD') res.end(body);
+      else res.end();
+      return;
+    }
   }
   if (!range) {
     res.writeHead(200, { ...common, 'Content-Length': total });
@@ -124,7 +153,7 @@ const server = createServer(async (req, res) => {
       }
       filePath = join(ROOT, 'index.html');
     }
-    await send(req, res, filePath);
+    await send(req, res, filePath, urlPath);
   } catch (err) {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Internal error: ' + (err && err.message));

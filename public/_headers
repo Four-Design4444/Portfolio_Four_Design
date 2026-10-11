@@ -1,0 +1,10 @@
+# Cloudflare Pages / static-host cache rules.
+# Vite emits content-hashed files under /assets/* (JS/CSS/fonts). The hash
+# changes whenever the content changes, so they are safe to cache forever.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML entry + everything with a stable filename (covers, detail tiles) must be
+# revalidated so a content swap is never served stale from a long-lived cache.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate

@@ -10,7 +10,27 @@ export default defineConfig({
      并被原样带到线上 —— 线上仍能直接访问到旧 demo 文件。
      dist 里全部是构建产物（public/ 的拷贝 + assets），没有手工维护的文件，
      所以改为 true：每次构建先清空，dist 恒等于「当前源码真实产出」。 */
-  build: { emptyOutDir: true, target: 'es2018' },
+  build: {
+    emptyOutDir: true,
+    target: 'es2018',
+    rollupOptions: {
+      output: {
+        // Split the single 575KB app chunk into cache-friendly, parallel-loadable
+        // pieces. Runtime order is unchanged (everything is still imported by the
+        // entry), so no animation/home-motion behaviour is touched — this only
+        // reorganises which module lands in which file.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('/ogl/')) return 'webgl';        // contact-street + SideRays WebGL
+            if (id.includes('react-dom') || id.includes('/react/') || id.includes('react-router') || id.includes('scheduler')) return 'react-vendor';
+            if (id.includes('lucide-react')) return 'icons';  // icon set
+            return 'vendor';
+          }
+          if (id.includes('detailScrolls')) return 'work-data'; // 11-work tile manifest
+        }
+      }
+    }
+  },
   plugins: [{
     name: 'mark-boot-entry',
     transformIndexHtml: {
