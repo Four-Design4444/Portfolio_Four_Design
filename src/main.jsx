@@ -6566,6 +6566,14 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
   // earlier visit, and starting at 0 while the page sits on 3 would leave the
   // wheel and the view disagreeing for the rest of the session.
   const startIndexRef = useRef(null);
+  /* 2026-10-11 修复：二级页刷新后返回一级，HomePage 随整棵树重新挂载，
+     hm-played 闩（playedRef）是空的。回程 goHome 把入口屏号滚回 entryIndex，
+     那一屏的 latch 第一次见到它 ⇒ 挂上 hm-played + hm-entering 窗口 ⇒ 触发
+     「翻屏入场动效」，与二级→一级的形变转场（卡片收拢）打架。落地时若不在
+     一级（刷新就落在二级/三级 URL），说明这些屏刷新前已被用户到达过，这里把
+     landedOffHome 记下来，并在下方 playedRef 初始化时把 entryIndex 及之前各屏
+     预置成已播放，使回程走「正常（不刷新）回程」那条终态快速回落、不再重播慢时序。 */
+  const landedOffHomeRef = useRef(null);
   if (startIndexRef.current === null) {
     /* 2026-10-08 PC 业主反馈「二级页刷新后返回一级,SELECTED WORK 标题消失」。
        成因:goWorks 离开一级时把入口屏号写进 sessionStorage(portfolioHomeEntryIndex),
@@ -6579,6 +6587,7 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
        入口屏号。注意不能改成读 window.scrollY —— 首页层此刻是 .is-hidden,文档高度塌成 0,
        scrollY 会被浏览器钳回 0,那正是当初把它钉死为 0 的原因。 */
     const landedOffHome = parseRoute().page !== 'home';
+    landedOffHomeRef.current = landedOffHome;
     const saved = landedOffHome
       ? Number(window.sessionStorage.getItem('portfolioHomeEntryIndex') ?? 0)
       : 0;
@@ -6983,7 +6992,23 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
        闩还没挂上，那一帧文字正停在离场态（opacity 0）—— 观感上就是一次闪烁。
        这里只是往 Set 里加数字，幂等，StrictMode 下重复渲染也无副作用。 */
   const playedRef = useRef(null);
-  if (playedRef.current === null) playedRef.current = new Set();
+  if (playedRef.current === null) {
+    playedRef.current = new Set();
+    /* 2026-10-11 修复（业主 BUG：二级页刷新后返回一级，错误地播放一级翻屏入场动效）：
+       刷新后 HomePage 重新挂载、playedRef 为空。把「刷新前已到达的屏」预置成已播放，
+       —— 仅作用于 landedOffHome（刷新落在二级/三级），直达一级（首访）不动它、保留
+       正常的首次入场。回程时这些屏的 latch 直接 has(n) 早退，不挂 hm-entering 窗口，
+       也不重播「第一次到达」的那套慢时序（标题 400/1400ms、卡组 520ms 延迟），只走
+       hm-played:not(.hm-entering) 的终态快速回落，与二级→一级形变转场并存而不打架。
+       ⚠ 只预置 hm-played、不预置 enteringRef：回程要的是「已到达」的终态，不是入场窗口；
+          预置项 = entryIndex 及之前各屏（滚到 entryIndex 必然途经它们），屏号 1/2/3
+          对应 profile / projects / contact，屏 0(hero)无 HOME MOTION 闩故跳过。 */
+    if (landedOffHomeRef.current) {
+      for (let n = 1; n <= Math.min(startIndexRef.current || 0, 3); n++) {
+        playedRef.current.add(n);
+      }
+    }
+  }
   /* ★ 入场窗口 .hm-entering（只给 PC 卡组 + 移动端副卡展开用；见 styles.css 块 ③）
      —— 与 hm-played 在**同一个提交**里挂上：如果放到 useEffect 里晚一帧，
      transition 已经以 delay:0 起步了，再补 delay 也来不及（transition-delay 只在
