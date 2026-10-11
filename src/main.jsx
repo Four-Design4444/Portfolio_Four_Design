@@ -6549,28 +6549,23 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       if (window.__appRevealed) warmExtra();
       else window.addEventListener('app:ready', warmExtra, { once: true });
     }
-    // 尾屏 WebGL 编译：★ 2026-10-11 优化——不在 loading 期一挂载就编译，而是等
-    //   `hero:ready`（视频已能连续播、首帧安全）之后再挂载 iframe 并编译。
-    //   原因：WebGL 着色器编译是整条链最重的主线程负载，原先与视频首帧解码并行，
-    //   会抢视频要等的那道闸门 → heroVideoReady 被推晚 → 揭幕变迟。视频安全后再编译，
-    //   视频首帧不再被挤，heroVideoReady 更早，揭幕更早。
-    //   揭幕闸门仍含 tailReady && tailBurned：编译 + 灯光烧录仍在遮罩期内跑完，
-    //   首屏入场动画依旧不被烧录主线程吃掉（不 reintroduce hero 入场卡顿）。
-    //   707KB 入口 JS 仍由 index.html 在 t=0 低优先级预下载（C1），带宽不浪费。
-    //   兜底：8s 仍未收到 hero:ready（极端异常）也挂载，避免尾屏永不就绪卡死闸门。
-    const mountTail = () => { if (!cancelled) setContactPreload(true); };
-    let onTailReady = null;
-    if (window.__heroReady === true) {
-      mountTail();
-    } else {
-      onTailReady = () => { mountTail(); };
-      window.addEventListener('hero:ready', onTailReady, { once: true });
-      window.setTimeout(() => { if (!window.__heroReady) mountTail(); }, 8000);
-    }
+    // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
+    // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
+    // ⚠ 2026-10-11 P2：它现在与视频缓冲**同时**发生（warmStage 挂载即为 1）。
+    //   C1 又把它的 707KB 入口 JS 提到 t=0 预下载（见 index.html 的 preload），
+    //   网络那一段不再等 React 挂载；编译时机不变（仍等 iframe 创建）。
+    //   代价：WebGL 编译是整条链上最重的主线程负载，重叠会拖慢视频首帧。
+    //   兜底仍在：heroVideoReady 不满足就不揭幕，最坏情况只是 loading 变长，
+    //   不会让用户在视频卡顿的状态下进入 hero。
+    // ⚠⚠ 2026-10-11 实验已回退，**勿重试**：曾改成「等 hero:ready 之后再挂载编译」，
+    //   意图是去掉编译与视频首帧抢主线程。推演是**净回归**——原揭幕 =
+    //   max(图片, 视频, 尾屏)（三者并行），串行后变成 >= hero:ready + 尾屏时长，
+    //   凭空多赔一个 hero:ready（本地 +750ms / CPU4x +1.9s / 家宽 +2.2s / 4G +5.6s）。
+    //   尾屏本就是最慢的并列项，推迟它只会让总量变长。**保持并行**。
+    setContactPreload(true);
     return () => {
       cancelled = true;
       window.removeEventListener('hero:ready', onHeroReady);
-      if (onTailReady) window.removeEventListener('hero:ready', onTailReady);
     };
   }, [warmStage]);
   /* ⚠ 依赖数组只有 warmStage：worksItems / mobileWorksItems 每次渲染都是新数组，
