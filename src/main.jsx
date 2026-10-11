@@ -4855,16 +4855,64 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           document.querySelectorAll('video.hero-video-alpha').forEach((extra) => list.push(extra));
           return list.every(smooth);
         };
+        /* ★ 2026-10-11「判据换轴」——**缓冲够 ≠ 画面在流畅动**。
+           PC 上真正显示的是 .hero-video-base-canvas / .hero-video-alpha-canvas 两个画布，
+           那两个 <video> 只是被 styles.css:3595 压成 1×1 的时钟/纹理源；画面由渲染循环
+           每帧绘制上去 ⇒ "能流畅播"必须再验一条：**画布真的在连续出帧**。
+           这里只读渲染循环已有的 dataset.framePairCount，**不碰任何绘制代码、不改视觉与动效**。
+           移动端是真实可见的 <video>，改用 requestVideoFrameCallback 确认真在呈现帧。
+           两条路都取不到时优雅降级（不额外要求），行为同旧版。
+           ⚠ 本改动只影响「什么时候揭幕」，渲染/视觉/动效一律不动。 */
+        const FRAME_MIN_FRAMES = 6;    // 累计至少出这么多帧
+        const FRAME_FRESH_MS = 600;    // 且最近 600ms 内还在涨（证明还在出，不是卡住的一帧）
+        const FRAME_STALL_MS = 2000;   // 缓冲已够但帧一直不来 → 认输上限（保证 loading 一定会结束）
+                                       // 取 2s：正常出帧是 6 帧≈250ms，2s 是 8 倍余量；
+                                       // 真的一帧都不出时最多只多等 2s，不把 loading 拖长。
+        const pcCanvas = document.querySelector('canvas.hero-video-base-canvas');
+        const useRvf = !pcCanvas && typeof v.requestVideoFrameCallback === 'function';
+        let frameCount = 0;
+        let frameLastAt = 0;
+        let framesQuietSince = 0;
+        let rvfHandle = 0;
+        if (useRvf) {
+          const onFrame = () => {
+            frameCount += 1;
+            frameLastAt = performance.now();
+            try { rvfHandle = v.requestVideoFrameCallback(onFrame); } catch (_) { rvfHandle = 0; }
+          };
+          try { rvfHandle = v.requestVideoFrameCallback(onFrame); } catch (_) { rvfHandle = 0; }
+        }
+        const framesFlowing = () => {
+          if (pcCanvas) {
+            const n = Number(pcCanvas.dataset.framePairCount || 0);
+            if (n > frameCount) { frameCount = n; frameLastAt = performance.now(); }
+          } else if (!useRvf) {
+            return true;   // 既无画布也无 rVFC（如 alpha2d / 老内核）→ 优雅降级，不额外要求
+          }
+          return frameCount >= FRAME_MIN_FRAMES
+            && (performance.now() - frameLastAt) <= FRAME_FRESH_MS;
+        };
+        /* 「缓冲已够、但帧一直没来」要单独计时：这是渲染通道被占住（或 WebGL 不可用）的
+           特征。等到 FRAME_STALL_MS 就认输放行，绝不让 loading 永久扣住 —— 与旧版
+           stalled / never-started 同一条设计原则。 */
+        const noteFrameState = () => {
+          if (heroSmooth() && !framesFlowing()) {
+            if (!framesQuietSince) framesQuietSince = performance.now();
+          } else {
+            framesQuietSince = 0;
+          }
+        };
+        const framesQuietFor = () => (framesQuietSince ? performance.now() - framesQuietSince : 0);
         const mark = (force, reason) => {
           if (videoReadyRef.current) return;
-          if (!force && !heroSmooth()) return;
+          if (!force && !(heroSmooth() && framesFlowing())) return;
           videoReadyRef.current = true;
           // 自查用：揭幕时是"真的攒够了"还是走了某条兜底（控制台 window.__heroReadyReason）
           try { window.__heroReadyReason = reason || (force ? 'forced' : 'smooth'); } catch (_) { /* noop */ }
           if (stopReadyWatch) { stopReadyWatch(); stopReadyWatch = null; }
           try { onVideoReady(); } catch (_) { /* noop */ }
         };
-        const onProgress = () => mark(false, 'smooth');
+        const onProgress = () => { noteFrameState(); mark(false, 'smooth'); };
         v.addEventListener('playing', onProgress);
         v.addEventListener('canplay', onProgress);
         v.addEventListener('progress', onProgress);
@@ -4912,6 +4960,8 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
           if (autoplayBlocked()) return 'autoplay-blocked';
           if (hadData() && quietFor() >= STALL_MS) return 'stalled';
           if (!hadData() && quietFor() >= NEVER_START_MS) return 'never-started';
+          // 缓冲已够但画面迟迟不出帧（渲染通道被占 / WebGL 不可用）→ 到点认输，保证会结束
+          if (framesQuietFor() >= FRAME_STALL_MS) return 'frames-not-flowing';
           return null;
         };
         let smoothFailSafe = 0;
@@ -4927,6 +4977,9 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         stopReadyWatch = () => {
           window.clearInterval(smoothPoll);
           window.clearTimeout(smoothFailSafe);
+          if (rvfHandle && typeof v.cancelVideoFrameCallback === 'function') {
+            try { v.cancelVideoFrameCallback(rvfHandle); } catch (_) { /* noop */ }
+          }
           v.removeEventListener('playing', onProgress);
           v.removeEventListener('canplay', onProgress);
           v.removeEventListener('progress', onProgress);
