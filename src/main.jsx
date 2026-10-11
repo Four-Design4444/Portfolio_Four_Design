@@ -6398,7 +6398,11 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
        最后开跑的变成 10~20KB 的小封面，长尾显著缩短。
        注意只动这一处的拼接顺序，inventory 本身的结构（covers/cross/tiles）
        与 cross 的揭幕后预热路径都不变。 */
-    const all = [...inventory.tiles, ...inventory.covers];
+    /* ★ 2026-10-11 优化：详情页首图 tile-001 不再进 loading 闸门。
+       首页根本不显示它，过去 11 张全量预拉（~1.5MB）既撑大首屏、又拖慢揭幕。
+       现在只预载本机马上要显示的封面（covers），详情首图改为揭幕后再后台暖缓存
+       （见下方 warmExtra），不参与计分、不拦揭幕 —— 详情页导航在缓存命中时依旧秒开。 */
+    const all = [...inventory.covers];
     const total = all.length;
     let done = 0;
     /* 每张图 = **一个独立的 loading 任务**（id 带文件名），不再是"整组一个 covers"。
@@ -6531,30 +6535,42 @@ function HomePage({ openWorks, paging, active = true, deckFocusId = '', revealPr
       });
     }
     /* 跨比例那批（PC 的 3:5 / 手机的 16:9）不占启动带宽：等**揭幕之后**再悄悄下，
-       纯粹暖 HTTP 缓存（换设备、跨 1100px 断点时才用得到）。 */
-    if (inventory.cross.length) {
-      const warmCross = () => {
-        inventory.cross.forEach((src) => {
+       纯粹暖 HTTP 缓存（换设备、跨 1100px 断点时才用得到）。
+       ★ 2026-10-11 优化：详情页首图 tile-001 也移到这里暖缓存 —— 首页不显示它，
+       过去在 loading 期全量预拉既撑大首屏又拖慢揭幕；现在揭幕后才后台下，不参与计分与闸门。 */
+    if (inventory.cross.length || inventory.tiles.length) {
+      const warmExtra = () => {
+        [...inventory.cross, ...inventory.tiles].forEach((src) => {
           const img = new Image();
           img.decoding = 'async';
           img.src = src;
         });
       };
-      if (window.__appRevealed) warmCross();
-      else window.addEventListener('app:ready', warmCross, { once: true });
+      if (window.__appRevealed) warmExtra();
+      else window.addEventListener('app:ready', warmExtra, { once: true });
     }
-    // 尾屏 WebGL 在 loading 阶段就挂载（见 ContactStreet 的 onTailReady），
-    // shader 编译 / 纹理加载在遮罩下进行，进入尾屏时场景已就绪。
-    // ⚠ 2026-10-11 P2：它现在与视频缓冲**同时**发生（warmStage 挂载即为 1）。
-    //   C1 又把它的 707KB 入口 JS 提到 t=0 预下载（见 index.html 的 preload），
-    //   网络那一段不再等 React 挂载；编译时机不变（仍等 iframe 创建）。
-    //   代价：WebGL 编译是整条链上最重的主线程负载，重叠会拖慢视频首帧。
-    //   兜底仍在：heroVideoReady 不满足就不揭幕，最坏情况只是 loading 变长，
-    //   不会让用户在视频卡顿的状态下进入 hero。
-    setContactPreload(true);
+    // 尾屏 WebGL 编译：★ 2026-10-11 优化——不在 loading 期一挂载就编译，而是等
+    //   `hero:ready`（视频已能连续播、首帧安全）之后再挂载 iframe 并编译。
+    //   原因：WebGL 着色器编译是整条链最重的主线程负载，原先与视频首帧解码并行，
+    //   会抢视频要等的那道闸门 → heroVideoReady 被推晚 → 揭幕变迟。视频安全后再编译，
+    //   视频首帧不再被挤，heroVideoReady 更早，揭幕更早。
+    //   揭幕闸门仍含 tailReady && tailBurned：编译 + 灯光烧录仍在遮罩期内跑完，
+    //   首屏入场动画依旧不被烧录主线程吃掉（不 reintroduce hero 入场卡顿）。
+    //   707KB 入口 JS 仍由 index.html 在 t=0 低优先级预下载（C1），带宽不浪费。
+    //   兜底：8s 仍未收到 hero:ready（极端异常）也挂载，避免尾屏永不就绪卡死闸门。
+    const mountTail = () => { if (!cancelled) setContactPreload(true); };
+    let onTailReady = null;
+    if (window.__heroReady === true) {
+      mountTail();
+    } else {
+      onTailReady = () => { mountTail(); };
+      window.addEventListener('hero:ready', onTailReady, { once: true });
+      window.setTimeout(() => { if (!window.__heroReady) mountTail(); }, 8000);
+    }
     return () => {
       cancelled = true;
       window.removeEventListener('hero:ready', onHeroReady);
+      if (onTailReady) window.removeEventListener('hero:ready', onTailReady);
     };
   }, [warmStage]);
   /* ⚠ 依赖数组只有 warmStage：worksItems / mobileWorksItems 每次渲染都是新数组，
