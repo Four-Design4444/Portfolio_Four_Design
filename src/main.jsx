@@ -7404,8 +7404,25 @@ function WorksPage({
   useLayoutEffect(() => {
     if (!isMobile) return undefined;
     if (pos >= RAIL_LO && pos <= RAIL_HI) return undefined;
-    teleportRef.current = true;
-    setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
+    /* 两档瞬移(2026-10-13 修「03→02 直接跳一下」):
+       · 边界档(pos == RAIL_LO-1 或 == RAIL_HI+1,即索引 1 / 31):这一档的 1-away 邻居
+         仍存在(三份副本撑出的缓冲),让这一步逐卡动画先走完,延时 640ms 再瞬移。瞬移
+         目标与当前卡是同一项目、同一屏幕位置 → 肉眼无变化。这样 03→02 这类「跨边界那
+         一下」才有过渡帧,不会直接跳。
+       · 极端档(pos <= 0 或 >= 末位):1-away 邻居已不存在(索引 -1 / 末+1),必须在绘制前
+         立即瞬移,否则空槽会露出来 —— 这正是此前修的「滑到尽头右侧副卡空槽」。只在极
+         快速连滑冲到尽头时才触发,正常滑动走不到这一档。 */
+    const atExtreme = pos <= 0 || pos >= RAIL_N * RAIL_COPIES - 1;
+    if (atExtreme) {
+      teleportRef.current = true;
+      setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      teleportRef.current = true;
+      setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
+    }, 640);
+    return () => window.clearTimeout(timer);
   }, [pos, isMobile]);
 
   /* 入场:轨道自己就是那张在飞的卡(替代旧的「裸露 img 覆盖层」)。
