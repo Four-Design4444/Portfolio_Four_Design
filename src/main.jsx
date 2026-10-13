@@ -317,16 +317,22 @@ const worksByCategory = {
 const WORKS_RAIL = Object.entries(worksByCategory).flatMap(([category, list]) =>
   list.filter((work) => work.id !== 'motion-space').map((work) => ({ ...work, category }))
 );
-/* 闭环轮回:轨道渲染两份副本,当前索引始终待在允许区间内,越界时整轨瞬移一份。
+/* 闭环轮回:轨道渲染三份副本,当前索引始终待在允许区间内,越界时整轨瞬移一份。
    瞬移前后可见窗口里的卡与位置逐像素相同(同一批卡的同一批顺序),所以看不见。
    11 = WORKS_RAIL.length,写成常量以便算窗口边界。
-   ⚠ 2026-10-09(项4):副本数 3 → 2。三份 = 33 个节点,**一次性挂载**的样式重算 +
-      布局实测就是跨级转场里最贵的那一块(4× 手机降速下「样式/布局」自耗稳定在
-      500ms 上下,占该阶段一半以上)。两份仍然满足下面那个前提:任何允许停留的位置
-      ±RAIL_WINDOW 都落在数组范围内(见 RAIL_LO / RAIL_HI)。 */
+   ⚠ 副本数 2 → 3(2026-10-13 修「滑到尽头右侧副卡空槽」):两份副本时 RAIL_SLIDES
+      只有 22 个节点,RAIL_HI = 19。连续快速滑动会把 pos 在 680ms 瞬移生效前推到 21,
+      此时右侧可见副卡(|d|=1,露 ~30px 边角)要取索引 22 —— 但 22 不存在 → 槽位
+      没有 DOM 节点 → 整段空着,直到瞬移折回 10 才被 01 卡(索引 11)填上,正是
+      「空一下才循环接上」。三份把数组撑到 33 个节点(索引 0..32),pos 在 ±RAIL_WINDOW
+      缓冲内永不缺节点,正常滑动始终逐卡动画、不越界;瞬移只在 pos>30 这种极端连滑
+      时才触发(见下方 teleport effect 的 useLayoutEffect 兜底)。
+   ⚠ 33 节点的挂载成本靠 .mw-slide[data-far]{content-visibility:hidden} 兜住:
+      只有 ±2 的 5 张参与绘制,其余 28 张不进样式重算/布局/绘制(2026-10-09 加的),
+      所以入口首帧不会回到三份时代那次 500ms 的样式/布局自耗。 */
 const RAIL_N = WORKS_RAIL.length;
-const RAIL_COPIES = 2;
-const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL];
+const RAIL_COPIES = 3;
+const RAIL_SLIDES = [...WORKS_RAIL, ...WORKS_RAIL, ...WORKS_RAIL];
 
 /* ── 作品图片总清单：首屏 loading 的**唯一**数据来源（2026-10-13 业主口径）─────────
    业主原话：「一级页面的作品封面和二级页面的作品封面都要进 loading 一同加载；
@@ -7387,14 +7393,19 @@ function WorksPage({
   /* 闭环:当前索引越出中间副本时整轨瞬移一份。瞬移前后可见窗口里是同一批卡、
      同一批位置,所以肉眼无变化;必须等补间走完再做 —— 期间整轨还在动,提前
      瞬移会把没走完的那一段吃掉。 */
-  useEffect(() => {
+  /* 闭环:当前索引越出中间副本时整轨瞬移一份。瞬移前后可见窗口里是同一批卡、
+     同一批位置,所以肉眼无变化。
+     ⚠ 2026-10-13 修「滑到尽头右侧副卡空槽」:原来用 useEffect + 680ms 延时,目的是
+       "等补间走完再瞬移"。但连续快速滑动时,pos 会在 680ms 内被推到 21(两份副本时
+       索引 22 不存在)→ 右侧可见副卡槽位缺 DOM 节点 → 空着几百毫秒才被瞬移折回的
+       01 卡填上。改成 useLayoutEffect + 立即瞬移:越界的那一帧在**绘制前**就被纠正,
+       空槽永远不会画上屏(三份副本已保证正常滑动区间内永不缺节点,这里只兜极端连滑)。
+       瞬移用 teleportRef 关掉补间 → 同一批卡同位置,瞬移本身无视觉跳变。 */
+  useLayoutEffect(() => {
     if (!isMobile) return undefined;
     if (pos >= RAIL_LO && pos <= RAIL_HI) return undefined;
-    const timer = window.setTimeout(() => {
-      teleportRef.current = true;
-      setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
-    }, 680);
-    return () => window.clearTimeout(timer);
+    teleportRef.current = true;
+    setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
   }, [pos, isMobile]);
 
   /* 入场:轨道自己就是那张在飞的卡(替代旧的「裸露 img 覆盖层」)。
