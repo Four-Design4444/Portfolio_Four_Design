@@ -1842,6 +1842,9 @@ html[data-device="mobile"] .works-index-page.mw-leaving .mw-slide.is-current .mw
      · 三张卡同帧出发、同帧到位 → 不再「主卡站好了副卡才出来」。
    mw-armed 只存在一帧:写初始姿态时禁止过渡(否则会从静止姿态倒着飞出去)。 */
 html[data-device="mobile"] .works-index-page.mw-armed .mw-slide { transition: none; }
+/* 瞬移换副本节点时掐掉一帧 scale 过渡(见 main.jsx 归位 effect),避免同项目克隆卡在屏幕
+   中央先缩后放的 pop。下一帧由 JS 移除 mw-snap,正常逐卡滑动不受影响。 */
+html[data-device="mobile"] .works-index-page.mw-snap .mw-slide { transition: none; }
 html[data-device="mobile"] .works-index-page.mw-entering .mw-slide {
   transition-duration: var(--mw-emerge-dur, 700ms);
 }

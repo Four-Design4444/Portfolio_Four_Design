@@ -7389,6 +7389,17 @@ function WorksPage({
     if (leavingRef.current) return undefined;
     const teleport = teleportRef.current;
     teleportRef.current = false;
+    /* ⚠ 瞬移换副本节点时,把整页 .mw-slide 的 transform 过渡掐掉一帧:旧 current 节点
+       与新 current 节点是同项目同位置的两张克隆,若不关过渡,旧卡会先缩回侧卡、新卡
+       再从侧卡放大 —— 同一张图在屏幕中央先缩后放 = 可见「pop」。mw-snap 下 transition
+       为 none,换节点当帧即落位,瞬时无 pop;下一帧移除,正常滑动的逐卡动画不受影响。 */
+    if (teleport) {
+      const pageEl = pageRef.current;
+      if (pageEl) {
+        pageEl.classList.add('mw-snap');
+        requestAnimationFrame(() => pageEl.classList.remove('mw-snap'));
+      }
+    }
     appliedRef.current = pos;
     railApply(0, 0, !firstPaintRef.current && !teleport, 0, durRef.current);
     durRef.current = 0;
@@ -7410,18 +7421,19 @@ function WorksPage({
   useLayoutEffect(() => {
     if (!isMobile) return undefined;
     if (pos >= RAIL_LO && pos <= RAIL_HI) return undefined;
-    /* 两档瞬移(2026-10-13 稳定版):区间已移到中间副本(11..21),跨边界那一步落在
-       pos=10 / pos=22,两侧副本节点都还在,所以**不存在空槽**;瞬移只在「极快连滑冲出
-       安全区」时兜底。两档都靠 teleportRef 关补间,且 ±11 恒等于「同一项目、同一屏幕
-       位置」,所以瞬移本身肉眼不可见 —— 这是它绝不会截断可见逐卡动画的关键。
-       · 边界档(pos === RAIL_LO-1 或 === RAIL_HI+1,即 10 / 22):这是「跨边界那一步」
-         的落点,1-away 邻居仍在,让这一步逐卡动画先走完,延时 640ms 再瞬移 → 跨边界有
-         过渡帧、不直接跳。
-       · 极端档(pos < RAIL_LO-1 或 > RAIL_HI+1,即 <10 / >22):正常滑动走不到这里,
-         只在极快连滑冲出安全区时才触发;此时立即瞬移,±11 同项目同位置 → 不可见,
-         且因已远离边界、两侧节点充足,不会露空槽。 */
-    const atExtreme = pos < RAIL_LO - 1 || pos > RAIL_HI + 1;
-    if (atExtreme) {
+    /* 两档瞬移(2026-10-13 再修·稳定版):33 节点(0..32),窗口 RAIL_WINDOW=2 要求
+       邻居都落在 [0,32] 内 → pos 硬上限是 [2,30],再滑一格(<=1 或 >=31)就会缺邻居
+       节点(空槽)。所以:
+       · 边缘档(pos <= 1 或 >= 31):真贴数组边缘,必须**立即**瞬移兜底空槽;只在极快
+         连滑冲到这里才触发,±11 同项目同位置 → 不可见。
+       · 缓冲档(pos 在 [2,10] 或 [22,30]):还有整份副本缓冲、两侧节点齐全,让这一步
+         逐卡动画先播完(640ms ≈ 滑入时长 620ms + 余量)再瞬移 → 跨边界/环绕那一格
+         有完整过渡帧,不再被立即瞬移截断。此前阈值是 <10 / >22,把「22→23 这一步
+         work01→work02」当成极端立即瞬移,正是业主看到的「01→02 过渡有问题」。
+       两档都靠 teleportRef + 归位 effect 里的 mw-snap 关掉卡面 scale 过渡,使换副本
+       节点那一下零形变 → 瞬移彻底不可见。 */
+    const atEdge = pos <= 1 || pos >= RAIL_N * RAIL_COPIES - 2;
+    if (atEdge) {
       teleportRef.current = true;
       setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
       return undefined;
