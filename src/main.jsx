@@ -420,8 +420,14 @@ const RAIL_HOME = RAIL_N;        // 初始落点 = 第二份的第一张
 const RAIL_WINDOW = 2;
 /* 允许停留的索引区间:必须保证 pos ± RAIL_WINDOW 都落在 [0, slides-1] 内。
    越界那一帧会读到不存在的槽位 —— 那些位置虽然落在屏外看不见,但状态机不该依赖它。 */
-const RAIL_LO = RAIL_WINDOW;
-const RAIL_HI = RAIL_N * RAIL_COPIES - 1 - RAIL_WINDOW;
+/* ⚠ 允许停留区间 = 中间那份副本(11..21),两侧各留一整份副本做缓冲。
+   之前区间压在 2..30(第一/二份),导致跨边界那一步落点紧贴数组边缘,再滑一格就
+   到 pos=0/32(无左右副本节点 → 空槽);为兜空槽的「立即瞬移」又截断正在播的逐卡
+   动画(02→01 跳一下)。把区间移到中间副本后:跨边界那一步(pos=10/22)两侧节点都
+   存在 → 无空槽;边界档延时 640ms 让那步动画播完;极快连滑冲到 pos<10/pos>22 才
+   立即瞬移,而 ±11 始终同项目同位置 → 瞬移不可见、绝不截断可见动画。 */
+const RAIL_LO = RAIL_N;
+const RAIL_HI = RAIL_N * RAIL_COPIES - 1 - RAIL_N;
 /* 跨级转场时长:入场(从源卡姿态张开到静止)与离场(收拢回首页那张卡)同值。
    必须与 .mw-entering/.mw-leaving 的过渡时长一致,否则主卡与副卡会分家。 */
 const RAIL_EMERGE_MS = 700;
@@ -7404,15 +7410,17 @@ function WorksPage({
   useLayoutEffect(() => {
     if (!isMobile) return undefined;
     if (pos >= RAIL_LO && pos <= RAIL_HI) return undefined;
-    /* 两档瞬移(2026-10-13 修「03→02 直接跳一下」):
-       · 边界档(pos == RAIL_LO-1 或 == RAIL_HI+1,即索引 1 / 31):这一档的 1-away 邻居
-         仍存在(三份副本撑出的缓冲),让这一步逐卡动画先走完,延时 640ms 再瞬移。瞬移
-         目标与当前卡是同一项目、同一屏幕位置 → 肉眼无变化。这样 03→02 这类「跨边界那
-         一下」才有过渡帧,不会直接跳。
-       · 极端档(pos <= 0 或 >= 末位):1-away 邻居已不存在(索引 -1 / 末+1),必须在绘制前
-         立即瞬移,否则空槽会露出来 —— 这正是此前修的「滑到尽头右侧副卡空槽」。只在极
-         快速连滑冲到尽头时才触发,正常滑动走不到这一档。 */
-    const atExtreme = pos <= 0 || pos >= RAIL_N * RAIL_COPIES - 1;
+    /* 两档瞬移(2026-10-13 稳定版):区间已移到中间副本(11..21),跨边界那一步落在
+       pos=10 / pos=22,两侧副本节点都还在,所以**不存在空槽**;瞬移只在「极快连滑冲出
+       安全区」时兜底。两档都靠 teleportRef 关补间,且 ±11 恒等于「同一项目、同一屏幕
+       位置」,所以瞬移本身肉眼不可见 —— 这是它绝不会截断可见逐卡动画的关键。
+       · 边界档(pos === RAIL_LO-1 或 === RAIL_HI+1,即 10 / 22):这是「跨边界那一步」
+         的落点,1-away 邻居仍在,让这一步逐卡动画先走完,延时 640ms 再瞬移 → 跨边界有
+         过渡帧、不直接跳。
+       · 极端档(pos < RAIL_LO-1 或 > RAIL_HI+1,即 <10 / >22):正常滑动走不到这里,
+         只在极快连滑冲出安全区时才触发;此时立即瞬移,±11 同项目同位置 → 不可见,
+         且因已远离边界、两侧节点充足,不会露空槽。 */
+    const atExtreme = pos < RAIL_LO - 1 || pos > RAIL_HI + 1;
     if (atExtreme) {
       teleportRef.current = true;
       setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
@@ -7933,33 +7941,13 @@ function WorksPage({
        动画帧里)。用 useMemo 把依赖收窄成 pos:相位类变化不再触碰这批节点。
        键值、结构、属性完全不变,只是跳过 React 的重建 → 视觉与行为零变化。 */
     const railSlides = useMemo(() => RAIL_SLIDES.map((work, i) => {
-      /* ⚠ 2026-10-13 修「滑到尽头右侧副卡空一下才加载出 01 卡」:原来 src 与
-         data-far 共用同一个非绕回窗口 `live`(距当前卡 ±RAIL_WINDOW)。循环接上的
-         那一两张(01 / 11)在远离边界时是 far(无 src),滑到边界才 live→挂 src→解码/
-         重取,正好在循环接上的瞬间露白;而且两档瞬移的「边界延时 + 越界瞬移」会让这些
-         邻卡在 far↔live 之间反复切换,重复解码/重取,白更明显。
-         修法:把「是否挂 src」与「是否参与布局(data-far)」解耦 ——
-           · layoutFar = 非绕回 ±RAIL_WINDOW(原样):远处副本 content-visibility:hidden
-             跳过布局/绘制,性能不变;
-           · loaded = 绕回窗口 ±(RAIL_WINDOW+1):循环邻卡(01/11)在刚要接上之前就被
-             挂 src 并解码好,且瞬移弹跳时因绕回而始终落在 loaded 内、不会被卸载→重取,
-             循环点不再露白。绕回窗口只比布局窗口宽 1 张,多挂的图都是 boot 期 loading
-             已下载过的同一批 URL,浏览器按 URL 去重解码,首帧不回退 85ms 那一档。 */
-      const dist = Math.abs(i - pos);
-      /* 布局跳过用「视觉滑距」(非绕回):远处副本 content-visibility:hidden,性能不变。
-         src 预加载用「作品环距」——把 i 与 pos 先对 RAIL_N 取模,再算环上最短距。
-         轨道每 RAIL_N 张重复一次(三份副本),所以视觉上 slide i 与 i±RAIL_N 是同一张
-         卡;用滑距直接绕 33 会算错跨副本邻接(如 pos=30 时 i=22 滑距 8 看似很远,其实
-         作品环距只有 3)。作品环距 ≤ RAIL_WINDOW+1(比布局窗口宽 1)即提前挂 src 并解码,
-         循环接上的 01/11 在刚要出现前就已就绪,且瞬移弹跳时因落在该环距内、不会被卸载→
-         重取,循环点不再露白。多挂的图都是 boot 期 loading 已下载的同一批 URL,按 URL 去重
-         解码,首帧不回退那一档。 */
-      const di = ((i % RAIL_N) + RAIL_N) % RAIL_N;
-      const dp = ((pos % RAIL_N) + RAIL_N) % RAIL_N;
-      const d = Math.abs(di - dp);
-      const wrapDist = Math.min(d, RAIL_N - d);
-      const layoutFar = dist > RAIL_WINDOW;
-      const loaded = wrapDist <= RAIL_WINDOW + 1;
+      /* ⚠ 2026-10-13 稳定版:瞬移区间已移到中间副本(11..21),空槽/跳帧由两档瞬移
+         彻底兜住,不再需要「绕回窗口预加载 src」。但凡落进轨道的卡一律常驻 src ——
+         33 个节点只有 11 个不同 URL(同作品三份副本同源),浏览器按 URL 去重解码,
+         实际只解码 11 张,且都是 boot 期 loading 已下载过的同一批 ⇒ 进二级页那一刻
+         11 张封面全在缓存里已就绪,根除「封面没加载完」;data-far(布局跳过)只按
+         非绕回滑距关掉屏外副本的布局/绘制,性能不变。 */
+      const layoutFar = Math.abs(i - pos) > RAIL_WINDOW;
       return (
         <div
           className={`mw-slide${i === pos ? ' is-current' : ''}`}
@@ -7973,14 +7961,13 @@ function WorksPage({
             className="mw-card"
             aria-label={`${work.title} — 下滑或点按查看设计详情`}
           >
-            {/* ⚠ 只给活跃窗口(非绕回 ±RAIL_WINDOW)做 content-visibility:hidden 跳过布局,
-                 但挂 src 用绕回 ±(RAIL_WINDOW+1):循环接上的 01/11 提前解码好,不再露白。
-                 ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,塞 16:9 会被
-                 object-fit:cover 每侧裁掉 33%。且跨级转场要求一级 .mob-card 与二级
-                 .mw-card 是同一张卡面。 */}
+            {/* ⚠ 11 张封面一律常驻 src(同源三份副本去重解码),进二级页即刻从缓存就绪,
+                 根除「封面没加载完」;取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,
+                 塞 16:9 会被 object-fit:cover 每侧裁掉 33%。且跨级转场要求一级 .mob-card
+                 与二级 .mw-card 是同一张卡面。 */}
             <img
               className="mw-card-img"
-              src={loaded ? (work.image ?? work.detailHero) : undefined}
+              src={work.image ?? work.detailHero}
               alt=""
               decoding="async"
             />
