@@ -421,11 +421,14 @@ const RAIL_WINDOW = 2;
 /* 允许停留的索引区间:必须保证 pos ± RAIL_WINDOW 都落在 [0, slides-1] 内。
    越界那一帧会读到不存在的槽位 —— 那些位置虽然落在屏外看不见,但状态机不该依赖它。 */
 /* ⚠ 允许停留区间 = 中间那份副本(11..21),两侧各留一整份副本做缓冲。
-   之前区间压在 2..30(第一/二份),导致跨边界那一步落点紧贴数组边缘,再滑一格就
-   到 pos=0/32(无左右副本节点 → 空槽);为兜空槽的「立即瞬移」又截断正在播的逐卡
-   动画(02→01 跳一下)。把区间移到中间副本后:跨边界那一步(pos=10/22)两侧节点都
-   存在 → 无空槽;边界档延时 640ms 让那步动画播完;极快连滑冲到 pos<10/pos>22 才
-   立即瞬移,而 ±11 始终同项目同位置 → 瞬移不可见、绝不截断可见动画。 */
+   pos 就是**居中那张卡的真实下标**,transform = railBase(pos),is-current = (i === pos)
+   —— 三者恒一致(这是「不跳帧」的第一前提:任何把 pos 与居中卡错开的做法都会让
+   is-current 落到屏外节点上,居中卡当场掉档)。
+   跨边界那一步落点 pos=22 / 10,两侧副本节点都还在(无空槽);等这一步动画走完、
+   手指松开后,再由归位 effect 的定时器整轨瞬移一份(±RAIL_N)。±RAIL_N 前后可见窗口
+   是同一批作品、同一批屏幕位置 ⇒ 瞬移不可见,且**永远不与滑动抢跑**。
+   ⚠ 勿再改回「定时器/立即瞬移」那两档:它们的通病是在动画还在飞时改写 transform,
+   把逐卡动画吃掉 = 业主看到的「没有过渡帧」。 */
 const RAIL_LO = RAIL_N;
 const RAIL_HI = RAIL_N * RAIL_COPIES - 1 - RAIL_N;
 /* 跨级转场时长:入场(从源卡姿态张开到静止)与离场(收拢回首页那张卡)同值。
@@ -7324,8 +7327,8 @@ function WorksPage({
   const trackRef = useRef(null);
   const railRef = useRef({ down: false, axis: null, startX: 0, startY: 0, dx: 0, dy: 0, lastDX: 0, vel: 0, moved: false, pid: null });
   const firstPaintRef = useRef(true);   // 首帧静默归位(不做过场)
-  const teleportRef = useRef(false);    // 本次 pos 变更来自整轨瞬移 → 不许补间
   const durRef = useRef(0);             // 覆盖本次补间时长(点导航 = 快速滑动)
+  const animUntilRef = useRef(0);       // 轨道补间结束时刻(performance.now 基准):重吸附/闭环归一都必须等它过去,否则会把正在飞的滑动掐断
   const appliedRef = useRef(null);      // 已写进 DOM 的 pos,避免重复写重启动画
   const leavingRef = useRef(leaving);
   leavingRef.current = leaving;
@@ -7361,9 +7364,62 @@ function WorksPage({
     const g = railGeom();
     if (!track || !g) return;
     const base = railBase(g, posRef.current);
-    track.style.transition = animate ? `transform ${dur || 620}ms cubic-bezier(0.22, 1, 0.36, 1)` : 'none';
+    /* ⚠ 补间结束时刻记在 ref 上:重吸附(reapply)与闭环归一都要靠它判断
+       「轨道是否还在飞」—— 在飞的轨道绝不能被再写一次 transform,否则当场掐断。 */
+    const d = dur || 620;
+    if (animate) animUntilRef.current = performance.now() + d;
+    track.style.transition = animate ? `transform ${d}ms cubic-bezier(0.22, 1, 0.36, 1)` : 'none';
     track.style.transform = `translate3d(${base + dx}px, ${extraY + dy * 0.3}px, 0)`;
   }, [railGeom]);
+
+  /* 读轨道**当前实际**的 translateX/Y —— 可能是补间中途的插值。闭环归一必须用它做
+     精确重基准,所以不能读内联 style(那是"目标值",不是"此刻在屏上的值")。 */
+  const railTxOf = (el) => {
+    const m = getComputedStyle(el).transform;
+    if (!m || m === 'none') return { x: 0, y: 0 };
+    const p3 = m.match(/matrix3d\(([^)]+)\)/);
+    if (p3) { const a = p3[1].split(','); return { x: parseFloat(a[12]) || 0, y: parseFloat(a[13]) || 0 }; }
+    const p2 = m.match(/matrix\(([^)]+)\)/);
+    if (p2) { const a = p2[1].split(','); return { x: parseFloat(a[4]) || 0, y: parseFloat(a[5]) || 0 }; }
+    return { x: 0, y: 0 };
+  };
+
+  /* ⚠ 闭环重基准(2026-10-13 终修·稳定版) —— 这是整套「不跳帧」的核心。
+     轨道是 3 份**逐像素相同**的副本拼成的 33 个节点(周期 = RAIL_N·slideW)。所以把
+     整条轨道平移 ±RAIL_N·slideW,屏幕上看到的东西**逐像素不变**(同一批作品、同一批
+     位置)。于是跨边界那一步不再需要"瞬移"这个会掐断动画的动作,只需要:
+       ① 把 pos 折回中间副本(±RAIL_N);
+       ② 同时把轨道**当前实际位置**平移 ∓RAIL_N·slideW,并强制提交这一帧。
+     ②之后紧接着的逐卡动画就从重基准后的位置起跑,和普通的一步滑动**完全同构** ——
+     没有瞬移、没有定时器、没有克隆卡换节点,所以既不会掐断动画(无跳帧),也不会
+     is-current 落到屏外(居中卡与 is-current 恒一致)。 */
+  const rebaseTrack = (shiftPx) => {
+    const track = trackRef.current;
+    if (!track || !shiftPx) return;
+    const { x, y } = railTxOf(track);
+    track.style.transition = 'none';
+    track.style.transform = `translate3d(${x + shiftPx}px, ${y}px, 0)`;
+    /* 强制样式提交:不让浏览器把「重基准写」与「动画写」合并成一次 —— 合并会丢掉
+       过渡起点(起点还是旧位置)→ 又退化成一次硬跳。 */
+    void track.offsetWidth;
+  };
+
+  /* 闭环滑动(2026-10-13 终修·稳定版):
+     pos 恒为**居中那张卡在 33 节点里的真实下标**,且恒被折在中间副本 [RAIL_LO, RAIL_HI];
+     transform 恒为 railBase(pos);is-current 恒为 (i === pos) —— 三者永远一致。
+     越界时在这里就把 pos 折回(而非等动画走完),并同步重基准轨道:跨边界那一步与
+     普通一步无差别,逐卡动画永远完整。 */
+  const slideTo = (delta) => {
+    const raw = posRef.current + delta;
+    let np = raw;
+    while (np > RAIL_HI) np -= RAIL_N;
+    while (np < RAIL_LO) np += RAIL_N;
+    if (np !== raw) {
+      const g = railGeom();
+      if (g) rebaseTrack((raw - np) * g.slideW);
+    }
+    setPos(np);
+  };
 
   // 静止归位:pos 一变就把轨道吸到该索引。整轨瞬移(pos ± N)与首帧都不补间。
   useLayoutEffect(() => {
@@ -7387,63 +7443,14 @@ function WorksPage({
        接管就会把它换成「吸到某个索引」的补间 —— 整轨被拉走,收拢动画当场作废
        (2026-10-07 实测:pos 被改掉时 track 被拽走 477px)。 */
     if (leavingRef.current) return undefined;
-    const teleport = teleportRef.current;
-    teleportRef.current = false;
-    /* ⚠ 瞬移换副本节点时,把整页 .mw-slide 的 transform 过渡掐掉一帧:旧 current 节点
-       与新 current 节点是同项目同位置的两张克隆,若不关过渡,旧卡会先缩回侧卡、新卡
-       再从侧卡放大 —— 同一张图在屏幕中央先缩后放 = 可见「pop」。mw-snap 下 transition
-       为 none,换节点当帧即落位,瞬时无 pop;下一帧移除,正常滑动的逐卡动画不受影响。 */
-    if (teleport) {
-      const pageEl = pageRef.current;
-      if (pageEl) {
-        pageEl.classList.add('mw-snap');
-        requestAnimationFrame(() => pageEl.classList.remove('mw-snap'));
-      }
-    }
     appliedRef.current = pos;
-    railApply(0, 0, !firstPaintRef.current && !teleport, 0, durRef.current);
+    railApply(0, 0, !firstPaintRef.current, 0, durRef.current);
     durRef.current = 0;
     firstPaintRef.current = false;
+    /* pos 恒被 slideTo 折在中间副本内,所以这里不再需要任何瞬移/定时器/归一 ——
+       跨边界那一步在 slideTo 里已经用 rebaseTrack 精确重基准,与普通一步同构。 */
     return undefined;
   }, [pos, isMobile, railApply]);
-
-  /* 闭环:当前索引越出中间副本时整轨瞬移一份。瞬移前后可见窗口里是同一批卡、
-     同一批位置,所以肉眼无变化;必须等补间走完再做 —— 期间整轨还在动,提前
-     瞬移会把没走完的那一段吃掉。 */
-  /* 闭环:当前索引越出中间副本时整轨瞬移一份。瞬移前后可见窗口里是同一批卡、
-     同一批位置,所以肉眼无变化。
-     ⚠ 2026-10-13 修「滑到尽头右侧副卡空槽」:原来用 useEffect + 680ms 延时,目的是
-       "等补间走完再瞬移"。但连续快速滑动时,pos 会在 680ms 内被推到 21(两份副本时
-       索引 22 不存在)→ 右侧可见副卡槽位缺 DOM 节点 → 空着几百毫秒才被瞬移折回的
-       01 卡填上。改成 useLayoutEffect + 立即瞬移:越界的那一帧在**绘制前**就被纠正,
-       空槽永远不会画上屏(三份副本已保证正常滑动区间内永不缺节点,这里只兜极端连滑)。
-       瞬移用 teleportRef 关掉补间 → 同一批卡同位置,瞬移本身无视觉跳变。 */
-  useLayoutEffect(() => {
-    if (!isMobile) return undefined;
-    if (pos >= RAIL_LO && pos <= RAIL_HI) return undefined;
-    /* 两档瞬移(2026-10-13 再修·稳定版):33 节点(0..32),窗口 RAIL_WINDOW=2 要求
-       邻居都落在 [0,32] 内 → pos 硬上限是 [2,30],再滑一格(<=1 或 >=31)就会缺邻居
-       节点(空槽)。所以:
-       · 边缘档(pos <= 1 或 >= 31):真贴数组边缘,必须**立即**瞬移兜底空槽;只在极快
-         连滑冲到这里才触发,±11 同项目同位置 → 不可见。
-       · 缓冲档(pos 在 [2,10] 或 [22,30]):还有整份副本缓冲、两侧节点齐全,让这一步
-         逐卡动画先播完(640ms ≈ 滑入时长 620ms + 余量)再瞬移 → 跨边界/环绕那一格
-         有完整过渡帧,不再被立即瞬移截断。此前阈值是 <10 / >22,把「22→23 这一步
-         work01→work02」当成极端立即瞬移,正是业主看到的「01→02 过渡有问题」。
-       两档都靠 teleportRef + 归位 effect 里的 mw-snap 关掉卡面 scale 过渡,使换副本
-       节点那一下零形变 → 瞬移彻底不可见。 */
-    const atEdge = pos <= 1 || pos >= RAIL_N * RAIL_COPIES - 2;
-    if (atEdge) {
-      teleportRef.current = true;
-      setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
-      return undefined;
-    }
-    const timer = window.setTimeout(() => {
-      teleportRef.current = true;
-      setPos((p) => (p > RAIL_HI ? p - RAIL_N : p + RAIL_N));
-    }, 640);
-    return () => window.clearTimeout(timer);
-  }, [pos, isMobile]);
 
   /* 入场:轨道自己就是那张在飞的卡(替代旧的「裸露 img 覆盖层」)。
      ① 布局阶段先量出主卡静止矩形,再把「源卡姿态」以内联样式压上去:
@@ -7746,13 +7753,11 @@ function WorksPage({
     const targetReal = WORKS_RAIL.findIndex((w) => w.category === activeCategory.id);
     if (targetReal < 0) return undefined;
     durRef.current = 440;
-    setPos((p) => {
-      const curReal = realIndexOf(p);
-      let delta = targetReal - curReal;
-      if (delta > RAIL_N / 2) delta -= RAIL_N;
-      if (delta < -RAIL_N / 2) delta += RAIL_N;
-      return delta === 0 ? p : p + delta;
-    });
+    const curReal = realIndexOf(posRef.current);
+    let delta = targetReal - curReal;
+    if (delta > RAIL_N / 2) delta -= RAIL_N;
+    if (delta < -RAIL_N / 2) delta += RAIL_N;
+    if (delta !== 0) slideTo(delta);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory.id, isMobile]);
@@ -7763,25 +7768,31 @@ function WorksPage({
     if (!isMobile || !workId) return undefined;
     const real = WORKS_RAIL.findIndex((w) => w.id === workId);
     if (real < 0) return undefined;
-    setPos((p) => {
-      const curReal = realIndexOf(p);
-      if (curReal === real) return p;
-      let delta = real - curReal;
-      if (delta > RAIL_N / 2) delta -= RAIL_N;
-      if (delta < -RAIL_N / 2) delta += RAIL_N;
-      return p + delta;
-    });
+    const curReal = realIndexOf(posRef.current);
+    if (curReal === real) return undefined;
+    let delta = real - curReal;
+    if (delta > RAIL_N / 2) delta -= RAIL_N;
+    if (delta < -RAIL_N / 2) delta += RAIL_N;
+    slideTo(delta);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workId, isMobile]);
 
   /* 重新吸附:样式/字体就绪之前量出的几何可能是错的(生产环境 CSS 先于 JS,
      这里只是保险)。入场/离场动画期间绝不能重吸 —— 那会把正在张开(或收拢)
-     的轨道按回静止位。 */
+     的轨道按回静止位。
+     ⚠ 2026-10-13 补两条硬闸(业主「09→10 没有过渡帧」的残余真因之一):
+       · 手指按住(down)时绝不重吸 —— 拖拽期间轨道带着跟手位移,重吸会把它
+         一把拽回 base,单帧回弹 = 可见跳变(探针抓到 152px 单帧跳、transition:none);
+       · 轨道还在飞(now < animUntilRef)时绝不重吸 —— 会把正在播的 620ms 滑动
+         掐断在当前位置。两条都只跳过这一次;90/320/720ms 三次 + fonts.ready +
+        resize 里总有一次落在静止态,几何校正不会丢。 */
   useEffect(() => {
     if (!isMobile) return undefined;
     const reapply = () => {
       if (phaseRef.current !== 'idle' || leavingRef.current) return;
+      if (railRef.current.down) return;
+      if (performance.now() < animUntilRef.current) return;
       appliedRef.current = posRef.current;
       railApply(0, 0, false, 0);
     };
@@ -7880,12 +7891,12 @@ function WorksPage({
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const slide = el ? el.closest('.mw-slide') : null;
       const idx = slide && trackRef.current ? Array.prototype.indexOf.call(trackRef.current.children, slide) : -1;
-      if (idx >= 0 && idx !== posRef.current) setPos(idx);
+      if (idx >= 0 && idx !== posRef.current) slideTo(idx - posRef.current);
       else openDetailRef.current(workAt(posRef.current));
       return;
     }
     if (axis === 'x' && (Math.abs(dx) > 62 || flick)) {
-      setPos((p) => p + (dx < 0 ? 1 : -1));
+      slideTo(dx < 0 ? 1 : -1);
     } else if (axis === 'y' && Math.abs(dy) > 72) {
       openDetailRef.current(workAt(posRef.current));
     } else {
