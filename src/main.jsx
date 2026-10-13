@@ -7933,31 +7933,54 @@ function WorksPage({
        动画帧里)。用 useMemo 把依赖收窄成 pos:相位类变化不再触碰这批节点。
        键值、结构、属性完全不变,只是跳过 React 的重建 → 视觉与行为零变化。 */
     const railSlides = useMemo(() => RAIL_SLIDES.map((work, i) => {
-      /* 距当前卡 ±RAIL_WINDOW 之外:整张卡不参与绘制、也不解码封面
-         (见 RAIL_WINDOW 处的说明)。attribute 存在即代表 far。 */
-      const live = Math.abs(i - pos) <= RAIL_WINDOW;
+      /* ⚠ 2026-10-13 修「滑到尽头右侧副卡空一下才加载出 01 卡」:原来 src 与
+         data-far 共用同一个非绕回窗口 `live`(距当前卡 ±RAIL_WINDOW)。循环接上的
+         那一两张(01 / 11)在远离边界时是 far(无 src),滑到边界才 live→挂 src→解码/
+         重取,正好在循环接上的瞬间露白;而且两档瞬移的「边界延时 + 越界瞬移」会让这些
+         邻卡在 far↔live 之间反复切换,重复解码/重取,白更明显。
+         修法:把「是否挂 src」与「是否参与布局(data-far)」解耦 ——
+           · layoutFar = 非绕回 ±RAIL_WINDOW(原样):远处副本 content-visibility:hidden
+             跳过布局/绘制,性能不变;
+           · loaded = 绕回窗口 ±(RAIL_WINDOW+1):循环邻卡(01/11)在刚要接上之前就被
+             挂 src 并解码好,且瞬移弹跳时因绕回而始终落在 loaded 内、不会被卸载→重取,
+             循环点不再露白。绕回窗口只比布局窗口宽 1 张,多挂的图都是 boot 期 loading
+             已下载过的同一批 URL,浏览器按 URL 去重解码,首帧不回退 85ms 那一档。 */
+      const dist = Math.abs(i - pos);
+      /* 布局跳过用「视觉滑距」(非绕回):远处副本 content-visibility:hidden,性能不变。
+         src 预加载用「作品环距」——把 i 与 pos 先对 RAIL_N 取模,再算环上最短距。
+         轨道每 RAIL_N 张重复一次(三份副本),所以视觉上 slide i 与 i±RAIL_N 是同一张
+         卡;用滑距直接绕 33 会算错跨副本邻接(如 pos=30 时 i=22 滑距 8 看似很远,其实
+         作品环距只有 3)。作品环距 ≤ RAIL_WINDOW+1(比布局窗口宽 1)即提前挂 src 并解码,
+         循环接上的 01/11 在刚要出现前就已就绪,且瞬移弹跳时因落在该环距内、不会被卸载→
+         重取,循环点不再露白。多挂的图都是 boot 期 loading 已下载的同一批 URL,按 URL 去重
+         解码,首帧不回退那一档。 */
+      const di = ((i % RAIL_N) + RAIL_N) % RAIL_N;
+      const dp = ((pos % RAIL_N) + RAIL_N) % RAIL_N;
+      const d = Math.abs(di - dp);
+      const wrapDist = Math.min(d, RAIL_N - d);
+      const layoutFar = dist > RAIL_WINDOW;
+      const loaded = wrapDist <= RAIL_WINDOW + 1;
       return (
         <div
           className={`mw-slide${i === pos ? ' is-current' : ''}`}
           key={`${work.id}-${i}`}
           data-rail-index={i}
           data-rail-work={work.id}
-          data-far={live ? undefined : ''}
+          data-far={layoutFar ? '' : undefined}
         >
           <button
             type="button"
             className="mw-card"
             aria-label={`${work.title} — 下滑或点按查看设计详情`}
           >
-            {/* ⚠ 只给活跃窗口挂 src:33 个节点同时挂上会让首帧一次性解码
-                 全部封面,正好压在动画起跑那一帧上(实测多花 ~85ms)。
-                 远处副本要么被主卡盖住、要么远在屏外,不需要位图。
-                 ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,
-                   塞 16:9 会被 object-fit:cover 每侧裁掉 33%。且跨级转场
-                   要求一级 .mob-card 与二级 .mw-card 是同一张卡面。 */}
+            {/* ⚠ 只给活跃窗口(非绕回 ±RAIL_WINDOW)做 content-visibility:hidden 跳过布局,
+                 但挂 src 用绕回 ±(RAIL_WINDOW+1):循环接上的 01/11 提前解码好,不再露白。
+                 ⚠ 取 image(3:5)而非 detailHero(16:9):.mw-card 是 3:5,塞 16:9 会被
+                 object-fit:cover 每侧裁掉 33%。且跨级转场要求一级 .mob-card 与二级
+                 .mw-card 是同一张卡面。 */}
             <img
               className="mw-card-img"
-              src={live ? (work.image ?? work.detailHero) : undefined}
+              src={loaded ? (work.image ?? work.detailHero) : undefined}
               alt=""
               decoding="async"
             />
