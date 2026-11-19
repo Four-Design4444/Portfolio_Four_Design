@@ -4829,15 +4829,17 @@ net=${video.networkState} err=${video.error ? video.error.code : 'none'}`;
         const FILL_MIN_RATE = 1.1;
         const FILL_WINDOW_MS = 900;
         const fillSamples = new WeakMap();
+        /* 判"视频还在下载"必须读**整条缓冲的末端**，不能只读覆盖播放点的那一段。
+           慢网重新缓冲时 currentTime 会掉到所有 range 之外，旧写法返回 0 →
+           noteData() 以为 5s 没新数据 → 误判 stalled 强放行（实测揭幕时
+           readyState=1、缓冲末端还在涨，正好踩中）。末端增长与播放点是否卡住
+           无关，只反映字节有没有继续到位，这才是 stalled 该问的问题。 */
         const bufferedEndAt = (node) => {
           if (!node) return 0;
-          const at = node.currentTime || 0;
           try {
-            for (let i = 0; i < node.buffered.length; i += 1) {
-              if (at + 0.05 >= node.buffered.start(i) && at <= node.buffered.end(i)) return node.buffered.end(i);
-            }
+            const n = node.buffered.length;
+            return n ? node.buffered.end(n - 1) : 0;
           } catch (_) { return 0; }
-          return 0;
         };
         const fillHealthy = (node) => {
           const end = bufferedEndAt(node);

@@ -927,6 +927,12 @@
            明确讨厌的）。它仍会播报 app:ready，否则首屏标题会永远停在 opacity:0。 */
         var WATCHDOG_MIN_MS = 15000;
         var WATCHDOG_STALL_MS = 5000;
+        /* 视频闸门未通过时，进度条钉在 92~94% 是**设计使然**（最后 8% 由
+           __heroReady 补）。旧看门狗只认"进度没涨"，慢网实测会在 readyState=1、
+           播放点卡住、视频仍在下载时强行揭幕 —— 正是"视频还没播就进了 hero 页"。
+           现在超时放行必须先过视频闸门；60s 硬上限只兜 React 崩掉/无视频元素的
+           极端情况（那种情况下 __heroReady 永不到来，不能把首屏永久扣住）。 */
+        var WATCHDOG_HERO_MAX_MS = 60000;
         var startedAt = Date.now();
         var hidden = false;
         var hide = function (finished) {
@@ -969,14 +975,18 @@
         // （只淡出遮罩不给信号，首屏标题会永远停在 opacity:0），但不补满进度。
         var watchdog = window.setInterval(function () {
           if (hidden) { window.clearInterval(watchdog); return; }
-          if (Date.now() - startedAt < WATCHDOG_MIN_MS) return;
+          var elapsed = Date.now() - startedAt;
+          if (elapsed < WATCHDOG_MIN_MS) return;
+          // 视频闸门还没放行：继续等，别把"视频还在缓冲"误判成卡死。
+          if (window.__heroReady !== true && elapsed < WATCHDOG_HERO_MAX_MS) return;
           if (Date.now() - lastGainAt < WATCHDOG_STALL_MS) return;
           announceReady();
           hide(false);
         }, 500);
-        // 极端情况：任务表本身出错 / 一直没有任何任务在动（含 tick 抛错）。
-        // 40s 后无论如何也要揭幕，否则首屏永久扣住。
-        window.setTimeout(function () { if (!hidden) { announceReady(); hide(false); } }, 40000);
+        // 极端情况：任务表本身出错 / 一直没有任何任务在动（含 tick 抛错），
+        // 或 React 崩了使 __heroReady 永不到来。65s 绝对硬上限（比上面 60s 略晚，
+        // 让正常看门狗先判），之后无论如何揭幕，否则首屏永久扣住。
+        window.setTimeout(function () { if (!hidden) { announceReady(); hide(false); } }, 65000);
         tick();
       })();
     </script>
